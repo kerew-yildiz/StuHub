@@ -6,10 +6,27 @@ import App from './App'
 
 vi.mock('./api/client', () => ({
   getHealth: vi.fn(async () => true),
+  apiFetch: vi.fn(),
+}))
+
+vi.mock('./api/terms', () => ({
+  termsApi: {
+    list: vi.fn(async () => []),
+    create: vi.fn(async () => ({})),
+    update: vi.fn(async () => ({})),
+    remove: vi.fn(async () => undefined),
+  },
+}))
+
+vi.mock('./api/settings', () => ({
+  settingsApi: {
+    list: vi.fn(async () => ({ model: 'deepseek-chat' })),
+    set: vi.fn(async () => ({ ok: true })),
+  },
 }))
 
 describe('App', () => {
-  it('Dönemler sayfasını gösterir', () => {
+  it('Dönemler sayfasını boş durumla gösterir', async () => {
     render(
       <MemoryRouter initialEntries={['/']}>
         <App />
@@ -17,17 +34,28 @@ describe('App', () => {
     )
 
     expect(screen.getByRole('heading', { name: 'Dönemler' })).toBeInTheDocument()
-    expect(screen.getByText('Henüz dönem yok')).toBeInTheDocument()
+    expect(await screen.findByText('Henüz dönem yok')).toBeInTheDocument()
   })
 
-  it('Backend kapalıyken sağlık uyarısını gösterir', () => {
+  it('Ayarlar sayfasını gösterir', async () => {
+    render(
+      <MemoryRouter initialEntries={['/ayarlar']}>
+        <App />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('heading', { name: 'Ayarlar' })).toBeInTheDocument()
+    expect(screen.getByLabelText('DeepSeek API anahtarı')).toBeInTheDocument()
+  })
+
+  it('Backend ayaktayken sağlık uyarısı görünmez', async () => {
     render(
       <MemoryRouter initialEntries={['/']}>
         <App />
       </MemoryRouter>,
     )
 
-    // getHealth mock'u true döner; yine de banner bileşeni 'down' ile test edilebilir
+    await screen.findByText('Henüz dönem yok')
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })
