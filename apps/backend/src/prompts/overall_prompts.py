@@ -11,6 +11,7 @@ KURALLAR:
 5. FIB sorularına kabul edilen cevap listesi (accepted_answers) eklenecek — eş anlamlılar ve yaygın yazım varyantları dahil (interaksiyonda LLM çağrısı yapılmaz).
 6. Açık uçlu sorulara saklı cevap anahtarı (answer_key: points listesi + citations) yazılacak.
 7. Yalnızca JSON döndür: {{"category": "{category}", "questions": [ ... ]}}
+8. {dil_talimati}
 
 TIP ŞEMALARI:
 - mcq: {{"type": "mcq", "topic": "...", "question": "...", "options": ["","","",""], "correct_index": 0, "explanation": "...", "feedback_correct": "Doğru! ...", "feedback_wrong": "Doğru cevap: X. Açıklama: ...", "citations": [{{"id": 1}}]}}

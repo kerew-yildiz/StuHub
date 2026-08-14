@@ -673,10 +673,10 @@ StuHub DS/
 | V2.2 | Flashcard + SM-2 | ✅ TAMAM (backend+frontend; commit sıradaki turda) | (bu oturum) | `flashcard_generator` (not+quiz'den konu başına map-reduce kart üretimi, atıf zorunlu + dedup + asla başarısız olma) + `routers/flashcards.py` (SSE üretim, set listesi, due kuyruğu [vadesi geçen önce], SM-2 review UPSERT + activity_log) + `srs.py` (deterministik çekirdek) + FlashcardPlayer (flip + Again/Hard/Good/Easy + atıf çipleri) + NotebookPage "Kartlar" + CoursePage "Bugünün Kartları". Kapılar: pytest 157, vitest 15 |
 | V2.3 | Export + Arşiv | 🚧 SÜRÜYOR (backend) | — | Not MD/PDF, Anki `.apkg` (stdlib), CSV, dönem arşivi export/import (manifest v1) — backend servisleri + router hazır; frontend butonları V2.4 paketiyle |
 | V2.4 | UI Paketi | ⬜ PLANLI | — | Notebook/kurs mod sekmeleri, Dönem→Ders→Chapter sidebar ağacı, streak + günlük hedef halkası, 3 adımlı onboarding |
-| V2.5 | Essay Değerlendirici | ⬜ PLANLI | — | Genel "ödev yükle → değerlendir" akışı (rubrikli 0–100 + alıntılı yorumlar), essay_submissions |
+| V2.5 | Essay Değerlendirici | 🚧 SÜRÜYOR (backend hazır) | — | `essay_service` (0–100 rubrik, güven eşiği, boş metin deterministik) + `essays/grade` uçları commit'li; frontend ekranı kuyrukta |
 | V2.6 | Medya Alımı | ⬜ PLANLI | — | YouTube/ses/DOCX/EPUB/OCR/metin yapıştırma + taranmış PDF OCR fallback + transkripsiyon iş hattı |
-| V2.7 | Rehber + Çok Dilli | ⬜ PLANLI | — | Chapter/ders özeti + anahtar terimler + kavram haritası (SVG) + `not_dili` (tr/en/auto) |
-| V2.8 | PWA + LAN | ⬜ PLANLI | — | vite-plugin-pwa (manifest/SW/ikonlar), FastAPI statik istisnaları, `--host 0.0.0.0` dokümantasyonu |
+| V2.7 | Rehber + Çok Dilli | 🚧 SÜRÜYOR (backend hazır) | — | `guide_service` (özet + DAG kavram haritası) + `/guide(s)` uçları commit'li; `not_dili` prompt entegrasyonu guide'da tamam; not/quiz promptlarına dil talimatı + frontend Rehber sekmesi kuyrukta |
+| V2.8 | PWA + LAN | 🚧 SÜRÜYOR (backend hazır) | — | `/sw.js` + `/manifest.webmanifest` FastAPI rotaları hazır (SPA fallback'ten önce); vite-plugin-pwa yapılandırması + ikonlar + LAN dokümantasyonu kuyrukta |
 | V2.9 | Teslim v2.0.0 | ⬜ PLANLI | — | Kalite kapıları tam turu, README/KULLANIM güncellemesi, canlı E2E, sürüm geçmişi |
 
 ---
@@ -699,15 +699,15 @@ StuHub rakiplerin zayıf olduğu yerlerde zaten güçlü: **yerel-öncelikli giz
 | 4 | Anki + Markdown export | V2.3 | ⬜ | `export_service.py` genişletme + `anki_export.py` (stdlib apkg) |
 | 5 | Streak + günlük hedef halkası (yerel) | V2.4 | ⬜ | `activity_log`, `services/streak_service.py`, `StreakRing` |
 | 6 | 3 adımlı onboarding + klasör ağacı sidebar | V2.4 | ⬜ | `OnboardingWizard`, `SidebarNav` (Dönem→Ders→Chapter) |
-| 7 | Essay/ödev değerlendirici | V2.5 | ⬜ | `essay_submissions`, `essay_grader.py` genellemesi, `essays.py` router |
+| 7 | Essay/ödev değerlendirici | V2.5 | 🟡 backend ✅ | `essay_submissions`, `essay_grader.py` genellemesi, `essays.py` router |
 | 8 | YouTube → içerik | V2.6 | ⬜ | `media_extractors/youtube.py` (yt-dlp; whisper fallback) |
 | 9 | Ses/ders kaydı → not | V2.6 | ⬜ | `media_extractors/audio.py` (faster-whisper, yerel STT) |
-| 10 | Çalışma rehberi + kavram haritası | V2.7 | ⬜ | `study_guides`, `services/guide_service.py`, `GuideView` (SVG) |
-| 11 | Mobil erişim (PWA + LAN) | V2.8 | ⬜ | vite-plugin-pwa, `/sw.js` + `/manifest.webmanifest` rotaları |
+| 10 | Çalışma rehberi + kavram haritası | V2.7 | 🟡 backend ✅ | `study_guides`, `services/guide_service.py`, `GuideView` (SVG) |
+| 11 | Mobil erişim (PWA + LAN) | V2.8 | 🟡 backend ✅ | vite-plugin-pwa, `/sw.js` + `/manifest.webmanifest` rotaları |
 | 12 | Sokratik chat modu | V2.1 | ⬜ | `chat_service.py` modları (`direct\|socratic\|quiz`) |
 | 13 | Çok cihaz sync | — | 📄 KARAR | Bulut sync yok (Bölüm 10/4); yerel karşılığı: dönem arşivi export/import (#16). Gerçek bulut sync = gelecekte kullanıcı kararı + feature-flag |
 | 14 | DOCX/EPUB/fotoğraf (OCR)/metin yapıştırma | V2.6 | ⬜ | `media_extractors/{docx,epub,ocr}.py`; EPUB stdlib (AGPL'li ebooklib yasak) |
-| 15 | Çok dilli not (tr/en/auto) | V2.7 | ⬜ | settings `not_dili` → tüm üretim promptlarına dil talimatı |
+| 15 | Çok dilli not (tr/en/auto) | V2.7 | 🟡 backend ✅ | settings `not_dili` → rehber promptlarına dil talimatı tamam; not/quiz/flashcard promptlarına entegrasyon kuyrukta |
 | 16 | Paylaşım/paket export (dönem arşivi) | V2.3 | ⬜ | `services/archive_service.py`, manifest v1 export/import |
 
 ### 17.3 Bilinçli Yapılmayacaklar (rapor 7.6 — bağlayıcı)

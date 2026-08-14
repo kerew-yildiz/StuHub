@@ -7,7 +7,9 @@ import json
 import logging
 import random
 
+from ..config import settings
 from ..db import get_db
+from ..prompts.common import dil_talimati
 from ..prompts.overall_prompts import OVERALL_BATCH_PROMPT
 from . import llm_service
 from .quiz_generator import _rebalance as _rebalance_mcq
@@ -211,6 +213,7 @@ async def _generate_batch(
         distribution_plan=distribution_plan,
         note_sections=note_sections[:6000],
         citations_json=allowed_text,
+        dil_talimati=dil_talimati(settings.not_dili),
     )
 
     last_data: dict | None = None

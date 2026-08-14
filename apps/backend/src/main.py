@@ -19,6 +19,9 @@ APP_VERSION = "1.0.0"
 # Üretim: inşa edilmiş frontend (apps/frontend/dist) — varsa servis edilir (yol haritası 2.2.2)
 FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 INDEX_HTML = FRONTEND_DIST / "index.html"
+# v2 PWA dosyaları (Faz V2.8) — build çıktısında varsa servis edilir
+SW_FILE = FRONTEND_DIST / "sw.js"
+MANIFEST_FILE = FRONTEND_DIST / "manifest.webmanifest"
 
 
 @asynccontextmanager
@@ -62,6 +65,19 @@ if INDEX_HTML.exists():
     @app.get("/", include_in_schema=False)
     async def root_spa():
         return FileResponse(INDEX_HTML)
+
+    # v2 PWA: service worker + manifest — catch-all SPA fallback'ten ÖNCE kaydedilir
+    if SW_FILE.exists():
+
+        @app.get("/sw.js", include_in_schema=False)
+        async def sw_js():
+            return FileResponse(SW_FILE, media_type="application/javascript")
+
+    if MANIFEST_FILE.exists():
+
+        @app.get("/manifest.webmanifest", include_in_schema=False)
+        async def web_manifest():
+            return FileResponse(MANIFEST_FILE, media_type="application/manifest+json")
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa_fallback(full_path: str):

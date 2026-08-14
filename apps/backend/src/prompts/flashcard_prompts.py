@@ -10,6 +10,7 @@ KURALLAR:
 4. Kart cümleleri kısa, net, öğrenci seviyesinde Türkçe olacak.
 5. Yalnızca JSON döndür ve şemaya birebir uy: {{"cards": [{{"topic": "...", "front": "...", "back": "...", "type": "qa", "citations": [{{"id": 1}}]}}]}}
 6. type yalnızca "qa" ya da "term" olabilir; front soru/terim, back cevap/tanım metnidir.
+7. {dil_talimati}
 
 NOT BÖLÜMÜ:
 {note_section}

@@ -8,7 +8,7 @@ SUNUM:
 
 KURALLAR:
 1. Her konu için kısa ve net bir başlık yaz.
-2. keywords: konuyla ilgili anahtar terimler (Türkçe).
+2. keywords: konuyla ilgili anahtar terimler. {dil_talimati}
 3. slide_refs: konunun geçtiği slide numaraları.
 4. Yalnızca JSON döndür, şu şema ile:
 {{"topics": [{{"topic": "...", "keywords": ["...", "..."], "slide_refs": [1, 2]}}]}}
@@ -18,7 +18,7 @@ NOTE_GENERATION_PROMPT = """Sen bir üniversite ders notu yazarısın. Aşağıd
 
 KURALLAR:
 1. SADECE sağlanan kaynak parçalarını kullan; kaynaklarda olmayan bilgi EKLEME.
-2. "{topic}" konusunu eksiksiz ve anlaşılır biçimde açıkla; öğrenci seviyesine uygun Türkçe yaz.
+2. "{topic}" konusunu eksiksiz ve anlaşılır biçimde açıkla; öğrenci seviyesine uygun yaz. {dil_talimati}
 3. Her bilgi parçasının sonuna kaynak atıf numarasını [n] biçiminde koy (n: KAYNAKLAR listesindeki numara).
 4. Madde işaretleri ve kısa paragraflar kullan; gereksiz tekrar yapma.
 5. Bölümü tam olarak "### {topic}" başlığıyla başlat (başka başlık düzeyi/ifade kullanma).

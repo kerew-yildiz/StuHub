@@ -12,7 +12,9 @@ import json
 import logging
 import re
 
+from ..config import settings
 from ..db import get_db
+from ..prompts.common import dil_talimati
 from ..prompts.quiz_prompts import QUIZ_BATCH_PROMPT
 from . import llm_service
 from .note_generator import topic_matches
@@ -165,6 +167,7 @@ async def _generate_batch(
         topic=topic["topic"],
         note_section=topic["section"][:4000],
         citations_json=allowed_text,
+        dil_talimati=dil_talimati(settings.not_dili),
     )
 
     last_data: dict | None = None

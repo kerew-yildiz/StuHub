@@ -15,6 +15,7 @@ import re
 
 from ..config import settings
 from ..db import get_db
+from ..prompts.common import dil_talimati
 from ..prompts.note_prompts import (
     CITATION_CONFIRM_PROMPT,
     COVERAGE_CHECK_PROMPT,
@@ -139,7 +140,10 @@ async def _extract_topics(slide_text: str, course_id: int, chapter_id: int) -> l
         [
             {
                 "role": "user",
-                "content": TOPIC_EXTRACTION_PROMPT.format(slides=slide_text[:SLIDES_CONTEXT_CHARS]),
+                "content": TOPIC_EXTRACTION_PROMPT.format(
+                    slides=slide_text[:SLIDES_CONTEXT_CHARS],
+                    dil_talimati=dil_talimati(settings.not_dili),
+                ),
             }
         ],
         kind="topic_extraction",
@@ -206,6 +210,7 @@ def _build_prompt(topic: dict, slides: list[dict], chunks: list[dict]) -> str:
         topic=topic["topic"],
         slide_content=_slide_content_for_topic(topic, slides),
         numbered_sources=_numbered_sources(chunks),
+        dil_talimati=dil_talimati(settings.not_dili),
     )
 
 

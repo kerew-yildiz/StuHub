@@ -10,6 +10,7 @@ KURALLAR:
 4. Doğru/yanlış geribildirim metinlerini yaz; yanlış geribildirim "Doğru cevap: X. Açıklama: ... [kaynak: [n] sayfa/slide]" biçiminde atıflı olacak.
 5. Yalnızca JSON döndür: {{"topic": "...", "questions": [{{"topic": "...", "question": "...", "options": ["","","",""], "correct_index": 0, "explanation": "...", "feedback_correct": "Doğru! ...", "feedback_wrong": "Doğru cevap: X. Açıklama: ...", "citations": [{{"id": 1}}]}}]}}
 6. Doğru cevap index dağılımı dengeli olsun (aynı şık en fazla 2 kez doğru olabilir).
+7. {dil_talimati}
 
 NOT BÖLÜMÜ:
 {note_section}
