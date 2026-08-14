@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from contextlib import suppress
 from pathlib import Path
@@ -25,6 +26,16 @@ _LIST_BY_COURSE = (
     "FROM materials WHERE course_id = ? ORDER BY created_at DESC, id DESC"
 )
 
+_UUID_PREFIX_RE = re.compile(r"^[0-9a-f]{32}_")
+
+
+def _display_name(filepath: str) -> str:
+    """Kullanıcının yüklediği özgün dosya adını döndürür (UUID öneki gizlenir)."""
+    name = Path(filepath).name
+    if _UUID_PREFIX_RE.match(name):
+        return name[33:]
+    return name
+
 ALLOWED_TYPES = {"textbook", "slides"}
 # textbook: PDF; slides: PDF ya da PPTX (Faz 2.1'de çıkarılır)
 ALLOWED_EXTENSIONS = {"textbook": {".pdf"}, "slides": {".pdf", ".pptx", ".ppt"}}
@@ -35,10 +46,18 @@ class MaterialOut(BaseModel):
     course_id: int
     type: str
     filepath: str
+    display_name: str
     extracted_text: str | None = None
     page_count: int | None = None
     vector_ns: str | None = None
     created_at: str
+
+
+def _to_out(row: dict) -> MaterialOut:
+    return MaterialOut(
+        **{k: v for k, v in row.items() if k != "display_name"},
+        display_name=_display_name(row["filepath"]),
+    )
 
 
 def _safe_filename(original: str) -> str:
@@ -113,7 +132,21 @@ async def upload_material(
         await db.close()
     if row is None:
         raise RuntimeError("beklenen materyal satırı bulunamadı")
-    return MaterialOut(**dict(row))
+    return _to_out(dict(row))
+
+
+@router.get("/materials/{material_id}", response_model=MaterialOut)
+async def get_material(material_id: int) -> MaterialOut:
+    """Tek materyal (önizleme/title için)."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(_SELECT_BY_ID, (material_id,))
+        row = await cursor.fetchone()
+    finally:
+        await db.close()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Materyal bulunamadı")
+    return _to_out(dict(row))
 
 
 @router.get("/courses/{course_id}/materials", response_model=list[MaterialOut])
@@ -125,7 +158,7 @@ async def list_materials(course_id: int) -> list[MaterialOut]:
         rows = await cursor.fetchall()
     finally:
         await db.close()
-    return [MaterialOut(**dict(r)) for r in rows]
+    return [_to_out(dict(r)) for r in rows]
 
 
 @router.delete("/materials/{material_id}", status_code=204)

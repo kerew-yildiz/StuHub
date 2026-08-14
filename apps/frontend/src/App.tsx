@@ -1,5 +1,6 @@
 import { NavLink, Route, Routes } from 'react-router-dom'
 
+import { GlobalGenerationPanel } from './components/GlobalGenerationPanel'
 import { HealthBanner } from './components/HealthBanner'
 import { CoursePage } from './pages/CoursePage'
 import { NotebookPage } from './pages/NotebookPage'
@@ -32,6 +33,7 @@ export default function App() {
         </div>
       </header>
       <HealthBanner />
+      <GlobalGenerationPanel />
       <main className="mx-auto max-w-5xl px-6 py-8">
         <Routes>
           <Route path="/" element={<TermsPage />} />

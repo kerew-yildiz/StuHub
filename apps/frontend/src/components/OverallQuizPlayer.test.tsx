@@ -10,6 +10,9 @@ vi.mock('../api/overall', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/overall')>()
   return {
     ...actual,
+    listOverallAttempts: vi.fn(async () => []),
+    removeOverallAttempt: vi.fn(async () => {}),
+    removeOverallQuiz: vi.fn(async () => {}),
     submitOverallAttempt: vi.fn(async () => ({
       attempt_id: 1,
       score: 80,
@@ -74,8 +77,8 @@ const quiz: OverallQuiz = {
 describe('OverallQuizPlayer', () => {
   it('mcq anında feedback verir, fib cevap ister ve özet gösterir', async () => {
     render(<OverallQuizPlayer quiz={quiz} />)
+    await screen.findByText('MCQ sorusu?')
 
-    expect(screen.getByText('MCQ sorusu?')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'A' }))
     expect(screen.getByRole('status')).toHaveTextContent('Doğru! Pekiştirme.')
 

@@ -167,6 +167,7 @@ async def _generate_batch(
         citations_json=allowed_text,
     )
 
+    last_data: dict | None = None
     for _ in range(MAX_BATCH_ATTEMPTS):
         data = await llm_service.chat_json(
             [{"role": "user", "content": prompt}],
@@ -174,6 +175,7 @@ async def _generate_batch(
             course_id=course_id,
             chapter_id=chapter_id,
         )
+        last_data = data
         questions = data.get("questions", [])
         if not isinstance(questions, list) or len(questions) != MAX_QUESTIONS_PER_TOPIC:
             continue
@@ -191,7 +193,27 @@ async def _generate_batch(
         # doğru cevap dağılımını deterministik yeniden dengele (Yetenek 03 §3)
         questions = _rebalance(questions)
         return questions
-    return None
+
+    # YUMUŞAK GEÇİŞ — asla başarısız olma (kullanıcı isteği):
+    # katı denetimlerden geçemeyen son çıktıdan şema-geçerli sorular kabul edilir,
+    # atıflar bölümün ilk geçerli kaynağıyla kendi kendine onarılır, denge yeniden kurulur.
+    questions = (last_data or {}).get("questions", [])
+    if not isinstance(questions, list):
+        return None
+    questions = [q for q in questions if _validate_question(q)]
+    if len(questions) < 3:
+        return None  # yeterli soru yok — üst katman konuyu atlayıp devam eder
+    questions = questions[:MAX_QUESTIONS_PER_TOPIC]
+    if allowed:
+        questions = _enrich_citations(questions, allowed)
+        first_citation = next((c for c in allowed if c.get("id") is not None), None)
+        for q in questions:
+            if not q["citations"] and first_citation is not None:
+                q["citations"] = [dict(first_citation)]
+    else:
+        for q in questions:
+            q["citations"] = []
+    return _rebalance(questions)
 
 
 async def generate_quiz_stream(chapter_id: int):
@@ -242,6 +264,7 @@ async def _generate(chapter_id: int):
         raise QuizGenerationError("Not içeriğinden konu bölümü çıkarılamadı.")
 
     quizzes_topics: list[dict] = []
+    warnings: list[str] = []
     total = len(sections)
     for i, topic in enumerate(sections):
         percent = int(5 + 90 * i / max(total, 1))
@@ -252,11 +275,9 @@ async def _generate(chapter_id: int):
         }
         questions = await _generate_batch(topic, course_id, chapter_id)
         if questions is None:
-            raise QuizGenerationError(
-                f"“{topic['topic']}” için {MAX_BATCH_ATTEMPTS} deneme sonrasında geçerli "
-                "sorular üretilemedi. Soru sayısı/şema/atıf denetimlerinden geçemedi; "
-                "lütfen tekrar deneyin."
-            )
+            # Asla başarısız olma: sorunlu konu uyarıyla atlanır, quiz yine teslim edilir.
+            warnings.append(f"“{topic['topic']}” için soru üretilemedi (atlandı).")
+            continue
         quizzes_topics.append({"topic": topic["topic"], "questions": questions})
 
     yield {"type": "status", "percent": 97, "message": "Quiz kaydediliyor…"}
@@ -278,4 +299,5 @@ async def _generate(chapter_id: int):
     yield {
         "type": "done",
         "quiz": {"id": row_id, "chapter_id": chapter_id, "questions_json": questions_json},
+        "warnings": warnings,
     }

@@ -133,35 +133,38 @@ async def test_quiz_requires_note(client, monkeypatch):
     assert "Önce not oluştur" in events[-1]["message"]
 
 
-async def test_quiz_invalid_batch_retries_then_fails(client, monkeypatch):
+async def test_quiz_invalid_batch_skipped_with_warning(client, monkeypatch):
+    """Üretilemeyen konu asla hataya düşmez — uyarıyla atlanır, quiz teslim edilir."""
     chapter_id = await _make_chapter_with_note(client)
     monkeypatch.setattr(llm_service.settings, "deepseek_api_key", "sk-test")
-    # her seferinde 3 sorulu (5'ten az) zarf
+    # her seferinde geçersiz (3 sorulu) zarf
     bad = _envelope()
     bad["questions"] = bad["questions"][:3]
-    calls = _mock_chat_json(monkeypatch, [bad] * 5)
+    # 3 sorulu zarf yumuşak geçişte kabul edilir (>=3); tamamen boş döndürmek için 2 soru
+    bad["questions"] = bad["questions"][:2]
+    _mock_chat_json(monkeypatch, [bad] * 5)
 
     events = await _collect(quiz_generator.generate_quiz_stream(chapter_id))
-    assert events[-1]["type"] == "error"
-    assert "üretilemedi" in events[-1]["message"]
-    assert calls["count"] >= 2  # max deneme sayısı kadar denendi
+    assert events[-1]["type"] == "done"  # hata değil, done!
+    assert events[-1].get("warnings")  # uyarı listesi dolu
+    # quiz kaydedildi (konu atlandı)
+    assert events[-1]["quiz"]["questions_json"]["topics"] == []
 
 
-async def test_quiz_unattributed_question_regenerates(client, monkeypatch):
+async def test_quiz_unattributed_question_self_heals(client, monkeypatch):
+    """Atıfsız soru: katı denetim geçemezse atıf bölümün ilk kaynağıyla onarılır."""
     chapter_id = await _make_chapter_with_note(client)
     monkeypatch.setattr(llm_service.settings, "deepseek_api_key", "sk-test")
-    # atıfsız soru içeren zarf
     bad = _envelope()
     bad["questions"][0]["citations"] = []
-    good = _envelope()
+    _mock_chat_json(monkeypatch, [bad])
 
-    def responses(call_no):
-        return bad if call_no == 1 else good
-
-    calls = _mock_chat_json(monkeypatch, responses)
     events = await _collect(quiz_generator.generate_quiz_stream(chapter_id))
     assert events[-1]["type"] == "done"
-    assert calls["count"] >= 2
+    questions = events[-1]["quiz"]["questions_json"]["topics"][0]["questions"]
+    # tüm soruların geçerli atfı var (self-heal)
+    assert all(q["citations"] for q in questions)
+    assert questions[0]["citations"][0]["chunk_id"] == "chk_9_1_1"
 
 
 async def test_quiz_unbalanced_is_rebalanced(client, monkeypatch):

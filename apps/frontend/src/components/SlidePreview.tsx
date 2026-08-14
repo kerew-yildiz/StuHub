@@ -5,10 +5,11 @@ import type { Slide } from '../api/slides'
 interface SlidePreviewProps {
   slides: Slide[]
   onDelete: (slideId: number) => void
+  onOpenPdf?: () => void
 }
 
-/** Slide önizleyici — tüm slide'ları listelemek yerine teker teker gösterir (Faz 2 iyileştirme). */
-export function SlidePreview({ slides, onDelete }: SlidePreviewProps) {
+/** Slide önizleyici — slaytları teker teker kart olarak gösterir; PDF'i tam ekran açar. */
+export function SlidePreview({ slides, onDelete, onOpenPdf }: SlidePreviewProps) {
   const [index, setIndex] = useState(0)
 
   if (slides.length === 0) {
@@ -23,8 +24,8 @@ export function SlidePreview({ slides, onDelete }: SlidePreviewProps) {
   const slide = slides[current]
 
   return (
-    <div className="rounded-md border border-stuhub-border bg-stuhub-surface">
-      <div className="flex items-center justify-between border-b border-stuhub-border px-4 py-2">
+    <div className="overflow-hidden rounded-md border border-stuhub-border bg-stuhub-surface">
+      <div className="flex items-center justify-between border-b border-stuhub-border bg-stuhub-bg px-4 py-2">
         <button
           type="button"
           onClick={() => setIndex((i) => Math.max(0, i - 1))}
@@ -37,45 +38,61 @@ export function SlidePreview({ slides, onDelete }: SlidePreviewProps) {
         <span className="text-sm font-medium">
           Slide {current + 1} / {slides.length}
         </span>
-        <button
-          type="button"
-          onClick={() => setIndex((i) => Math.min(slides.length - 1, i + 1))}
-          disabled={current === slides.length - 1}
-          className="rounded-sm px-3 py-1 text-lg text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover disabled:opacity-40"
-          aria-label="Sonraki slide"
-        >
-          ›
-        </button>
+        <div className="flex items-center gap-1">
+          {onOpenPdf && (
+            <button
+              type="button"
+              onClick={onOpenPdf}
+              className="mr-2 rounded-sm bg-stuhub-accent px-3 py-1 text-xs font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
+            >
+              Sunumu aç
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setIndex((i) => Math.min(slides.length - 1, i + 1))}
+            disabled={current === slides.length - 1}
+            className="rounded-sm px-3 py-1 text-lg text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover disabled:opacity-40"
+            aria-label="Sonraki slide"
+          >
+            ›
+          </button>
+        </div>
+      </div>
+
+      {/* Slide kartı */}
+      <div className="flex min-h-[12rem] items-center justify-center px-10 py-8">
+        <p className="max-w-2xl text-center text-base leading-relaxed text-stuhub-text">
+          {slide.content_text ? slide.content_text : '(Bu slide da metin yok)'}
+        </p>
+      </div>
+
+      <div className="flex items-center justify-between border-t border-stuhub-border px-4 py-2">
+        <div className="flex flex-wrap gap-1.5">
+          {slides.map((s, i) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setIndex(i)}
+              className={`h-6 w-8 rounded-sm text-xs transition-colors duration-150 ${
+                i === current
+                  ? 'bg-stuhub-accent text-stuhub-on-accent'
+                  : 'bg-stuhub-bg text-stuhub-text-secondary hover:bg-stuhub-surface-hover'
+              }`}
+              aria-label={`Slide ${i + 1}'e git`}
+            >
+              {i + 1}
+            </button>
+          ))}
+        </div>
         <button
           type="button"
           onClick={() => onDelete(slide.id)}
-          className="ml-2 rounded-sm px-2 py-1 text-sm text-stuhub-error transition-colors duration-150 hover:bg-stuhub-surface-hover"
+          className="rounded-sm px-2 py-1 text-sm text-stuhub-error transition-colors duration-150 hover:bg-stuhub-surface-hover"
           aria-label={`Slide ${current + 1} sil`}
         >
           Sil
         </button>
-      </div>
-
-      <div className="min-h-[8rem] px-6 py-5 text-sm leading-relaxed text-stuhub-text-secondary">
-        {slide.content_text ? slide.content_text : '(Bu slide da metin yok)'}
-      </div>
-
-      <div className="flex flex-wrap gap-1.5 border-t border-stuhub-border px-4 py-2">
-        {slides.map((s, i) => (
-          <button
-            key={s.id}
-            type="button"
-            onClick={() => setIndex(i)}
-            className={`h-6 w-8 rounded-sm text-xs transition-colors duration-150 ${
-              i === current
-                ? 'bg-stuhub-accent text-stuhub-on-accent'
-                : 'bg-stuhub-bg text-stuhub-text-secondary hover:bg-stuhub-surface-hover'
-            }`}
-            aria-label={`Slide ${i + 1}'e git`}
-          >
-            {i + 1}
-          </button>
-        ))}
       </div>
     </div>
   )

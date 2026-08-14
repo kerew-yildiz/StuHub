@@ -10,6 +10,9 @@ vi.mock('../api/quizzes', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/quizzes')>()
   return {
     ...actual,
+    listAttempts: vi.fn(async () => []),
+    removeAttempt: vi.fn(async () => {}),
+    removeQuiz: vi.fn(async () => {}),
     submitAttempt: vi.fn(async () => ({
       attempt_id: 1,
       score: 100,
@@ -78,9 +81,9 @@ const quiz: Quiz = {
 }
 
 describe('QuizPlayer', () => {
-  it('tek soru gösterir ve anında feedback verir', () => {
+  it('tek soru gösterir ve anında feedback verir', async () => {
     render(<QuizPlayer quiz={quiz} />)
-    expect(screen.getByText('S1?')).toBeInTheDocument()
+    await screen.findByText('S1?')
 
     // doğru şıkkı seç
     fireEvent.click(screen.getByRole('button', { name: 'A' }))
@@ -89,6 +92,7 @@ describe('QuizPlayer', () => {
 
   it('tamamlanınca özet gösterir', async () => {
     render(<QuizPlayer quiz={quiz} />)
+    await screen.findByText('S1?')
 
     fireEvent.click(screen.getByRole('button', { name: 'A' }))
     fireEvent.click(screen.getByRole('button', { name: 'Sonraki soru' }))

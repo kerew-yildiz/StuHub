@@ -146,3 +146,78 @@ async def submit_attempt(quiz_id: int, payload: AttemptIn) -> dict:
         "correct_count": correct_count,
         "results": results,
     }
+
+
+@router.get("/chapters/{chapter_id}/quizzes")
+async def list_chapter_quizzes(chapter_id: int) -> list[dict]:
+    """Chapter'ın TÜM quizlerini (yeniden eskiye) döner — geçmiş korunur."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT id, questions_json, created_at FROM quizzes "
+            "WHERE chapter_id = ? ORDER BY id DESC",
+            (chapter_id,),
+        )
+        rows = await cursor.fetchall()
+    finally:
+        await db.close()
+    return [
+        {
+            "id": row["id"],
+            "chapter_id": chapter_id,
+            "questions_json": json.loads(row["questions_json"]),
+            "created_at": row["created_at"],
+        }
+        for row in rows
+    ]
+
+
+@router.delete("/quizzes/{quiz_id}", status_code=204)
+async def delete_quiz(quiz_id: int) -> None:
+    """Quiz'i siler (denemeleriyle birlikte)."""
+    db = await get_db()
+    try:
+        cursor = await db.execute("DELETE FROM quizzes WHERE id = ?", (quiz_id,))
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Quiz bulunamadı")
+        await db.commit()
+    finally:
+        await db.close()
+
+
+@router.get("/quizzes/{quiz_id}/attempts")
+async def list_quiz_attempts(quiz_id: int) -> list[dict]:
+    """Quiz'in kayıtlı denemeleri (yeniden eskiye) — cevaplar kalıcıdır."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT id, score, feedback_json, created_at FROM quiz_attempts "
+            "WHERE quiz_id = ? ORDER BY id DESC",
+            (quiz_id,),
+        )
+        rows = await cursor.fetchall()
+    finally:
+        await db.close()
+    return [
+        {
+            "attempt_id": row["id"],
+            "quiz_id": quiz_id,
+            "score": row["score"],
+            "created_at": row["created_at"],
+            "feedback_json": json.loads(row["feedback_json"] or "{}"),
+        }
+        for row in rows
+    ]
+
+
+@router.delete("/quiz-attempts/{attempt_id}", status_code=204)
+async def delete_quiz_attempt(attempt_id: int) -> None:
+    """Bir denemeyi (cevapları) siler."""
+    db = await get_db()
+    try:
+        cursor = await db.execute("DELETE FROM quiz_attempts WHERE id = ?", (attempt_id,))
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Deneme bulunamadı")
+        await db.commit()
+    finally:
+        await db.close()

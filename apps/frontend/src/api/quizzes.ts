@@ -26,6 +26,7 @@ export interface Quiz {
   id: number
   chapter_id: number
   questions_json: { topics: Array<{ topic: string; questions: QuizQuestion[] }> }
+  created_at?: string
 }
 
 export interface AttemptResult {
@@ -126,6 +127,37 @@ export async function getQuiz(chapterId: number): Promise<Quiz | null> {
   const response = await fetch(`${BASE_URL}/chapters/${chapterId}/quiz`)
   if (!response.ok) return null
   return (await response.json()) as Quiz
+}
+
+/** Chapter'ın TÜM quizleri (yeniden eskiye) — geçmiş korunur. */
+export async function listQuizzes(chapterId: number): Promise<Quiz[]> {
+  const response = await fetch(`${BASE_URL}/chapters/${chapterId}/quizzes`)
+  if (!response.ok) return []
+  return (await response.json()) as Quiz[]
+}
+
+/** Quiz'i kalıcı olarak siler. */
+export async function removeQuiz(quizId: number): Promise<void> {
+  await fetch(`${BASE_URL}/quizzes/${quizId}`, { method: 'DELETE' })
+}
+
+/** Kayıtlı deneme (cevaplar kalıcıdır). */
+export interface SavedAttempt {
+  attempt_id: number
+  quiz_id: number
+  score: number | null
+  created_at: string
+  feedback_json: { results: AttemptResult[] }
+}
+
+export async function listAttempts(quizId: number): Promise<SavedAttempt[]> {
+  const response = await fetch(`${BASE_URL}/quizzes/${quizId}/attempts`)
+  if (!response.ok) return []
+  return (await response.json()) as SavedAttempt[]
+}
+
+export async function removeAttempt(attemptId: number): Promise<void> {
+  await fetch(`${BASE_URL}/quiz-attempts/${attemptId}`, { method: 'DELETE' })
 }
 
 /** Cevapları gönderir; anında feedback döner (backend'de LLM çağrısı yok). */

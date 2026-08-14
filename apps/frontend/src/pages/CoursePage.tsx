@@ -5,12 +5,13 @@ import { chaptersApi, type Chapter } from '../api/chapters'
 import { coursesApi, type Course } from '../api/courses'
 import { indexingApi, type IndexingJob } from '../api/indexing'
 import { materialsApi, type Material } from '../api/materials'
-import { getOverallQuiz, streamOverallQuizGeneration, type OverallQuiz } from '../api/overall'
+import { listOverallQuizzes, removeOverallQuiz, type OverallQuiz } from '../api/overall'
 import { ChapterForm } from '../components/ChapterForm'
 import { FilePreviewModal } from '../components/FilePreviewModal'
 import { MaterialUploadForm } from '../components/MaterialUploadForm'
 import { OverallQuizPlayer } from '../components/OverallQuizPlayer'
 import { useAnimatedProgress } from '../lib/useAnimatedProgress'
+import { useGenerationStore } from '../stores/generationStore'
 
 type LoadState = 'loading' | 'ready' | 'error'
 
@@ -44,12 +45,12 @@ export function CoursePage() {
   const [showChapterForm, setShowChapterForm] = useState(false)
   const [previewMaterial, setPreviewMaterial] = useState<Material | null>(null)
 
-  // genel quiz durumu
-  const [overallQuiz, setOverallQuiz] = useState<OverallQuiz | null>(null)
-  const [quizGenerating, setQuizGenerating] = useState(false)
-  const [quizTarget, setQuizTarget] = useState(0)
-  const [quizMessage, setQuizMessage] = useState('')
-  const quizProgress = useAnimatedProgress(quizTarget)
+  // genel quiz durumu — küresel üretim deposu (madde 2)
+  const [overallQuizzes, setOverallQuizzes] = useState<OverallQuiz[]>([])
+  const overallJob = useGenerationStore((s) =>
+    s.jobs.find((j) => j.kind === 'overall' && j.targetId === numericId),
+  )
+  const quizProgress = useAnimatedProgress(overallJob?.percent ?? 0)
   const [quizKey, setQuizKey] = useState(0)
 
   const refreshJobs = useCallback(async () => {
@@ -66,18 +67,18 @@ export function CoursePage() {
     if (!numericId) return
     setState('loading')
     try {
-      const [courseData, chapterList, materialList, jobList, existingQuiz] = await Promise.all([
+      const [courseData, chapterList, materialList, jobList, quizList] = await Promise.all([
         coursesApi.get(numericId),
         chaptersApi.listByCourse(numericId),
         materialsApi.listByCourse(numericId),
         indexingApi.listByCourse(numericId),
-        getOverallQuiz(numericId),
+        listOverallQuizzes(numericId),
       ])
       setCourse(courseData)
       setChapters(chapterList)
       setMaterials(materialList)
       setJobs(jobList)
-      setOverallQuiz(existingQuiz)
+      setOverallQuizzes(quizList)
       setState('ready')
     } catch {
       setState('error')
@@ -86,26 +87,22 @@ export function CoursePage() {
   }, [numericId])
 
   const handleGenerateOverallQuiz = async () => {
-    setQuizGenerating(true)
-    setQuizTarget(0)
-    setQuizMessage('Hazırlanıyor…')
     setError('')
-    await streamOverallQuizGeneration(numericId, {
-      onStatus: (percent, message) => {
-        setQuizTarget(percent)
-        setQuizMessage(message)
-      },
-      onDone: (quiz) => {
-        setOverallQuiz(quiz)
-        setQuizKey((k) => k + 1)
-        setQuizGenerating(false)
-        setQuizMessage('')
-      },
-      onError: (message) => {
-        setError(message)
-        setQuizGenerating(false)
-      },
-    })
+    await useGenerationStore
+      .getState()
+      .generateOverallQuiz(numericId, course?.name ?? 'Ders')
+    setQuizKey((k) => k + 1)
+    await load()
+  }
+
+  const handleDeleteOverallQuiz = async (quizId: number) => {
+    if (!window.confirm('Bu genel quiz ve denemeleri silinecek. Emin misin?')) return
+    try {
+      await removeOverallQuiz(quizId)
+      setOverallQuizzes((prev) => prev.filter((q) => q.id !== quizId))
+    } catch {
+      setError('Genel quiz silinemedi. Lütfen tekrar deneyin.')
+    }
   }
 
   useEffect(() => {
@@ -260,7 +257,7 @@ export function CoursePage() {
                   className="flex items-center justify-between gap-4 rounded-sm bg-stuhub-bg px-4 py-2 text-sm"
                 >
                   <span className="min-w-0">
-                    <span className="font-medium">{material.filepath.split(/[\\/]/).pop()}</span>
+                    <span className="font-medium">{material.display_name}</span>
                     <span className="ml-2 text-stuhub-text-secondary">
                       {material.type === 'textbook' ? 'Kitap' : 'Sunum'}
                       {material.page_count ? ` · ${material.page_count} sayfa` : ''}
@@ -322,7 +319,7 @@ export function CoursePage() {
       {previewMaterial && (
         <FilePreviewModal
           url={`/api/materials/${previewMaterial.id}/file`}
-          title={previewMaterial.filepath.split(/[\\/]/).pop() ?? 'Önizleme'}
+          title={previewMaterial.display_name}
           onClose={() => setPreviewMaterial(null)}
         />
       )}
@@ -334,22 +331,22 @@ export function CoursePage() {
             <h2 className="text-xl font-semibold">Genel Quiz</h2>
             <p className="mt-1 text-sm text-stuhub-text-secondary">
               Dersin tüm chapter notlarından 50 soru: çoktan seçmeli, doğru-yanlış, boşluk
-              doldurma ve açık uçlu (otomatik puanlama).
+              doldurma ve açık uçlu (otomatik puanlama). Tüm quizler kaydedilir.
             </p>
           </div>
           <button
             type="button"
             onClick={() => void handleGenerateOverallQuiz()}
-            disabled={quizGenerating}
+            disabled={overallJob?.status === 'running'}
             className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-50"
           >
-            {quizGenerating ? 'Üretiliyor…' : overallQuiz ? 'Genel Quiz\'i Yenile' : 'Genel Quiz Oluştur'}
+            {overallJob?.status === 'running' ? 'Üretiliyor…' : 'Yeni Genel Quiz Oluştur'}
           </button>
         </div>
 
-        {quizGenerating && (
+        {overallJob?.status === 'running' && (
           <div className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface p-5">
-            <p className="text-sm font-medium">{quizMessage}</p>
+            <p className="text-sm font-medium">{overallJob.message}</p>
             <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-stuhub-border">
               <div
                 className="h-full rounded-full bg-stuhub-accent transition-[width] duration-150 ease-out"
@@ -362,14 +359,44 @@ export function CoursePage() {
           </div>
         )}
 
-        {!quizGenerating && overallQuiz && (
-          <OverallQuizPlayer key={quizKey} quiz={overallQuiz} />
-        )}
-        {!quizGenerating && !overallQuiz && !error && (
-          <p className="mt-4 text-sm text-stuhub-text-secondary">
-            Henüz genel quiz yok. Önce chapter'lar için not oluşturup buradan başlat.
-          </p>
-        )}
+        <div className="mt-5 space-y-4">
+          {overallQuizzes.length === 0 && overallJob?.status !== 'running' && (
+            <p className="text-sm text-stuhub-text-secondary">
+              Henüz genel quiz yok. Önce chapter'lar için not oluşturup buradan başlat.
+            </p>
+          )}
+          {overallQuizzes.map((overallQuiz, index) => (
+            <details key={overallQuiz.id} open={index === 0}>
+              <summary className="flex cursor-pointer items-center justify-between rounded-md border border-stuhub-border bg-stuhub-surface px-5 py-3 font-medium">
+                <span>
+                  Genel Quiz {overallQuizzes.length - index} ·{' '}
+                  {overallQuiz.questions_json.questions.length} soru ·{' '}
+                  {overallQuiz.created_at
+                    ? new Date(overallQuiz.created_at).toLocaleDateString('tr-TR')
+                    : ''}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    void handleDeleteOverallQuiz(overallQuiz.id)
+                  }}
+                  className="rounded-sm px-2 py-1 text-sm text-stuhub-error transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                  aria-label="Genel quiz'i sil"
+                >
+                  Sil
+                </button>
+              </summary>
+              <div className="mt-3">
+                <OverallQuizPlayer
+                  key={`${overallQuiz.id}-${quizKey}`}
+                  quiz={overallQuiz}
+                  onDelete={(id) => void handleDeleteOverallQuiz(id)}
+                />
+              </div>
+            </details>
+          ))}
+        </div>
       </div>
     </section>
   )

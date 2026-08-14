@@ -2,62 +2,70 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { chaptersApi, type Chapter } from '../api/chapters'
-import {
-  exportNotePdf,
-  getNote,
-  streamNoteGeneration,
-  type SavedNote,
-} from '../api/notes'
-import { getQuiz, streamQuizGeneration, type Quiz } from '../api/quizzes'
+import { materialsApi } from '../api/materials'
+import { exportNotePdf, getNote, type SavedNote } from '../api/notes'
+import { listQuizzes, removeQuiz, type Quiz } from '../api/quizzes'
 import { slidesApi, type Slide } from '../api/slides'
+import { FilePreviewModal } from '../components/FilePreviewModal'
 import { GuideSlidesForm } from '../components/GuideSlidesForm'
 import { NoteViewer } from '../components/NoteViewer'
 import { QuizPlayer } from '../components/QuizPlayer'
 import { SlidePreview } from '../components/SlidePreview'
 import { useAnimatedProgress } from '../lib/useAnimatedProgress'
+import { useGenerationStore } from '../stores/generationStore'
 
 type LoadState = 'loading' | 'ready' | 'error'
 
-/** Chapter detay sayfası — guide slides + not + bölüm quizi (Faz 2/3/4 + iyileştirmeler). */
+/** Chapter detay sayfası — guide slides + not + quiz geçmişi (Faz 2/3/4 + iyileştirmeler). */
 export function NotebookPage() {
   const { courseId, chapterId } = useParams<{ courseId: string; chapterId: string }>()
   const numericChapterId = Number(chapterId)
 
   const [chapter, setChapter] = useState<Chapter | null>(null)
   const [slides, setSlides] = useState<Slide[]>([])
+  const [slidesPdfUrl, setSlidesPdfUrl] = useState<string | null>(null)
   const [note, setNote] = useState<SavedNote | null>(null)
-  const [quiz, setQuiz] = useState<Quiz | null>(null)
+  const [quizzes, setQuizzes] = useState<Quiz[]>([])
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState('')
+  const [pdfPreview, setPdfPreview] = useState<string | null>(null)
 
-  // üretim durumu (hedef yüzde — hook animasyonu sürer)
-  const [generating, setGenerating] = useState(false)
-  const [noteTarget, setNoteTarget] = useState(0)
-  const [statusMessage, setStatusMessage] = useState('')
-  const [liveContent, setLiveContent] = useState('')
-  const noteProgress = useAnimatedProgress(noteTarget)
-
-  // quiz durumu
-  const [quizGenerating, setQuizGenerating] = useState(false)
-  const [quizTarget, setQuizTarget] = useState(0)
-  const [quizMessage, setQuizMessage] = useState('')
-  const quizProgress = useAnimatedProgress(quizTarget)
-  const [quizKey, setQuizKey] = useState(0)
+  // Küresel üretim deposu — sayfa değişse bile üretim sürer (madde 2)
+  const noteJob = useGenerationStore((s) =>
+    s.jobs.find((j) => j.kind === 'note' && j.targetId === numericChapterId),
+  )
+  const quizJob = useGenerationStore((s) =>
+    s.jobs.find((j) => j.kind === 'quiz' && j.targetId === numericChapterId),
+  )
+  const noteProgress = useAnimatedProgress(noteJob?.percent ?? 0)
+  const quizProgress = useAnimatedProgress(quizJob?.percent ?? 0)
 
   const load = useCallback(async () => {
     if (!numericChapterId) return
     setState('loading')
     try {
-      const [chapterData, slideList, existingNote, existingQuiz] = await Promise.all([
+      const [chapterData, slideList, existingNote, quizList] = await Promise.all([
         chaptersApi.get(numericChapterId),
         slidesApi.listByChapter(numericChapterId),
         getNote(numericChapterId),
-        getQuiz(numericChapterId),
+        listQuizzes(numericChapterId),
       ])
       setChapter(chapterData)
       setSlides(slideList)
       setNote(existingNote)
-      setQuiz(existingQuiz)
+      setQuizzes(quizList)
+      // Slayt materyalinin PDF'i varsa önizleme URL'si hazırla (madde 1)
+      const withMaterial = slideList.find((s) => s.material_id != null)
+      if (withMaterial?.material_id != null) {
+        const material = await materialsApi.get(withMaterial.material_id)
+        if (material.filepath.toLowerCase().endsWith('.pdf')) {
+          setSlidesPdfUrl(`/api/materials/${material.id}/file`)
+        } else {
+          setSlidesPdfUrl(null)
+        }
+      } else {
+        setSlidesPdfUrl(null)
+      }
       setState('ready')
     } catch {
       setState('error')
@@ -84,55 +92,34 @@ export function NotebookPage() {
     }
   }
 
-  const handleGenerateQuiz = useCallback(async () => {
-    setQuizGenerating(true)
-    setQuizTarget(0)
-    setQuizMessage('Hazırlanıyor…')
-    setError('')
-    await streamQuizGeneration(numericChapterId, {
-      onStatus: (percent, message) => {
-        setQuizTarget(percent)
-        setQuizMessage(message)
-      },
-      onDone: (newQuiz) => {
-        setQuiz(newQuiz)
-        setQuizKey((k) => k + 1)
-        setQuizGenerating(false)
-        setQuizMessage('')
-      },
-      onError: (message) => {
-        setError(message)
-        setQuizGenerating(false)
-      },
-    })
-  }, [numericChapterId])
-
   const handleGenerate = async () => {
-    setGenerating(true)
-    setNoteTarget(0)
-    setStatusMessage('Hazırlanıyor…')
-    setLiveContent('')
-    setError('')
-    await streamNoteGeneration(numericChapterId, {
-      onStatus: (percent, message) => {
-        setNoteTarget(percent)
-        setStatusMessage(message)
-      },
-      onDelta: (text) => setLiveContent((prev) => prev + text),
-      onDone: (savedNote) => {
-        setNote(savedNote)
-        setLiveContent('')
-        setNoteTarget(100)
-        setStatusMessage('Not hazır.')
-        setGenerating(false)
-        // Madde 5: quiz not bittikten sonra OTOMATİK oluşturulur
-        void handleGenerateQuiz()
-      },
-      onError: (message) => {
-        setError(message)
-        setGenerating(false)
-      },
-    })
+    const saved = await useGenerationStore
+      .getState()
+      .generateNote(numericChapterId, chapter?.title ?? 'Chapter')
+    if (saved) {
+      setNote(saved)
+      setError('')
+      // Madde 5: quiz not bittikten sonra OTOMATİK üretilir
+      await useGenerationStore.getState().generateQuiz(numericChapterId, chapter?.title ?? 'Chapter')
+      await load()
+    }
+  }
+
+  const handleGenerateQuiz = async () => {
+    await useGenerationStore
+      .getState()
+      .generateQuiz(numericChapterId, chapter?.title ?? 'Chapter')
+    await load()
+  }
+
+  const handleDeleteQuiz = async (quizId: number) => {
+    if (!window.confirm('Bu quiz ve denemeleri silinecek. Emin misin?')) return
+    try {
+      await removeQuiz(quizId)
+      setQuizzes((prev) => prev.filter((q) => q.id !== quizId))
+    } catch {
+      setError('Quiz silinemedi. Lütfen tekrar deneyin.')
+    }
   }
 
   const handleExportPdf = async () => {
@@ -145,7 +132,8 @@ export function NotebookPage() {
   }
 
   const canGenerate = slides.length > 0
-  const canGenerateQuiz = note !== null
+  const generatingNote = noteJob?.status === 'running'
+  const generatingQuiz = quizJob?.status === 'running'
 
   return (
     <section>
@@ -169,7 +157,7 @@ export function NotebookPage() {
         <p className="mt-8 text-sm text-stuhub-text-secondary">Yükleniyor…</p>
       )}
 
-      {/* Guide slides — önizleyici (tek tek gösterim) */}
+      {/* Guide slides — önizleyici + PDF açma */}
       <div className="mt-8">
         <h2 className="text-xl font-semibold">Guide Slides</h2>
         <p className="mt-1 text-sm text-stuhub-text-secondary">
@@ -180,7 +168,11 @@ export function NotebookPage() {
         </div>
 
         <div className="mt-5">
-          <SlidePreview slides={slides} onDelete={handleDeleteSlide} />
+          <SlidePreview
+            slides={slides}
+            onDelete={handleDeleteSlide}
+            onOpenPdf={slidesPdfUrl ? () => setPdfPreview(slidesPdfUrl) : undefined}
+          />
         </div>
       </div>
 
@@ -189,7 +181,7 @@ export function NotebookPage() {
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold">Not</h2>
           <div className="flex gap-3">
-            {note && !generating && (
+            {note && !generatingNote && (
               <button
                 type="button"
                 onClick={() => void handleExportPdf()}
@@ -201,36 +193,34 @@ export function NotebookPage() {
             <button
               type="button"
               onClick={() => void handleGenerate()}
-              disabled={generating || !canGenerate}
+              disabled={generatingNote || !canGenerate}
               className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-50"
               title={canGenerate ? '' : 'Önce guide slides yükle'}
             >
-              {generating ? 'Üretiliyor…' : 'Not Oluştur'}
+              {generatingNote ? 'Üretiliyor…' : 'Not Oluştur'}
             </button>
           </div>
         </div>
 
-        {generating && (
+        {generatingNote && (
           <div className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface p-5">
-            <p className="text-sm font-medium">{statusMessage}</p>
+            <p className="text-sm font-medium">{noteJob?.message}</p>
             <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-stuhub-border">
               <div
                 className="h-full rounded-full bg-stuhub-accent transition-[width] duration-150 ease-out"
                 style={{ width: `${Math.max(noteProgress, 2)}%` }}
               />
             </div>
-            <p className="mt-2 text-xs text-stuhub-text-secondary">
-              %{Math.round(noteProgress)} tamamlandı
-            </p>
-            {liveContent && (
+            <p className="mt-2 text-xs text-stuhub-text-secondary">%{Math.round(noteProgress)} tamamlandı</p>
+            {noteJob?.liveContent && (
               <pre className="mt-4 max-h-64 overflow-y-auto whitespace-pre-wrap rounded-sm bg-stuhub-bg p-3 text-sm text-stuhub-text-secondary">
-                {liveContent}
+                {noteJob.liveContent}
               </pre>
             )}
           </div>
         )}
 
-        {!generating && note && (
+        {!generatingNote && note && (
           <details open className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface">
             <summary className="cursor-pointer select-none px-5 py-3 font-medium">
               Not görüntüle / gizle
@@ -240,54 +230,90 @@ export function NotebookPage() {
             </div>
           </details>
         )}
-        {!generating && !note && !error && (
+        {!generatingNote && !note && !error && (
           <p className="mt-4 text-sm text-stuhub-text-secondary">
             Henüz not yok. Guide slides yükleyip “Not Oluştur” ile başla.
           </p>
         )}
       </div>
 
-      {/* Bölüm quizi — notun sonunda otomatik */}
+      {/* Bölüm quizleri — geçmiş korunur, hepsi listelenir (madde 3) */}
       <div className="mt-8">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Quiz</h2>
+          <h2 className="text-xl font-semibold">Quizler</h2>
           <button
             type="button"
             onClick={() => void handleGenerateQuiz()}
-            disabled={quizGenerating || !canGenerateQuiz}
+            disabled={generatingQuiz || generatingNote || !note}
             className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-50"
-            title={canGenerateQuiz ? '' : 'Önce not oluştur'}
+            title={note ? '' : 'Önce not oluştur'}
           >
-            {quizGenerating ? 'Üretiliyor…' : quiz ? 'Quiz\'i Yenile' : 'Quiz Oluştur'}
+            {generatingQuiz ? 'Üretiliyor…' : 'Yeni Quiz Oluştur'}
           </button>
         </div>
 
-        {quizGenerating && (
+        {generatingQuiz && (
           <div className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface p-5">
-            <p className="text-sm font-medium">{quizMessage}</p>
+            <p className="text-sm font-medium">{quizJob?.message}</p>
             <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-stuhub-border">
               <div
                 className="h-full rounded-full bg-stuhub-accent transition-[width] duration-150 ease-out"
                 style={{ width: `${Math.max(quizProgress, 2)}%` }}
               />
             </div>
-            <p className="mt-2 text-xs text-stuhub-text-secondary">
-              %{Math.round(quizProgress)} tamamlandı
-            </p>
+            <p className="mt-2 text-xs text-stuhub-text-secondary">%{Math.round(quizProgress)} tamamlandı</p>
           </div>
         )}
 
-        {!quizGenerating && quiz && (
-          <div className="mt-4">
-            <QuizPlayer key={quizKey} quiz={quiz} />
-          </div>
-        )}
-        {!quizGenerating && !quiz && !error && (
-          <p className="mt-4 text-sm text-stuhub-text-secondary">
-            Henüz quiz yok. Not oluşturunca otomatik hazırlanır.
-          </p>
-        )}
+        <div className="mt-5 space-y-4">
+          {quizzes.length === 0 && !generatingQuiz && (
+            <p className="text-sm text-stuhub-text-secondary">
+              Henüz quiz yok. Not oluşturunca otomatik hazırlanır.
+            </p>
+          )}
+          {quizzes.map((quiz, index) => (
+            <details key={quiz.id} open={index === 0}>
+              <summary className="flex cursor-pointer items-center justify-between rounded-md border border-stuhub-border bg-stuhub-surface px-5 py-3 font-medium">
+                <span>
+                  Quiz {quizzes.length - index} ·{' '}
+                  {quiz.questions_json.topics.reduce(
+                    (n, t) => n + t.questions.length,
+                    0,
+                  )}{' '}
+                  soru ·{' '}
+                  {quiz.created_at ? new Date(quiz.created_at).toLocaleDateString('tr-TR') : ''}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    void handleDeleteQuiz(quiz.id)
+                  }}
+                  className="rounded-sm px-2 py-1 text-sm text-stuhub-error transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                  aria-label="Quiz'i sil"
+                >
+                  Sil
+                </button>
+              </summary>
+              <div className="mt-3">
+                <QuizPlayer
+                  key={quiz.id}
+                  quiz={quiz}
+                  onDelete={(id) => void handleDeleteQuiz(id)}
+                />
+              </div>
+            </details>
+          ))}
+        </div>
       </div>
+
+      {pdfPreview && (
+        <FilePreviewModal
+          url={pdfPreview}
+          title="Sunum Önizleme"
+          onClose={() => setPdfPreview(null)}
+        />
+      )}
     </section>
   )
 }

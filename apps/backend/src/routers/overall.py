@@ -131,6 +131,13 @@ async def submit_overall_attempt(quiz_id: int, payload: OverallAttemptIn) -> dic
                     ),
                     "explanation": question.get("explanation", ""),
                     "citations": question.get("citations", []),
+                    # Önizleme için tam içerik (madde 7)
+                    "options": question.get("options"),
+                    "correct_index": question.get("correct_index"),
+                    "selected_index": value if qtype == "mcq" else None,
+                    "statement": question.get("statement"),
+                    "answer": question.get("answer"),
+                    "selected_tf": value if qtype == "tf" else None,
                 }
             )
         elif qtype == "fib":
@@ -150,6 +157,7 @@ async def submit_overall_attempt(quiz_id: int, payload: OverallAttemptIn) -> dic
                     "explanation": question.get("explanation", ""),
                     "citations": question.get("citations", []),
                     "accepted_answers": question["accepted_answers"] if not correct else [],
+                    "user_answer": user_text,
                 }
             )
         else:  # open
@@ -174,6 +182,7 @@ async def submit_overall_attempt(quiz_id: int, payload: OverallAttemptIn) -> dic
                     "question": question.get("question", ""),
                     "score": grade["score"],
                     "correct": grade["score"] >= 5,
+                    "user_answer": user_text,
                     "grade": {
                         k: grade[k]
                         for k in (
@@ -219,3 +228,81 @@ async def submit_overall_attempt(quiz_id: int, payload: OverallAttemptIn) -> dic
         await db.close()
 
     return {"attempt_id": attempt_id, **score_json}
+
+
+@router.get("/courses/{course_id}/overall-quizzes")
+async def list_course_overall_quizzes(course_id: int) -> list[dict]:
+    """Dersin TÜM genel quizlerini (yeniden eskiye) döner — answer_key'ler SIZMAZ."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT id, questions_json, created_at FROM overall_quizzes "
+            "WHERE course_id = ? ORDER BY id DESC",
+            (course_id,),
+        )
+        rows = await cursor.fetchall()
+    finally:
+        await db.close()
+    return [
+        {
+            "id": row["id"],
+            "course_id": course_id,
+            "questions_json": _strip_answers(json.loads(row["questions_json"])),
+            "created_at": row["created_at"],
+        }
+        for row in rows
+    ]
+
+
+@router.delete("/overall-quizzes/{quiz_id}", status_code=204)
+async def delete_overall_quiz(quiz_id: int) -> None:
+    """Genel quiz'i siler (denemeleriyle birlikte)."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "DELETE FROM overall_quizzes WHERE id = ?", (quiz_id,)
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Genel quiz bulunamadı")
+        await db.commit()
+    finally:
+        await db.close()
+
+
+@router.get("/overall-quizzes/{quiz_id}/attempts")
+async def list_overall_attempts(quiz_id: int) -> list[dict]:
+    """Genel quiz'in kayıtlı denemeleri (yeniden eskiye) — cevaplar kalıcıdır."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT id, score_json, created_at FROM overall_attempts "
+            "WHERE overall_quiz_id = ? ORDER BY id DESC",
+            (quiz_id,),
+        )
+        rows = await cursor.fetchall()
+    finally:
+        await db.close()
+    return [
+        {
+            "attempt_id": row["id"],
+            "overall_quiz_id": quiz_id,
+            "created_at": row["created_at"],
+            "score_json": json.loads(row["score_json"] or "{}"),
+        }
+        for row in rows
+    ]
+
+
+@router.delete("/overall-attempts/{attempt_id}", status_code=204)
+async def delete_overall_attempt(attempt_id: int) -> None:
+    """Bir genel quiz denemesini (cevapları) siler."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "DELETE FROM overall_attempts WHERE id = ?", (attempt_id,)
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Deneme bulunamadı")
+        await db.commit()
+    finally:
+        await db.close()

@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import {
+  listOverallAttempts,
+  removeOverallAttempt,
   submitOverallAttempt,
   type OverallOutcome,
   type OverallQuestion,
@@ -9,7 +11,7 @@ import {
 
 interface OverallQuizPlayerProps {
   quiz: OverallQuiz
-  onReset?: () => void
+  onDelete?: (quizId: number) => void
 }
 
 type AnswerValue = number | string
@@ -29,17 +31,60 @@ const TYPE_LABELS: Record<string, string> = {
   open: 'Açık uçlu',
 }
 
-/** Genel quiz oynatıcı — 50 soru, 4 tip, karışık sıra, anında feedback (Faz 5). */
-export function OverallQuizPlayer({ quiz, onReset }: OverallQuizPlayerProps) {
+/** Genel quiz oynatıcı — kayıtlı denemeyi geri yükler, 50 soru, 4 tip (Faz 5 + iyileştirme). */
+export function OverallQuizPlayer({ quiz, onDelete }: OverallQuizPlayerProps) {
   const questions = quiz.questions_json.questions
+  const [phase, setPhase] = useState<'loading' | 'answering' | 'finished'>('loading')
   const [current, setCurrent] = useState(0)
   const [answers, setAnswers] = useState<Array<{ qid: number; value: AnswerValue }>>([])
   const [local, setLocal] = useState<LocalResult | null>(null)
   const [openText, setOpenText] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [outcome, setOutcome] = useState<OverallOutcome | null>(null)
+  const [savedAttemptId, setSavedAttemptId] = useState<number | null>(null)
 
-  if (outcome) {
+  // Kayıtlı deneme varsa geri yükle — bitmiş quiz yeniden başlamaz (madde 6)
+  useEffect(() => {
+    let cancelled = false
+    void listOverallAttempts(quiz.id).then((attempts) => {
+      if (cancelled || attempts.length === 0) {
+        if (!cancelled) setPhase('answering')
+        return
+      }
+      setOutcome(attempts[0].score_json)
+      setSavedAttemptId(attempts[0].attempt_id)
+      setPhase('finished')
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [quiz.id])
+
+  if (phase === 'loading') {
+    return <p className="mt-4 text-sm text-stuhub-text-secondary">Genel quiz yükleniyor…</p>
+  }
+
+  const startFresh = () => {
+    setOutcome(null)
+    setSavedAttemptId(null)
+    setCurrent(0)
+    setAnswers([])
+    setLocal(null)
+    setOpenText('')
+    setPhase('answering')
+  }
+
+  const handleDeleteAnswers = async () => {
+    if (savedAttemptId == null || !window.confirm('Kayıtlı cevaplar silinecek. Emin misin?')) return
+    try {
+      await removeOverallAttempt(savedAttemptId)
+      startFresh()
+    } catch {
+      // sessizce geç
+    }
+  }
+
+  if (phase === 'finished' && outcome) {
     return (
       <div className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface p-6">
         <h3 className="text-xl font-semibold">Genel quiz tamamlandı</h3>
@@ -48,89 +93,135 @@ export function OverallQuizPlayer({ quiz, onReset }: OverallQuizPlayerProps) {
           Kapalı sorular: {outcome.closed_correct} / {outcome.closed_total} doğru · Açık uçlu
           toplam: {outcome.open_total} / 50
         </p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={startFresh}
+            className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
+          >
+            Yeniden çöz
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleDeleteAnswers()}
+            className="rounded-sm border border-stuhub-border px-4 py-2 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+          >
+            Cevapları sil
+          </button>
+          {onDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(quiz.id)}
+              className="rounded-sm px-4 py-2 text-sm font-medium text-stuhub-error transition-colors duration-150 hover:bg-stuhub-surface-hover"
+            >
+              Genel quiz'i sil
+            </button>
+          )}
+        </div>
+
+        {/* Açılır kapanır tam soru önizleme (madde 7: seçeneklerle birlikte) */}
         <div className="mt-5 space-y-3">
           <details open className="rounded-md border border-stuhub-border">
             <summary className="cursor-pointer select-none bg-stuhub-bg px-4 py-2.5 text-sm font-medium">
               Sorular ve cevaplar ({outcome.results.length})
             </summary>
             <div className="space-y-3 p-4">
-          {outcome.results.map((result) => (
-            <details
-              key={result.qid}
-              className="rounded-md border border-stuhub-border bg-stuhub-bg"
-            >
-              <summary className="cursor-pointer px-4 py-2.5 text-sm font-medium">
-                {result.correct === undefined ? (
-                  <span className="text-stuhub-text">
-                    {result.question.slice(0, 80)} · <b>{result.score} / 10</b>
-                  </span>
-                ) : result.correct ? (
-                  <span className="text-stuhub-success">✓ {result.question.slice(0, 80)}</span>
-                ) : (
-                  <span className="text-stuhub-error">✗ {result.question.slice(0, 80)}</span>
-                )}
-              </summary>
-              <div className="border-t border-stuhub-border px-4 py-3 text-sm">
-                {result.feedback && (
-                  <p
-                    className={`font-medium ${result.correct ? 'text-stuhub-success' : 'text-stuhub-error'}`}
-                  >
-                    {result.feedback}
-                  </p>
-                )}
-                {result.explanation && (
-                  <p className="mt-1 text-stuhub-text-secondary">{result.explanation}</p>
-                )}
-                {result.grade && (
-                  <div className="mt-2 space-y-1 text-stuhub-text-secondary">
-                    <p>
-                      <b>Doğru:</b> {result.grade.correct.join(', ') || 'yok'}
-                    </p>
-                    <p>
-                      <b>Eksik:</b> {result.grade.missing.join(', ') || 'yok'}
-                    </p>
-                    <p>
-                      <b>Yanlış:</b> {result.grade.incorrect.join(', ') || 'yok'}
-                    </p>
-                    <p>
-                      <b>Gereksiz:</b> {result.grade.unnecessary.join(', ') || 'yok'}
-                    </p>
-                    <p className="mt-1">{result.grade.explanation}</p>
-                    {result.grade.ideal_answer && (
-                      <div className="mt-2 rounded-sm bg-stuhub-surface p-3">
-                        <p className="font-medium">İdeal cevap:</p>
-                        <p className="mt-1">{result.grade.ideal_answer}</p>
+              {outcome.results.map((result) => (
+                <details key={result.qid} className="rounded-md border border-stuhub-border bg-stuhub-bg">
+                  <summary className="cursor-pointer px-4 py-2.5 text-sm font-medium">
+                    {result.type === 'open' ? (
+                      <span className="text-stuhub-text">
+                        {result.question.slice(0, 80)} · <b>{result.score} / 10</b>
+                      </span>
+                    ) : result.correct ? (
+                      <span className="text-stuhub-success">✓ {result.question.slice(0, 80)}</span>
+                    ) : (
+                      <span className="text-stuhub-error">✗ {result.question.slice(0, 80)}</span>
+                    )}
+                  </summary>
+                  <div className="border-t border-stuhub-border px-4 py-3 text-sm">
+                    {result.type === 'mcq' && result.options && (
+                      <div className="mb-2 space-y-1.5">
+                        {result.options.map((option, index) => {
+                          let className =
+                            'rounded-sm border border-stuhub-border px-3 py-1.5 text-stuhub-text-secondary'
+                          if (index === result.correct_index) {
+                            className =
+                              'rounded-sm border border-stuhub-success bg-stuhub-success/10 px-3 py-1.5 text-stuhub-success'
+                          } else if (index === result.selected_index && !result.correct) {
+                            className =
+                              'rounded-sm border border-stuhub-error bg-stuhub-error/10 px-3 py-1.5 text-stuhub-error'
+                          }
+                          return (
+                            <div key={index} className={className}>
+                              {option}
+                              {index === result.correct_index && ' ✓'}
+                              {index === result.selected_index && !result.correct && ' (senin cevabın)'}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                    {result.type === 'tf' && result.statement != null && (
+                      <p className="mb-2 text-stuhub-text-secondary">
+                        Cevabın: {result.selected_tf === 1 ? 'Doğru' : 'Yanlış'} · Doğru cevap:{' '}
+                        {result.answer ? 'Doğru' : 'Yanlış'}
+                      </p>
+                    )}
+                    {result.type === 'fib' && (
+                      <p className="mb-2 text-stuhub-text-secondary">
+                        Cevabın: “{result.user_answer}” · Kabul edilen:{' '}
+                        {(result.accepted_answers ?? []).join(', ') || '—'}
+                      </p>
+                    )}
+                    {result.type === 'open' && (
+                      <p className="mb-2 text-stuhub-text-secondary">
+                        Cevabın: “{(result.user_answer ?? '').slice(0, 120)}”
+                      </p>
+                    )}
+                    {result.feedback && (
+                      <p className={`font-medium ${result.correct ? 'text-stuhub-success' : 'text-stuhub-error'}`}>
+                        {result.feedback}
+                      </p>
+                    )}
+                    {result.explanation && (
+                      <p className="mt-1 text-stuhub-text-secondary">{result.explanation}</p>
+                    )}
+                    {result.grade && (
+                      <div className="mt-2 space-y-1 text-stuhub-text-secondary">
+                        <p>
+                          <b>Doğru:</b> {result.grade.correct.join(', ') || 'yok'}
+                        </p>
+                        <p>
+                          <b>Eksik:</b> {result.grade.missing.join(', ') || 'yok'}
+                        </p>
+                        <p>
+                          <b>Yanlış:</b> {result.grade.incorrect.join(', ') || 'yok'}
+                        </p>
+                        <p>
+                          <b>Gereksiz:</b> {result.grade.unnecessary.join(', ') || 'yok'}
+                        </p>
+                        <p className="mt-1">{result.grade.explanation}</p>
+                        {result.grade.ideal_answer && (
+                          <div className="mt-2 rounded-sm bg-stuhub-surface p-3">
+                            <p className="font-medium">İdeal cevap:</p>
+                            <p className="mt-1">{result.grade.ideal_answer}</p>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                )}
-              </div>
-            </details>
-          ))}
+                </details>
+              ))}
             </div>
           </details>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setOutcome(null)
-            setCurrent(0)
-            setAnswers([])
-            setLocal(null)
-            setOpenText('')
-            onReset?.()
-          }}
-          className="mt-5 rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
-        >
-          Tekrar dene
-        </button>
       </div>
     )
   }
 
   const question = questions[current]
   const isLast = current === questions.length - 1
-  const answered = answers.some((a) => a.qid === current)
 
   const evaluateClosed = (value: number): LocalResult => {
     let correct: boolean
@@ -173,11 +264,13 @@ export function OverallQuizPlayer({ quiz, onReset }: OverallQuizPlayerProps) {
     try {
       const result = await submitOverallAttempt(quiz.id, answers)
       setOutcome(result)
+      setPhase('finished')
     } catch {
       setSubmitting(false)
     }
   }
 
+  const answered = answers.some((a) => a.qid === current)
   const canNext =
     question.type === 'open'
       ? (answers.find((a) => a.qid === current)?.value ?? '') !== ''
@@ -195,7 +288,7 @@ export function OverallQuizPlayer({ quiz, onReset }: OverallQuizPlayerProps) {
       </div>
       <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-stuhub-border">
         <div
-          className="h-full bg-stuhub-accent transition-all duration-300"
+          className="h-full rounded-full bg-stuhub-accent transition-[width] duration-150 ease-out"
           style={{ width: `${Math.max((current / questions.length) * 100, 2)}%` }}
         />
       </div>
@@ -306,9 +399,6 @@ export function OverallQuizPlayer({ quiz, onReset }: OverallQuizPlayerProps) {
         >
           <p className="font-medium">{local.feedback}</p>
           {!local.correct && local.explanation && <p className="mt-1">{local.explanation}</p>}
-          {!local.correct && local.acceptedAnswers && local.acceptedAnswers.length > 0 && (
-            <p className="mt-1">Kabul edilen cevaplar: {local.acceptedAnswers.join(', ')}</p>
-          )}
         </div>
       )}
 

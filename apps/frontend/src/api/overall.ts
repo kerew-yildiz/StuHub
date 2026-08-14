@@ -32,6 +32,7 @@ export interface OverallQuiz {
   id: number
   course_id: number
   questions_json: { seed: number; questions: OverallQuestion[] }
+  created_at?: string
 }
 
 export interface OverallGrade {
@@ -54,6 +55,14 @@ export interface OverallResult {
   accepted_answers?: string[]
   score?: number
   grade?: OverallGrade
+  // Önizleme için tam içerik (madde 7)
+  options?: string[]
+  correct_index?: number
+  selected_index?: number
+  statement?: string
+  selected_tf?: number
+  answer?: boolean
+  user_answer?: string
 }
 
 export interface OverallOutcome {
@@ -127,6 +136,36 @@ export async function getOverallQuiz(courseId: number): Promise<OverallQuiz | nu
   const response = await fetch(`${BASE_URL}/courses/${courseId}/overall-quiz`)
   if (!response.ok) return null
   return (await response.json()) as OverallQuiz
+}
+
+/** Dersin TÜM genel quizleri (yeniden eskiye) — geçmiş korunur. */
+export async function listOverallQuizzes(courseId: number): Promise<OverallQuiz[]> {
+  const response = await fetch(`${BASE_URL}/courses/${courseId}/overall-quizzes`)
+  if (!response.ok) return []
+  return (await response.json()) as OverallQuiz[]
+}
+
+/** Genel quiz'i kalıcı olarak siler. */
+export async function removeOverallQuiz(quizId: number): Promise<void> {
+  await fetch(`${BASE_URL}/overall-quizzes/${quizId}`, { method: 'DELETE' })
+}
+
+/** Kayıtlı genel quiz denemesi. */
+export interface SavedOverallAttempt {
+  attempt_id: number
+  overall_quiz_id: number
+  created_at: string
+  score_json: OverallOutcome
+}
+
+export async function listOverallAttempts(quizId: number): Promise<SavedOverallAttempt[]> {
+  const response = await fetch(`${BASE_URL}/overall-quizzes/${quizId}/attempts`)
+  if (!response.ok) return []
+  return (await response.json()) as SavedOverallAttempt[]
+}
+
+export async function removeOverallAttempt(attemptId: number): Promise<void> {
+  await fetch(`${BASE_URL}/overall-attempts/${attemptId}`, { method: 'DELETE' })
 }
 
 /** Tüm cevapları gönderir; kapalı sorular anında, açık uçlular Essay Grader ile puanlanır. */

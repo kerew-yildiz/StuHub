@@ -1,31 +1,85 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import {
   flattenQuestions,
+  listAttempts,
+  removeAttempt,
   submitAttempt,
   type AttemptOutcome,
   type Quiz,
-  type QuizCitation,
 } from '../api/quizzes'
-import { CitationPopup } from './CitationPopup'
 
 interface QuizPlayerProps {
   quiz: Quiz
-  onReset?: () => void
+  onDelete?: (quizId: number) => void
 }
 
-/** Quiz oynatıcı — tek soru/ekran, anında feedback, ilerleme (stil rehberi + Faz 4.2). */
-export function QuizPlayer({ quiz, onReset }: QuizPlayerProps) {
+type Phase = 'loading' | 'answering' | 'finished'
+
+/** Quiz oynatıcı — kayıtlı denemeyi geri yükler, anında feedback, tam önizleme (Faz 4 + iyileştirme). */
+export function QuizPlayer({ quiz, onDelete }: QuizPlayerProps) {
   const questions = flattenQuestions(quiz)
+  const [phase, setPhase] = useState<Phase>('loading')
   const [current, setCurrent] = useState(0)
   const [selected, setSelected] = useState<number | null>(null)
   const [revealed, setRevealed] = useState(false)
   const [answers, setAnswers] = useState<Array<{ qid: string; selected_index: number }>>([])
   const [outcome, setOutcome] = useState<AttemptOutcome | null>(null)
+  const [savedAttemptId, setSavedAttemptId] = useState<number | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [activeCitation, setActiveCitation] = useState<QuizCitation | null>(null)
 
-  if (outcome) {
+  // Kayıtlı deneme varsa geri yükle — bitmiş quiz yeniden başlamaz (madde 6)
+  useEffect(() => {
+    let cancelled = false
+    void listAttempts(quiz.id).then((attempts) => {
+      if (cancelled || attempts.length === 0) {
+        if (!cancelled) setPhase('answering')
+        return
+      }
+      const latest = attempts[0]
+      const results = latest.feedback_json?.results ?? []
+      const total = flattenQuestions(quiz).length
+      const correctCount = results.filter((r) => r.correct).length
+      setOutcome({
+        attempt_id: latest.attempt_id,
+        score: latest.score ?? 0,
+        total,
+        correct_count: correctCount,
+        results,
+      })
+      setSavedAttemptId(latest.attempt_id)
+      setPhase('finished')
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [quiz.id, quiz])
+
+  if (phase === 'loading') {
+    return <p className="mt-4 text-sm text-stuhub-text-secondary">Quiz yükleniyor…</p>
+  }
+
+  const startFresh = () => {
+    setOutcome(null)
+    setSavedAttemptId(null)
+    setCurrent(0)
+    setAnswers([])
+    setSelected(null)
+    setRevealed(false)
+    setPhase('answering')
+  }
+
+  const handleDeleteAnswers = async () => {
+    if (savedAttemptId == null || !window.confirm('Kayıtlı cevaplar silinecek. Emin misin?')) return
+    try {
+      await removeAttempt(savedAttemptId)
+      startFresh()
+    } catch {
+      // sessizce geç
+    }
+  }
+
+  if (phase === 'finished' && outcome) {
     return (
       <div className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface p-6">
         <h3 className="text-xl font-semibold">Quiz tamamlandı</h3>
@@ -35,52 +89,69 @@ export function QuizPlayer({ quiz, onReset }: QuizPlayerProps) {
         <p className="mt-1 text-sm text-stuhub-text-secondary">
           {outcome.correct_count} / {outcome.total} doğru
         </p>
-        <button
-          type="button"
-          onClick={() => {
-            setOutcome(null)
-            setCurrent(0)
-            setAnswers([])
-            setSelected(null)
-            setRevealed(false)
-            onReset?.()
-          }}
-          className="mt-4 rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
-        >
-          Tekrar dene
-        </button>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={startFresh}
+            className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
+          >
+            Yeniden çöz
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleDeleteAnswers()}
+            className="rounded-sm border border-stuhub-border px-4 py-2 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+          >
+            Cevapları sil
+          </button>
+          {onDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(quiz.id)}
+              className="rounded-sm px-4 py-2 text-sm font-medium text-stuhub-error transition-colors duration-150 hover:bg-stuhub-surface-hover"
+            >
+              Quiz'i sil
+            </button>
+          )}
+        </div>
 
-        {/* Açılır kapanır soru önizleme penceresi */}
+        {/* Açılır kapanır tam soru önizleme (seçeneklerle birlikte — madde 7) */}
         <details open className="mt-5 rounded-md border border-stuhub-border">
           <summary className="cursor-pointer select-none bg-stuhub-bg px-4 py-2.5 text-sm font-medium">
             Sorular ve cevaplar
           </summary>
           <div className="divide-y divide-stuhub-border">
-            {outcome.results.map((result) => {
-              const selectedLabel = result.options[result.selected_index] ?? '-'
-              const correctLabel = result.options[result.correct_index] ?? '-'
-              return (
-                <div key={result.qid} className="px-4 py-3 text-sm">
-                  <p className="font-medium">{result.question}</p>
-                  <p className="mt-1 text-stuhub-text-secondary">
-                    Senin cevabın: <b>{selectedLabel}</b>
-                    {!result.correct && (
-                      <>
-                        {' · '}Doğru cevap: <b className="text-stuhub-success">{correctLabel}</b>
-                      </>
-                    )}
-                  </p>
-                  <p
-                    className={`mt-1 ${result.correct ? 'text-stuhub-success' : 'text-stuhub-error'}`}
-                  >
-                    {result.correct ? '✓ Doğru' : '✗ Yanlış'} — {result.feedback}
-                  </p>
-                  {!result.correct && result.explanation && (
-                    <p className="mt-1 text-stuhub-text-secondary">{result.explanation}</p>
-                  )}
+            {outcome.results.map((result) => (
+              <div key={result.qid} className="px-4 py-3 text-sm">
+                <p className="font-medium">{result.question}</p>
+                <div className="mt-2 space-y-1.5">
+                  {result.options.map((option, index) => {
+                    let className =
+                      'rounded-sm border border-stuhub-border px-3 py-1.5 text-stuhub-text-secondary'
+                    if (index === result.correct_index) {
+                      className = 'rounded-sm border border-stuhub-success bg-stuhub-success/10 px-3 py-1.5 text-stuhub-success'
+                    } else if (index === result.selected_index && !result.correct) {
+                      className = 'rounded-sm border border-stuhub-error bg-stuhub-error/10 px-3 py-1.5 text-stuhub-error'
+                    }
+                    return (
+                      <div key={index} className={className}>
+                        {option}
+                        {index === result.correct_index && ' ✓'}
+                        {index === result.selected_index && !result.correct && ' (senin cevabın)'}
+                      </div>
+                    )
+                  })}
                 </div>
-              )
-            })}
+                <p
+                  className={`mt-2 font-medium ${result.correct ? 'text-stuhub-success' : 'text-stuhub-error'}`}
+                >
+                  {result.correct ? '✓ Doğru' : '✗ Yanlış'} — {result.feedback}
+                </p>
+                {!result.correct && result.explanation && (
+                  <p className="mt-1 text-stuhub-text-secondary">{result.explanation}</p>
+                )}
+              </div>
+            ))}
           </div>
         </details>
       </div>
@@ -114,9 +185,9 @@ export function QuizPlayer({ quiz, onReset }: QuizPlayerProps) {
     try {
       const result = await submitAttempt(quiz.id, answers)
       setOutcome(result)
+      setPhase('finished')
     } catch {
       setSubmitting(false)
-      // hata: kullanıcı tekrar bitir'e basabilir
     }
   }
 
@@ -130,7 +201,7 @@ export function QuizPlayer({ quiz, onReset }: QuizPlayerProps) {
       </div>
       <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-stuhub-border">
         <div
-          className="h-full bg-stuhub-accent transition-all duration-300"
+          className="h-full rounded-full bg-stuhub-accent transition-[width] duration-150 ease-out"
           style={{ width: `${Math.max((current / questions.length) * 100, 2)}%` }}
         />
       </div>
@@ -178,22 +249,6 @@ export function QuizPlayer({ quiz, onReset }: QuizPlayerProps) {
           {!correct && question.question.explanation && (
             <p className="mt-1">{question.question.explanation}</p>
           )}
-          {question.question.citations.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-2">
-              {question.question.citations.map((citation) => (
-                <button
-                  key={citation.id}
-                  type="button"
-                  onClick={() => setActiveCitation(citation)}
-                  className="rounded-sm bg-stuhub-surface px-2 py-1 text-xs font-semibold text-stuhub-accent transition-colors duration-150 hover:bg-stuhub-surface-hover"
-                >
-                  [{citation.id}]
-                  {citation.page != null ? ` sayfa ${citation.page}` : ''}
-                  {citation.slide != null ? ` slide ${citation.slide}` : ''}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
@@ -207,10 +262,6 @@ export function QuizPlayer({ quiz, onReset }: QuizPlayerProps) {
           {submitting ? 'Değerlendiriliyor…' : isLast ? 'Bitir' : 'Sonraki soru'}
         </button>
       </div>
-
-      {activeCitation && (
-        <CitationPopup citation={activeCitation} onClose={() => setActiveCitation(null)} />
-      )}
     </div>
   )
 }
