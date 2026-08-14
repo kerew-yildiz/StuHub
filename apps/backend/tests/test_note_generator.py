@@ -1,6 +1,6 @@
 """Not üretimi pipeline testleri (Faz 3.1) — LLM ve retrieval mock'lu."""
 
-from src.services import llm_service, note_generator, retrieval
+from src.services import llm_service, note_generator, retrieval, web_search_service
 
 TOPIC = "Bağlı Listeler"
 CHUNK_TEXT = "Bağlı listeler, her düğümün bir sonraki düğüme işaret ettiği doğrusal veri yapısıdır."
@@ -184,17 +184,99 @@ async def test_generate_notes_missing_topic_regenerated(client, monkeypatch):
     assert coverage["calls"] >= 2
 
 
-async def test_generate_notes_unresolvable_citation_fails(client, monkeypatch):
+async def test_generate_notes_unresolvable_citation_never_fails(client, monkeypatch):
+    """Çözümsüz atıflar notu HATAYA DÜŞÜRMEZ — slayt yedeğiyle bölüm teslim edilir."""
     chapter_id = await _make_chapter_with_slides(client)
     await _insert_slide(chapter_id, 1, "İçerik")
     monkeypatch.setattr(llm_service.settings, "deepseek_api_key", "sk-test")
-    # alıntı chunk'la eşleşmeyecek ve LLM onayı da 'hayır' → yeniden üretim de başarısız
+    # alıntı chunk'la eşleşmeyecek ve LLM onayı da 'hayır' → yedek zincir devreye girer
     bad_section = f"### {TOPIC}\n\nTamamen alakasız bir cümle burada [1]."
     _setup_mocks(monkeypatch, section=bad_section, confirm=False)
 
+    async def _disabled():
+        return False
+
+    monkeypatch.setattr(web_search_service, "web_search_enabled", _disabled)
+
     events = await _collect_events(note_generator.generate_notes_stream(chapter_id))
-    assert events[-1]["type"] == "error"
-    assert "Atıf doğrulaması" in events[-1]["message"]
+    assert not any(e["type"] == "error" for e in events)
+    done = next(e for e in events if e["type"] == "done")
+    assert TOPIC in done["note"]["content_md"]
+    assert note_generator.SLIDE_ONLY_NOTICE in done["note"]["content_md"]
+    # sorunlu konunun atıfları temizlenmiş olmalı (doğrulama geçti)
+    topic_citations = done["note"]["citations_json"]["topics"][0]["citations"]
+    assert topic_citations == []
+
+
+WEB_TEXT = "Bağlı listeler, her düğümün bir sonraki düğüme işaret ettiği doğrusal veri yapısıdır."
+WEB_SECTION = f"### {TOPIC}\n\n{WEB_TEXT} [1]"
+SLIDE_ONLY_SECTION = f"### {TOPIC}\n\nBağlı listeler doğrusal bir veri yapısıdır."
+
+
+def _setup_fallback_mocks(monkeypatch, *, web_enabled, section):
+    """Retrieval boş + web arama mock'lu fallback zinciri kurar."""
+    _setup_mocks(monkeypatch, section=section)
+    monkeypatch.setattr(retrieval, "hybrid_search", lambda *a, **kw: [])
+
+    async def _enabled():
+        return web_enabled
+
+    async def _search(topic, course_name, max_results=3):
+        return [
+            {
+                "title": "Web Kaynağı",
+                "url": "https://example.com/liste",
+                "text": WEB_TEXT,
+                "quote": WEB_TEXT[:240],
+            }
+        ]
+
+    monkeypatch.setattr(web_search_service, "web_search_enabled", _enabled)
+    monkeypatch.setattr(web_search_service, "search_web", _search)
+
+
+async def test_web_fallback_produces_cited_section(client, monkeypatch):
+    chapter_id = await _make_chapter_with_slides(client)
+    await _insert_slide(chapter_id, 1, "Bağlı listeler konusu")
+    monkeypatch.setattr(llm_service.settings, "deepseek_api_key", "sk-test")
+    _setup_fallback_mocks(monkeypatch, web_enabled=True, section=WEB_SECTION)
+
+    events = await _collect_events(note_generator.generate_notes_stream(chapter_id))
+    done = next(e for e in events if e["type"] == "done")
+    citations = done["note"]["citations_json"]["topics"][0]["citations"]
+    assert len(citations) >= 1
+    assert citations[0]["source_type"] == "web"
+    assert citations[0]["url"] == "https://example.com/liste"
+    assert TOPIC in done["note"]["content_md"]
+    assert "uyarılı not" not in done["note"]["content_md"]
+
+
+async def test_slide_fallback_produces_full_section(client, monkeypatch):
+    chapter_id = await _make_chapter_with_slides(client)
+    await _insert_slide(chapter_id, 1, "Bağlı listeler: düğüm ve işaretçi yapısı")
+    monkeypatch.setattr(llm_service.settings, "deepseek_api_key", "sk-test")
+    _setup_fallback_mocks(monkeypatch, web_enabled=False, section=SLIDE_ONLY_SECTION)
+
+    events = await _collect_events(note_generator.generate_notes_stream(chapter_id))
+    done = next(e for e in events if e["type"] == "done")
+    content = done["note"]["content_md"]
+    assert TOPIC in content
+    assert "ders sunumundan üretildi" in content
+    assert done["note"]["citations_json"]["topics"][0]["citations"] == []
+
+
+async def test_web_fallback_never_emits_missing_source_warning(client, monkeypatch):
+    chapter_id = await _make_chapter_with_slides(client)
+    await _insert_slide(chapter_id, 1, "Bağlı listeler konusu")
+    monkeypatch.setattr(llm_service.settings, "deepseek_api_key", "sk-test")
+    _setup_fallback_mocks(monkeypatch, web_enabled=True, section=WEB_SECTION)
+
+    events = await _collect_events(note_generator.generate_notes_stream(chapter_id))
+    messages = [e.get("message", "") for e in events if e["type"] == "status"]
+    assert all("uyarılı not" not in m for m in messages)
+    done = next(e for e in events if e["type"] == "done")
+    assert "uyarılı not" not in done["note"]["content_md"]
+    assert "eksik not edildi" not in done["note"]["content_md"]
 
 
 async def test_generation_logs_written(client, monkeypatch):

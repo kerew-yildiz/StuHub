@@ -97,6 +97,42 @@ async def test_citationless_cards_rejected_and_warned(tmp_path, monkeypatch):
     assert "Kart üretilemedi" in error["message"]
 
 
+async def test_citationless_topic_produces_cards_with_warning(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    await init_db()
+    # konu atıfsız: citations boş liste
+    async with aiosqlite.connect(tmp_path / "stuhub.db") as db:
+        await db.execute("INSERT INTO terms (id, name) VALUES (1, '2026 Bahar')")
+        await db.execute("INSERT INTO courses (id, term_id, name) VALUES (1, 1, 'Biyoloji')")
+        await db.execute("INSERT INTO chapters (id, course_id, title) VALUES (1, 1, 'Zar')")
+        await db.execute(
+            "INSERT INTO notes (id, chapter_id, content_md, citations_json, topics_json) "
+            "VALUES (1, 1, ?, ?, ?)",
+            (
+                NOTE_MD,
+                json.dumps({"topics": [{"topic": "Hücre Zarı", "citations": []}]}),
+                json.dumps([]),
+            ),
+        )
+        await db.commit()
+
+    async def no_citations(messages, **kwargs):
+        return {
+            "cards": [
+                {"front": "Zar nedir?", "back": "Hücreyi saran katman.", "type": "qa",
+                 "citations": []}
+            ]
+        }
+
+    monkeypatch.setattr(flashcard_generator.llm_service, "chat_json", no_citations)
+
+    events = await _collect_events(1)
+    done = next(e for e in events if e["type"] == "done")
+    assert done["card_count"] == 1
+    assert done["cards_json"][0]["citations"] == []
+    assert any("atıfsız kartlar" in w for w in done["warnings"])
+
+
 async def test_no_note_yields_clear_error(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "data_dir", tmp_path)
     await init_db()

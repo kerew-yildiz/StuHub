@@ -16,5 +16,7 @@ export const chaptersApi = {
       method: 'POST',
       body: JSON.stringify({ title }),
     }),
+  update: (id: number, title: string) =>
+    apiFetch<Chapter>(`/chapters/${id}`, { method: 'PUT', body: JSON.stringify({ title }) }),
   remove: (id: number) => apiFetch<void>(`/chapters/${id}`, { method: 'DELETE' }),
 }

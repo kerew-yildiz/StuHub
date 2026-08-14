@@ -15,15 +15,35 @@ const SOURCE_LABELS: Record<Citation['source_type'], string> = {
   textbook: 'Kitap',
   slides: 'Sunum',
   note: 'Not',
+  web: 'Web',
+}
+
+/** URL'yi güvenli biçimde render eder — yalnızca http(s) ise tıklanabilir bağlantı. */
+function SourceUrl({ url }: { url: string }) {
+  if (/^https?:\/\//i.test(url)) {
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="mt-1 inline-block break-all text-stuhub-accent underline decoration-stuhub-accent/40 underline-offset-2 transition-colors duration-150 hover:text-stuhub-accent-hover"
+      >
+        {url}
+      </a>
+    )
+  }
+  return <p className="mt-1 break-all text-stuhub-text-secondary">{url}</p>
 }
 
 /** Atıf pop-up'ı — kaynak parçayı gösterir (Yetenek 06 §3; metin fallback). */
 export function CitationPopup({ citation, onClose, preloadedText, sourceLabel }: CitationPopupProps) {
   const [chunk, setChunk] = useState<ResolvedChunk | null>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
+  const isWeb = citation.source_type === 'web' || Boolean(citation.url)
 
   useEffect(() => {
-    if (preloadedText) return undefined
+    // Web atıflarında kaynak parça API'den gelmez — doğrudan alıntı + URL gösterilir.
+    if (preloadedText || isWeb) return undefined
     if (citation.chunk_id) {
       let cancelled = false
       void resolveCitation(citation.chunk_id).then((resolved) => {
@@ -34,7 +54,7 @@ export function CitationPopup({ citation, onClose, preloadedText, sourceLabel }:
       }
     }
     return undefined
-  }, [citation.chunk_id, preloadedText])
+  }, [citation.chunk_id, citation.url, citation.source_type, preloadedText, isWeb])
 
   useEffect(() => {
     closeRef.current?.focus()
@@ -94,20 +114,29 @@ export function CitationPopup({ citation, onClose, preloadedText, sourceLabel }:
               </blockquote>
             </div>
           )}
-          <div>
-            <p className="font-medium text-stuhub-text-secondary">Kaynak parça</p>
-            {preloadedText ? (
-              <p className="mt-1">{preloadedText}</p>
-            ) : chunk ? (
-              <p className="mt-1">{chunk.text}</p>
-            ) : citation.quote ? (
-              <p className="mt-1">{citation.quote}</p>
-            ) : (
-              <p className="mt-1 text-stuhub-text-secondary">
-                Kaynak parça bulunamadı (dosya silinmiş olabilir).
-              </p>
-            )}
-          </div>
+          {isWeb ? (
+            citation.url && (
+              <div>
+                <p className="font-medium text-stuhub-text-secondary">Kaynak</p>
+                <SourceUrl url={citation.url} />
+              </div>
+            )
+          ) : (
+            <div>
+              <p className="font-medium text-stuhub-text-secondary">Kaynak parça</p>
+              {preloadedText ? (
+                <p className="mt-1">{preloadedText}</p>
+              ) : chunk ? (
+                <p className="mt-1">{chunk.text}</p>
+              ) : citation.quote ? (
+                <p className="mt-1">{citation.quote}</p>
+              ) : (
+                <p className="mt-1 text-stuhub-text-secondary">
+                  Kaynak parça bulunamadı (dosya silinmiş olabilir).
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

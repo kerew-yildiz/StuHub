@@ -2,10 +2,13 @@ import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 
 import type { Citation, SavedNote } from '../api/notes'
+import { hueColorVar, hueSoftVar } from '../lib/courseColors'
 import { CitationPopup } from './CitationPopup'
 
 interface NoteViewerProps {
   note: SavedNote
+  /** Ders hue id'si — bölüm başlıkları bu renkle şeritlenir (Şema 5). */
+  hueId?: string
 }
 
 interface RenderedSection {
@@ -15,6 +18,11 @@ interface RenderedSection {
 }
 
 const CITATION_SCHEME = 'stuhub-citation://'
+
+/** Web kaynaklı atıf mı? (source_type "web" ya da url varsa) — API'ye fetch yapılmaz. */
+function isWebCitation(citation: Citation): boolean {
+  return citation.source_type === 'web' || Boolean(citation.url)
+}
 
 /** Başlık ↔ konu adı esnek eşleşmesi (LLM başlıkları konu adından sapabilir). */
 function topicMatches(heading: string, topic: string): boolean {
@@ -98,8 +106,8 @@ function CitationLink({
   return <span>{children}</span>
 }
 
-/** Not görüntüleyici — markdown + interaktif atıflar (Faz 3.3). */
-export function NoteViewer({ note }: NoteViewerProps) {
+/** Not görüntüleyici — markdown + interaktif atıflar + ders renk şeritleri (Şema 5). */
+export function NoteViewer({ note, hueId }: NoteViewerProps) {
   const [active, setActive] = useState<Citation | null>(null)
   const sections = splitSections(note)
 
@@ -123,13 +131,29 @@ export function NoteViewer({ note }: NoteViewerProps) {
                   />
                 ),
                 h1: ({ children }) => (
-                  <h1 className="mt-0 mb-3 text-2xl font-semibold">{children}</h1>
+                  <h1 className="mt-0 mb-3 border-l-4 pl-3 text-2xl font-semibold"
+                    style={
+                      hueId
+                        ? { borderLeftColor: hueColorVar(hueId), backgroundColor: hueSoftVar(hueId) }
+                        : undefined
+                    }
+                  >
+                    {children}
+                  </h1>
                 ),
                 h2: ({ children }) => (
-                  <h2 className="mt-6 mb-2 text-xl font-semibold">{children}</h2>
+                  <h2 className="mt-6 mb-2 border-l-4 pl-3 text-xl font-semibold"
+                    style={hueId ? { borderLeftColor: hueColorVar(hueId) } : undefined}
+                  >
+                    {children}
+                  </h2>
                 ),
                 h3: ({ children }) => (
-                  <h3 className="mt-4 mb-2 text-lg font-semibold">{children}</h3>
+                  <h3 className="mt-4 mb-2 border-l-4 pl-3 text-lg font-semibold"
+                    style={hueId ? { borderLeftColor: hueColorVar(hueId) } : undefined}
+                  >
+                    {children}
+                  </h3>
                 ),
                 ul: ({ children }) => (
                   <ul className="mt-2 list-disc space-y-1 pl-6">{children}</ul>
@@ -138,7 +162,9 @@ export function NoteViewer({ note }: NoteViewerProps) {
                   <ol className="mt-2 list-decimal space-y-1 pl-6">{children}</ol>
                 ),
                 blockquote: ({ children }) => (
-                  <blockquote className="mt-2 border-l-2 border-stuhub-border pl-3 text-stuhub-text-secondary">
+                  <blockquote className="mt-3 rounded-sm border-l-4 bg-stuhub-callout-bg px-4 py-2 text-[15px] text-stuhub-text"
+                    style={{ borderLeftColor: 'var(--stuhub-callout-border)' }}
+                  >
                     {children}
                   </blockquote>
                 ),
@@ -150,7 +176,14 @@ export function NoteViewer({ note }: NoteViewerProps) {
         ))}
       </div>
 
-      {active && <CitationPopup citation={active} onClose={() => setActive(null)} />}
+      {active && (
+        <CitationPopup
+          citation={active}
+          preloadedText={isWebCitation(active) ? (active.quote ?? undefined) : undefined}
+          sourceLabel={isWebCitation(active) ? (active.title ?? active.url ?? undefined) : undefined}
+          onClose={() => setActive(null)}
+        />
+      )}
     </div>
   )
 }

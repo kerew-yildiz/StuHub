@@ -18,6 +18,7 @@ import { MaterialUploadForm } from '../components/MaterialUploadForm'
 import { OverallQuizPlayer } from '../components/OverallQuizPlayer'
 import { TabBar } from '../components/TabBar'
 import { useAnimatedProgress } from '../lib/useAnimatedProgress'
+import { getCourseHue, hueColorVar, hueSoftVar, hueTextVar } from '../lib/courseColors'
 import { useGenerationStore } from '../stores/generationStore'
 
 type LoadState = 'loading' | 'ready' | 'error'
@@ -49,6 +50,76 @@ function JobProgressBar({ target }: { target: number }) {
   )
 }
 
+/** Chapter düzenleme mini formu — başlık (hafif, mevcut Form'dan bağımsız). */
+function ChapterEditForm({
+  chapter,
+  onSubmit,
+  onCancel,
+}: {
+  chapter: Chapter
+  onSubmit: (title: string) => Promise<void>
+  onCancel: () => void
+}) {
+  const [title, setTitle] = useState(chapter.title)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    const trimmed = title.trim()
+    if (!trimmed) {
+      setError('Chapter başlığı boş olamaz.')
+      return
+    }
+    setBusy(true)
+    setError('')
+    try {
+      await onSubmit(trimmed)
+    } catch {
+      setError('Chapter güncellenemedi. Lütfen tekrar deneyin.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-3 rounded-md border border-stuhub-border bg-stuhub-surface p-4"
+    >
+      <div>
+        <label htmlFor={`chapter-edit-title-${chapter.id}`} className="mb-1 block text-sm font-medium">
+          Chapter başlığı
+        </label>
+        <input
+          id={`chapter-edit-title-${chapter.id}`}
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-stuhub-accent"
+        />
+      </div>
+      {error && <p className="text-sm text-stuhub-error">{error}</p>}
+      <div className="flex gap-3">
+        <button
+          type="submit"
+          disabled={busy}
+          className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-60"
+        >
+          {busy ? 'Kaydediliyor…' : 'Kaydet'}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-sm px-4 py-2 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+        >
+          İptal
+        </button>
+      </div>
+    </form>
+  )
+}
+
 /** Ders defteri (notebook) landing sayfası — chapter + materyaller + genel quiz (Faz 1.3/2.2/5). */
 export function CoursePage() {
   const { courseId } = useParams<{ courseId: string }>()
@@ -61,6 +132,7 @@ export function CoursePage() {
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState('')
   const [showChapterForm, setShowChapterForm] = useState(false)
+  const [editingChapter, setEditingChapter] = useState<Chapter | null>(null)
   const [previewMaterial, setPreviewMaterial] = useState<Material | null>(null)
   const [tab, setTab] = useState<CourseTab>('overview')
 
@@ -158,6 +230,12 @@ export function CoursePage() {
     await load()
   }
 
+  const handleUpdateChapter = async (id: number, title: string) => {
+    await chaptersApi.update(id, title)
+    setEditingChapter(null)
+    await load()
+  }
+
   const handleDeleteChapter = async (id: number) => {
     if (!window.confirm('Bu chapter silinecek. Emin misin?')) return
     try {
@@ -204,7 +282,20 @@ export function CoursePage() {
         ← Döneme dön
       </Link>
       <div className="mt-2">
-        <h1 className="text-3xl font-semibold">{course?.name ?? 'Ders'}</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-3xl font-semibold">{course?.name ?? 'Ders'}</h1>
+          {course && (
+            <span
+              className="rounded-full px-2.5 py-1 text-xs font-medium"
+              style={{
+                backgroundColor: hueSoftVar(getCourseHue(course).id),
+                color: hueTextVar(getCourseHue(course).id),
+              }}
+            >
+              {getCourseHue(course).name}
+            </span>
+          )}
+        </div>
         {course?.instructor && (
           <p className="mt-1 text-sm text-stuhub-text-secondary">{course.instructor}</p>
         )}
@@ -259,24 +350,47 @@ export function CoursePage() {
             </p>
           )}
           {chapters.map((chapter) => (
-            <div
-              key={chapter.id}
-              className="flex items-center justify-between rounded-md border border-stuhub-border bg-stuhub-surface px-5 py-4"
-            >
-              <Link
-                to={`/dersler/${numericId}/defter/${chapter.id}`}
-                className="font-medium transition-colors duration-150 hover:text-stuhub-accent"
+            <div key={chapter.id} className="space-y-2">
+              <div
+                className="flex items-center justify-between rounded-md border border-stuhub-border border-l-4 bg-stuhub-surface px-5 py-4"
+                style={
+                  course
+                    ? { borderLeftColor: hueColorVar(getCourseHue(course).id) }
+                    : undefined
+                }
               >
-                {chapter.title}
-              </Link>
-              <button
-                type="button"
-                onClick={() => handleDeleteChapter(chapter.id)}
-                className="rounded-sm px-2 py-1 text-sm text-stuhub-error transition-colors duration-150 hover:bg-stuhub-surface-hover"
-                aria-label={`${chapter.title} chapter'ını sil`}
-              >
-                Sil
-              </button>
+                <Link
+                  to={`/dersler/${numericId}/defter/${chapter.id}`}
+                  className="font-medium transition-colors duration-150 hover:text-stuhub-accent"
+                >
+                  {chapter.title}
+                </Link>
+                <span className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingChapter(chapter)}
+                    className="rounded-sm px-3 py-1 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                    aria-label={`${chapter.title} chapter'ını düzenle`}
+                  >
+                    Düzenle
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteChapter(chapter.id)}
+                    className="rounded-sm px-2 py-1 text-sm text-stuhub-error transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                    aria-label={`${chapter.title} chapter'ını sil`}
+                  >
+                    Sil
+                  </button>
+                </span>
+              </div>
+              {editingChapter?.id === chapter.id && (
+                <ChapterEditForm
+                  chapter={chapter}
+                  onSubmit={(title) => handleUpdateChapter(chapter.id, title)}
+                  onCancel={() => setEditingChapter(null)}
+                />
+              )}
             </div>
           ))}
         </div>
@@ -480,6 +594,7 @@ export function CoursePage() {
               dueCards={playingDue}
               onFinished={closeDuePlayer}
               onExit={closeDuePlayer}
+              hueId={course ? getCourseHue(course).id : undefined}
             />
           </div>
         ) : dueCards.length > 0 ? (

@@ -3,6 +3,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { NotebookPage } from '../pages/NotebookPage'
+import { slidesApi } from '../api/slides'
 
 vi.mock('../api/chapters', () => ({
   chaptersApi: {
@@ -75,5 +76,26 @@ describe('NotebookPage sekmeleri', () => {
     fireEvent.click(quiz)
     expect(quiz).toHaveAttribute('aria-selected', 'true')
     expect(kartlar).toHaveAttribute('aria-selected', 'false')
+  })
+
+  it('slaytlar varken "Yeni sunum ekle" görünür ve tıklanınca form açılır', async () => {
+    vi.mocked(slidesApi.listByChapter).mockResolvedValueOnce([
+      { id: 1, chapter_id: 1, material_id: null, slide_no: 1, content_text: 'İlk slayt' },
+    ])
+    render(
+      <MemoryRouter initialEntries={['/dersler/1/defter/1']}>
+        <Routes>
+          <Route path="/dersler/:courseId/defter/:chapterId" element={<NotebookPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    // Liste dolu olduğu için form kapalı başlar ve ekleme düğmesi görünür
+    const addButton = await screen.findByRole('button', { name: 'Yeni sunum ekle +' })
+    expect(addButton).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByLabelText('Sunum dosyası (PDF / PPTX)')).not.toBeInTheDocument()
+
+    fireEvent.click(addButton)
+    expect(screen.getByLabelText('Sunum dosyası (PDF / PPTX)')).toBeInTheDocument()
   })
 })

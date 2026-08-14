@@ -17,12 +17,13 @@ from ..config import settings
 from ..db import get_db
 from ..prompts.common import dil_talimati
 from ..prompts.note_prompts import (
-    CITATION_CONFIRM_PROMPT,
     COVERAGE_CHECK_PROMPT,
     NOTE_GENERATION_PROMPT,
+    NOTE_GENERATION_WEB_PROMPT,
+    NOTE_SLIDE_ONLY_PROMPT,
     TOPIC_EXTRACTION_PROMPT,
 )
-from . import llm_service, retrieval
+from . import llm_service, retrieval, web_search_service
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ MAX_TOPICS = 12
 QUOTE_WINDOW_CHARS = 240
 SLIDES_CONTEXT_CHARS = 8000
 NOTE_CONTEXT_CHARS = 6000
+SLIDE_ONLY_NOTICE = "> ℹ️ Bu bölüm ders sunumundan üretildi (kitap/web kaynağı bulunamadı)."
 
 
 class NoteGenerationError(Exception):
@@ -76,14 +78,25 @@ def _fuzzy_match(quote: str, chunk_text: str) -> bool:
 
 
 def _quote_before_citation(text: str, number: int) -> str:
-    """[n] işaretinden hemen önceki cümleyi alıntı adayı olarak döner."""
+    """[n] işaretinden hemen önceki cümleyi alıntı adayı olarak döner.
+
+    Markdown başlık satırları (`### ...`) ve boş satırlar alıntıdan ayıklanır —
+    tek cümlelik bölümlerde başlığın alıntıya karışıp fuzzy eşleşmeyi bozmasını
+    önler (kullanıcı geri bildirimi).
+    """
     marker = f"[{number}]"
     idx = text.find(marker)
     if idx == -1:
         return ""
     window = text[max(0, idx - QUOTE_WINDOW_CHARS) : idx]
-    sentences = re.split(r"(?<=[.!?…])\s+", window)
-    return sentences[-1].strip() if sentences else window.strip()
+    sentences = [s for s in re.split(r"(?<=[.!?…])\s+", window) if s.strip()]
+    quote = sentences[-1].strip() if sentences else window.strip()
+    lines = [
+        line.strip()
+        for line in quote.split("\n")
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    return lines[-1] if lines else quote
 
 
 def _slide_content_for_topic(topic: dict, slides: list[dict]) -> str:
@@ -121,6 +134,20 @@ def _section_for_topic(content_md: str, topic_name: str) -> str:
 
 
 def _chunk_to_citation(number: int, chunk: dict) -> dict:
+    if chunk.get("url"):
+        # Web kaynağı atfı: kaynak kimliği yok; url/title doğrudan atıfa taşınır.
+        return {
+            "id": number,
+            "source_type": "web",
+            "source_id": None,
+            "page": None,
+            "slide": None,
+            "chunk_id": chunk["chunk_id"],
+            "url": chunk.get("url"),
+            "title": chunk.get("title"),
+            "quote": "",
+            "chunk_text": chunk["text"],
+        }
     return {
         "id": number,
         "source_type": "textbook" if chunk["page"] is not None else "slides",
@@ -180,20 +207,12 @@ async def _check_coverage(
 async def _llm_confirms_quote(
     quote: str, chunk_text: str, course_id: int, chapter_id: int
 ) -> bool:
-    data = await llm_service.chat_json(
-        [
-            {
-                "role": "user",
-                "content": CITATION_CONFIRM_PROMPT.format(
-                    quote=quote[:400], chunk_text=chunk_text[:1200]
-                ),
-            }
-        ],
-        kind="citation_confirm",
-        course_id=course_id,
-        chapter_id=chapter_id,
-    )
-    return bool(data.get("supported"))
+    """KALDIRILDI (perf): atıf başına LLM onayı üretimi dakikalarca uzatıyordu.
+
+    Doğrulama artık yalnızca `_fuzzy_match` ile deterministik yapılır.
+    """
+    del quote, chunk_text, course_id, chapter_id
+    return False
 
 
 # ── Üretim yardımcıları ────────────────────────────────────────────────
@@ -203,6 +222,32 @@ def _numbered_sources(chunks: list[dict]) -> str:
         f"[{idx}] (sayfa {c['page'] or '-'} / slide {c['slide'] or '-'}) {c['text']}"
         for idx, c in enumerate(chunks, start=1)
     )
+
+
+def _numbered_web_sources(chunks: list[dict]) -> str:
+    lines: list[str] = []
+    for idx, c in enumerate(chunks, start=1):
+        header = c.get("title") or c.get("url") or "web kaynağı"
+        lines.append(f"[{idx}] ({header}) {c['text']}")
+    return "\n".join(lines)
+
+
+def _web_sources_to_chunks(web_sources: list[dict]) -> list[dict]:
+    """Web sonuçlarını chunk benzeri listeye çevirir (atıf zincirinin geri kalanıyla uyumlu)."""
+    return [
+        {
+            "chunk_id": f"web-{i + 1}",
+            "text": s["text"],
+            "material_id": None,
+            "page": None,
+            "slide": None,
+            "score": 1.0,
+            "url": s["url"],
+            "title": s["title"],
+            "quote": s["quote"],
+        }
+        for i, s in enumerate(web_sources)
+    ]
 
 
 def _build_prompt(topic: dict, slides: list[dict], chunks: list[dict]) -> str:
@@ -224,13 +269,124 @@ def _section_citations(section: str, chunks: list[dict]) -> list[dict]:
     return citations
 
 
+def _ensure_topic_heading(section: str, topic_name: str) -> str:
+    """Bölüm kendi `### {konu}` başlığıyla başlamıyorsa ekler."""
+    text = section.strip()
+    if re.match(rf"^#{{1,4}}\s+{re.escape(topic_name)}\s*$", text, re.MULTILINE):
+        return text
+    return f"### {topic_name}\n\n{text}"
+
+
+def _with_slide_notice(section: str) -> str:
+    return f"{section.strip()}\n\n{SLIDE_ONLY_NOTICE}"
+
+
+def _deterministic_slide_section(topic: dict, slides: list[dict]) -> str:
+    """LLM başarısız olsa bile slayt içeriğinden asla boş olmayan deterministik bölüm."""
+    return _with_slide_notice(f"### {topic['topic']}\n\n{_slide_content_for_topic(topic, slides)}")
+
+
+async def _generate_fallback_section(
+    topic: dict,
+    slides: list[dict],
+    course_id: int,
+    chapter_id: int,
+    course_name: str,
+    allow_web: bool = True,
+) -> tuple[str, list[dict], list[str], str]:
+    """Kitapta kaynak yokken (ya da atıf sorunu giderilirken) kaynak zinciri.
+
+    allow_web=True → web → slayt → deterministik slayt; allow_web=False → yalnızca
+    slayt → deterministik slayt (atıfsız, doğrulaması garantili temiz).
+    Dönüş: (bölüm, atıflar, deltalar, durum mesajı). Bölüm asla boş dönmez.
+    """
+    deltas: list[str] = []
+    name = topic["topic"]
+
+    # (a) Web kaynakları
+    if allow_web and await web_search_service.web_search_enabled():
+        web_sources = await web_search_service.search_web(name, course_name)
+        if web_sources:
+            chunks = _web_sources_to_chunks(web_sources)
+            prompt = NOTE_GENERATION_WEB_PROMPT.format(
+                topic=name,
+                numbered_sources=_numbered_web_sources(chunks),
+                dil_talimati=dil_talimati(settings.not_dili),
+            )
+            try:
+                parts: list[str] = []
+                async for delta in llm_service.chat_stream(
+                    [{"role": "user", "content": prompt}],
+                    kind="note_generation_web",
+                    course_id=course_id,
+                    chapter_id=chapter_id,
+                ):
+                    parts.append(delta)
+                    deltas.append(delta)
+                section = "".join(parts).strip()
+                if section:
+                    return (
+                        _ensure_topic_heading(section, name),
+                        _section_citations(section, chunks),
+                        deltas,
+                        f"“{name}” için web kaynakları kullanılıyor…",
+                    )
+            except llm_service.LLMError:
+                logger.warning("web not üretimi başarısız; slayt yedeğine düşülüyor: %s", name)
+
+    # (b) Slayt (rehber) içeriğinden tam not
+    prompt = NOTE_SLIDE_ONLY_PROMPT.format(
+        topic=name,
+        slide_content=_slide_content_for_topic(topic, slides),
+        dil_talimati=dil_talimati(settings.not_dili),
+    )
+    try:
+        parts = []
+        async for delta in llm_service.chat_stream(
+            [{"role": "user", "content": prompt}],
+            kind="note_generation_slide_only",
+            course_id=course_id,
+            chapter_id=chapter_id,
+        ):
+            parts.append(delta)
+            deltas.append(delta)
+        section = "".join(parts).strip()
+        if section:
+            return (
+                _with_slide_notice(_ensure_topic_heading(section, name)),
+                [],
+                deltas,
+                f"“{name}” sunum içeriğinden yazılıyor…",
+            )
+    except llm_service.LLMError:
+        logger.warning("slayt not üretimi başarısız; deterministik bölüme düşülüyor: %s", name)
+
+    # (c) Her iki yol da başarısız: slayt metninden deterministik bölüm (asla boş değil)
+    return (
+        _deterministic_slide_section(topic, slides),
+        [],
+        deltas,
+        f"“{name}” sunum içeriğinden yazılıyor…",
+    )
+
+
 async def _regen_topic(
-    topic: dict, slides: list[dict], course_id: int, chapter_id: int
+    topic: dict,
+    slides: list[dict],
+    course_id: int,
+    chapter_id: int,
+    course_name: str,
 ) -> tuple[str | None, list[dict]]:
-    """Kapsama/atıf düzeltme turu için konuyu yeniden üretir (stream'siz)."""
+    """Kapsama/atıf düzeltme turu için konuyu yeniden üretir (stream'siz).
+
+    Kitapta kaynak yoksa aynı zinciri izler (web → slayt yedeği); bölüm asla boş dönmez.
+    """
     chunks = retrieval.hybrid_search(course_id, topic["topic"], topic.get("keywords", []))
     if not chunks:
-        return None, []
+        section, citations, _deltas, _msg = await _generate_fallback_section(
+            topic, slides, course_id, chapter_id, course_name
+        )
+        return _strip_own_heading(section, topic["topic"]), citations
     prompt = _build_prompt(topic, slides, chunks)
     parts: list[str] = []
     async for delta in llm_service.chat_stream(
@@ -250,7 +406,13 @@ async def _validate_citations(
     course_id: int,
     chapter_id: int,
 ) -> list[str]:
-    """Her [n] atfını çözümler; çözümsüz kalan atıfların konularını döner."""
+    """Her [n] atfını DETERMİNİSTİK olarak çözümler; çözümsüz atıflı konuları döner.
+
+    PERFORMANS NOTU (kullanıcı geri bildirimi): atıf başına LLM onay çağrısı
+    (citation_confirm) kaldırıldı — yüzlerce küçük çağrı üretimi dakikalarca
+    uzatıyordu. Doğrulama artık yalnız fuzzy eşleşmeyle yapılır; eşleşmeyen
+    atıf "sorunlu konu" sayılır ve üst katmanın yedek zinciri devreye girer.
+    """
     problems: list[str] = []
     for topic_name, citations in topic_citations.items():
         section = _section_for_topic(content_md, topic_name)
@@ -260,12 +422,8 @@ async def _validate_citations(
             quote = citation["quote"] or _quote_before_citation(section, citation["id"])
             if _fuzzy_match(quote, citation["chunk_text"]):
                 continue
-            supported = await _llm_confirms_quote(
-                quote, citation["chunk_text"], course_id, chapter_id
-            )
-            if not supported:
-                problems.append(topic_name)
-                break
+            problems.append(topic_name)
+            break
     return list(dict.fromkeys(problems))
 
 
@@ -329,6 +487,9 @@ async def _generate(chapter_id: int):
         if chapter is None:
             raise NoteGenerationError("Chapter bulunamadı")
         course_id = chapter["course_id"]
+        cursor = await db.execute("SELECT name FROM courses WHERE id = ?", (course_id,))
+        course_row = await cursor.fetchone()
+        course_name = course_row["name"] if course_row else "ders"
         cursor = await db.execute(
             "SELECT slide_no, content_text FROM slides WHERE chapter_id = ? ORDER BY slide_no ASC",
             (chapter_id,),
@@ -365,40 +526,38 @@ async def _generate(chapter_id: int):
             "message": f"“{topic['topic']}” için kaynaklar taranıyor…",
         }
         chunks = retrieval.hybrid_search(course_id, topic["topic"], topic.get("keywords", []))
-        if not chunks:
-            topic_citations[topic["topic"]] = []
-            topic_chunks[topic["topic"]] = []
+        if chunks:
             yield {
                 "type": "status",
-                "percent": base + 2,
-                "message": f"“{topic['topic']}” için kaynak bulunamadı (uyarılı not).",
+                "percent": base + 3,
+                "message": f"“{topic['topic']}” notu yazılıyor…",
             }
-            sections.append(
-                f"### {topic['topic']}\n\n"
-                "> ⚠️ Bu konu için ders kitabında kaynak bulunamadı; "
-                "rehber içeriğe göre eksik not edildi."
-            )
+            prompt = _build_prompt(topic, slides, chunks)
+            parts: list[str] = []
+            async for delta in llm_service.chat_stream(
+                [{"role": "user", "content": prompt}],
+                kind="note_generation",
+                course_id=course_id,
+                chapter_id=chapter_id,
+            ):
+                parts.append(delta)
+                yield {"type": "delta", "text": delta}
+            section = "".join(parts).strip()
+            sections.append(section)
+            topic_citations[topic["topic"]] = _section_citations(section, chunks)
+            topic_chunks[topic["topic"]] = chunks
             continue
 
-        yield {
-            "type": "status",
-            "percent": base + 3,
-            "message": f"“{topic['topic']}” notu yazılıyor…",
-        }
-        prompt = _build_prompt(topic, slides, chunks)
-        parts: list[str] = []
-        async for delta in llm_service.chat_stream(
-            [{"role": "user", "content": prompt}],
-            kind="note_generation",
-            course_id=course_id,
-            chapter_id=chapter_id,
-        ):
-            parts.append(delta)
+        # Kitapta kaynak yok → web → slayt yedeği → deterministik slayt (her koşulda not)
+        section, citations, deltas, status_message = await _generate_fallback_section(
+            topic, slides, course_id, chapter_id, course_name
+        )
+        yield {"type": "status", "percent": base + 3, "message": status_message}
+        for delta in deltas:
             yield {"type": "delta", "text": delta}
-        section = "".join(parts).strip()
         sections.append(section)
-        topic_citations[topic["topic"]] = _section_citations(section, chunks)
-        topic_chunks[topic["topic"]] = chunks
+        topic_citations[topic["topic"]] = citations
+        topic_chunks[topic["topic"]] = []
 
     content_md = "\n\n".join(s for s in sections if s)
 
@@ -411,7 +570,9 @@ async def _generate(chapter_id: int):
         for topic in topics:
             if topic["topic"] not in missing:
                 continue
-            section, citations = await _regen_topic(topic, slides, course_id, chapter_id)
+            section, citations = await _regen_topic(
+                topic, slides, course_id, chapter_id, course_name
+            )
             if section is None:
                 continue
             # eski bölümü yenisiyle değiştir
@@ -439,7 +600,9 @@ async def _generate(chapter_id: int):
         for topic in topics:
             if topic["topic"] not in problems:
                 continue
-            section, citations = await _regen_topic(topic, slides, course_id, chapter_id)
+            section, citations = await _regen_topic(
+                topic, slides, course_id, chapter_id, course_name
+            )
             if section is None:
                 continue
             new_block = f"### {topic['topic']}\n\n{section}"
@@ -453,9 +616,54 @@ async def _generate(chapter_id: int):
             content_md, topic_citations, course_id, chapter_id
         )
     if problems:
-        raise NoteGenerationError(
-            "Atıf doğrulaması tamamlanamadı (çözümsüz atıflar). Lütfen üretimi tekrar deneyin."
+        # SON GÜVENCE 1: çözümsüz atıflı konuları yedek zincirle (web → slayt) yeniden üret —
+        # not ASLA atıf hatasıyla bitmez (kullanıcı kararı: her koşulda not teslim edilir).
+        yield {
+            "type": "status",
+            "percent": 95,
+            "message": "Atıf sorunları gideriliyor…",
+        }
+        for topic in topics:
+            if topic["topic"] not in problems:
+                continue
+            section, citations, _deltas, _msg = await _generate_fallback_section(
+                topic, slides, course_id, chapter_id, course_name, allow_web=True
+            )
+            new_block = f"### {topic['topic']}\n\n{_strip_own_heading(section, topic['topic'])}"
+            pattern = re.compile(
+                rf"^#{{1,4}}\s+{re.escape(topic['topic'])}\s*$", re.MULTILINE
+            )
+            content_md, replaced = _replace_section(content_md, pattern, new_block)
+            if not replaced:
+                content_md += f"\n\n{new_block}"
+            topic_citations[topic["topic"]] = citations
+        problems = await _validate_citations(
+            content_md, topic_citations, course_id, chapter_id
         )
+    if problems:
+        # SON GÜVENCE 2: slayt temelli atıfsız bölüm — doğrulaması garantili temiz.
+        for topic in topics:
+            if topic["topic"] not in problems:
+                continue
+            section, citations, _deltas, _msg = await _generate_fallback_section(
+                topic, slides, course_id, chapter_id, course_name, allow_web=False
+            )
+            new_block = f"### {topic['topic']}\n\n{_strip_own_heading(section, topic['topic'])}"
+            pattern = re.compile(
+                rf"^#{{1,4}}\s+{re.escape(topic['topic'])}\s*$", re.MULTILINE
+            )
+            content_md, replaced = _replace_section(content_md, pattern, new_block)
+            if not replaced:
+                content_md += f"\n\n{new_block}"
+            topic_citations[topic["topic"]] = citations
+        problems = await _validate_citations(
+            content_md, topic_citations, course_id, chapter_id
+        )
+    if problems:
+        # SON ÇARE: bölümler korunur, çözümsüz konuların atıfları düşürülür (asla hata dönmez).
+        logger.warning("çözümsüz atıf kalan konular (atıflar düşürüldü): %s", problems)
+        for topic_name in problems:
+            topic_citations[topic_name] = []
 
     # 6) Kayıt
     yield {"type": "status", "percent": 98, "message": "Not kaydediliyor…"}

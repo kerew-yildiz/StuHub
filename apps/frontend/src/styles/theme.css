@@ -3,33 +3,64 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ── Tema değişkenleri (YETENEKLER/07-stil-rehberi.md — tek otorite) ──
-   Aydınlık/karanlık iki tema; varsayılan sistem teması izlenir.
+   Şema 5 "Renkli Not Defteri": sıcak kağıt zemini + mürekkep metin +
+   ders başına renk kodu (6 tonlu hue paleti). Aydınlık/karanlık iki tema.
    Bileşenlerde hardcoded renk YASAK — yalnızca bu tokenlar. */
 
 :root {
-  --stuhub-bg: #f7f7f8;
+  /* Zemin / yüzey — sıcak kağıt */
+  --stuhub-bg: #faf7f2;
   --stuhub-surface: #ffffff;
-  --stuhub-surface-hover: #f4f4f5;
-  --stuhub-border: #e4e4e7;
-  --stuhub-text: #18181b;
-  --stuhub-text-secondary: #52525b;
+  --stuhub-surface-hover: #f3ede1;
+  --stuhub-border: #ece5d6;
+  --stuhub-text: #1f2937;
+  --stuhub-text-secondary: #6b7280;
+
+  /* Vurgu — ana eylemler mavi kalır */
   --stuhub-accent: #2563eb;
   --stuhub-accent-hover: #1d4ed8;
   --stuhub-on-accent: #ffffff;
-  --stuhub-success: #16a34a;
+
+  /* Semantik */
+  --stuhub-success: #15803d;
   --stuhub-error: #dc2626;
   --stuhub-on-error: #ffffff;
-  --stuhub-warning: #d97706;
-  --stuhub-info: #0891b2;
+  --stuhub-warning: #b45309;
+  --stuhub-info: #0e7490;
+
+  /* Anahtar terim kutusu (notlarda) */
+  --stuhub-callout-bg: rgba(217, 119, 6, 0.07);
+  --stuhub-callout-border: rgba(217, 119, 6, 0.35);
+
+  /* Ders renk paleti (hue) — Sidebar noktası, şeritler, sekme vurguları.
+     -text: WCAG AA güvenli metin varyantı; -soft: yüzey üstü yumuşak zemin. */
+  --stuhub-hue-indigo: #4f46e5;
+  --stuhub-hue-indigo-text: #4338ca;
+  --stuhub-hue-indigo-soft: rgba(79, 70, 229, 0.08);
+  --stuhub-hue-pine: #15803d;
+  --stuhub-hue-pine-text: #166534;
+  --stuhub-hue-pine-soft: rgba(21, 128, 61, 0.08);
+  --stuhub-hue-burgundy: #b91c1c;
+  --stuhub-hue-burgundy-text: #991b1b;
+  --stuhub-hue-burgundy-soft: rgba(185, 28, 28, 0.08);
+  --stuhub-hue-amber: #d97706;
+  --stuhub-hue-amber-text: #92400e;
+  --stuhub-hue-amber-soft: rgba(217, 119, 6, 0.08);
+  --stuhub-hue-teal: #0e7490;
+  --stuhub-hue-teal-text: #155e75;
+  --stuhub-hue-teal-soft: rgba(14, 116, 144, 0.08);
+  --stuhub-hue-plum: #9333ea;
+  --stuhub-hue-plum-text: #6b21a8;
+  --stuhub-hue-plum-soft: rgba(147, 51, 234, 0.08);
 }
 
 .dark {
-  --stuhub-bg: #18181b;
-  --stuhub-surface: #27272a;
-  --stuhub-surface-hover: #323236;
-  --stuhub-border: #3f3f46;
-  --stuhub-text: #fafafa;
-  --stuhub-text-secondary: #a1a1aa;
+  --stuhub-bg: #1c1917;
+  --stuhub-surface: #292524;
+  --stuhub-surface-hover: #33302d;
+  --stuhub-border: #44403c;
+  --stuhub-text: #fafaf9;
+  --stuhub-text-secondary: #a8a29e;
   --stuhub-accent: #60a5fa;
   --stuhub-accent-hover: #3b82f6;
   --stuhub-on-accent: #0f172a;
@@ -38,6 +69,27 @@
   --stuhub-on-error: #18181b;
   --stuhub-warning: #fbbf24;
   --stuhub-info: #22d3ee;
+  --stuhub-callout-bg: rgba(251, 191, 36, 0.10);
+  --stuhub-callout-border: rgba(251, 191, 36, 0.35);
+
+  --stuhub-hue-indigo: #818cf8;
+  --stuhub-hue-indigo-text: #a5b4fc;
+  --stuhub-hue-indigo-soft: rgba(129, 140, 248, 0.14);
+  --stuhub-hue-pine: #4ade80;
+  --stuhub-hue-pine-text: #86efac;
+  --stuhub-hue-pine-soft: rgba(74, 222, 128, 0.14);
+  --stuhub-hue-burgundy: #f87171;
+  --stuhub-hue-burgundy-text: #fca5a5;
+  --stuhub-hue-burgundy-soft: rgba(248, 113, 113, 0.14);
+  --stuhub-hue-amber: #fbbf24;
+  --stuhub-hue-amber-text: #fcd34d;
+  --stuhub-hue-amber-soft: rgba(251, 191, 36, 0.14);
+  --stuhub-hue-teal: #22d3ee;
+  --stuhub-hue-teal-text: #67e8f9;
+  --stuhub-hue-teal-soft: rgba(34, 211, 238, 0.14);
+  --stuhub-hue-plum: #c084fc;
+  --stuhub-hue-plum-text: #d8b4fe;
+  --stuhub-hue-plum-soft: rgba(192, 132, 252, 0.14);
 }
 
 @theme {
@@ -56,6 +108,8 @@
   --color-stuhub-on-error: var(--stuhub-on-error);
   --color-stuhub-warning: var(--stuhub-warning);
   --color-stuhub-info: var(--stuhub-info);
+  --color-stuhub-callout-bg: var(--stuhub-callout-bg);
+  --color-stuhub-callout-border: var(--stuhub-callout-border);
 
   /* Tipografi ölçeği (px): 12/14/16/18/20/24/30/36 */
   --text-xs: 12px;
@@ -67,10 +121,10 @@
   --text-3xl: 30px;
   --text-4xl: 36px;
 
-  /* Radius: 6/10/12 px */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 12px;
+  /* Radius: 10/14/16 px (Şema 5 — yumuşak "defter" köşeleri) */
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 16px;
 
   /* Geçiş: 150–200ms, ease-out */
   --ease-out: cubic-bezier(0, 0, 0.2, 1);

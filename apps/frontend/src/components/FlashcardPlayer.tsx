@@ -2,12 +2,15 @@ import { useState } from 'react'
 
 import { submitReview, type DueCard, type Rating } from '../api/flashcards'
 import type { Citation } from '../api/notes'
+import { hueColorVar, hueSoftVar, hueTextVar } from '../lib/courseColors'
 import { CitationPopup } from './CitationPopup'
 
 interface FlashcardPlayerProps {
   dueCards: DueCard[]
   onFinished: () => void
   onExit: () => void
+  /** Ders hue id'si — kart üst şeridi ve konu çipi rengi (Şema 5). */
+  hueId?: string
 }
 
 /** Atıf çipi için kaynak etiketi (Kitap s.X / Sunum slayt X). */
@@ -40,7 +43,12 @@ const RATING_STYLES: Record<Rating, string> = {
 const RATINGS: Rating[] = ['again', 'hard', 'good', 'easy']
 
 /** Flashcard oynatıcı — ön/arka yüz, SM-2 butonları, ilerleme ve özet (Faz V2.2). */
-export function FlashcardPlayer({ dueCards, onFinished, onExit }: FlashcardPlayerProps) {
+export function FlashcardPlayer({
+  dueCards,
+  onFinished,
+  onExit,
+  hueId,
+}: FlashcardPlayerProps) {
   const [index, setIndex] = useState(0)
   const [flipped, setFlipped] = useState(false)
   const [finished, setFinished] = useState(false)
@@ -125,17 +133,35 @@ export function FlashcardPlayer({ dueCards, onFinished, onExit }: FlashcardPlaye
             <button
               type="button"
               onClick={() => setFlipped(true)}
-              className="absolute inset-0 flex flex-col items-center justify-center rounded-md border border-stuhub-border bg-stuhub-bg p-6 text-center [backface-visibility:hidden]"
+              className="absolute inset-0 flex flex-col items-center justify-center rounded-md border border-t-4 border-stuhub-border bg-stuhub-bg p-6 text-center [backface-visibility:hidden]"
+              style={hueId ? { borderTopColor: hueColorVar(hueId) } : undefined}
             >
-              <span className="rounded-sm bg-stuhub-accent/10 px-2 py-0.5 text-xs font-medium text-stuhub-accent">
+              <span
+                className="rounded-sm px-2 py-0.5 text-xs font-medium"
+                style={
+                  hueId
+                    ? { backgroundColor: hueSoftVar(hueId), color: hueTextVar(hueId) }
+                    : undefined
+                }
+              >
                 {card.card.topic}
               </span>
               <p className="mt-4 text-lg font-semibold leading-relaxed">{card.card.front}</p>
               <p className="mt-4 text-xs text-stuhub-text-secondary">Çevirmek için tıkla</p>
             </button>
           ) : (
-            <div className="absolute inset-0 flex flex-col overflow-y-auto rounded-md border border-stuhub-border bg-stuhub-bg p-6 [backface-visibility:hidden] [transform:rotateY(180deg)]">
-              <span className="self-start rounded-sm bg-stuhub-accent/10 px-2 py-0.5 text-xs font-medium text-stuhub-accent">
+            <div
+              className="absolute inset-0 flex flex-col overflow-y-auto rounded-md border border-t-4 border-stuhub-border bg-stuhub-bg p-6 [backface-visibility:hidden] [transform:rotateY(180deg)]"
+              style={hueId ? { borderTopColor: hueColorVar(hueId) } : undefined}
+            >
+              <span
+                className="self-start rounded-sm px-2 py-0.5 text-xs font-medium"
+                style={
+                  hueId
+                    ? { backgroundColor: hueSoftVar(hueId), color: hueTextVar(hueId) }
+                    : undefined
+                }
+              >
                 {card.card.topic}
               </span>
               <p className="mt-3 text-base leading-relaxed">{card.card.back}</p>

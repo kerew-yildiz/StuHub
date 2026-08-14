@@ -10,12 +10,115 @@ import { TermForm } from '../components/TermForm'
 
 type LoadState = 'loading' | 'ready' | 'error'
 
+/** Dönem düzenleme mini formu — ad + tarih aralığı (hafif, mevcut Form'dan bağımsız). */
+function TermEditForm({
+  term,
+  onSubmit,
+  onCancel,
+}: {
+  term: Term
+  onSubmit: (input: TermInput) => Promise<void>
+  onCancel: () => void
+}) {
+  const [name, setName] = useState(term.name)
+  const [startDate, setStartDate] = useState(term.start_date?.slice(0, 10) ?? '')
+  const [endDate, setEndDate] = useState(term.end_date?.slice(0, 10) ?? '')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    const trimmed = name.trim()
+    if (!trimmed) {
+      setError('Dönem adı boş olamaz.')
+      return
+    }
+    setBusy(true)
+    setError('')
+    try {
+      await onSubmit({
+        name: trimmed,
+        start_date: startDate || null,
+        end_date: endDate || null,
+      })
+    } catch {
+      setError('Dönem güncellenemedi. Lütfen tekrar deneyin.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-3 rounded-md border border-stuhub-border bg-stuhub-surface p-4"
+    >
+      <div>
+        <label htmlFor={`term-edit-name-${term.id}`} className="mb-1 block text-sm font-medium">
+          Dönem adı
+        </label>
+        <input
+          id={`term-edit-name-${term.id}`}
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-stuhub-accent"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label htmlFor={`term-edit-start-${term.id}`} className="mb-1 block text-sm font-medium">
+            Başlangıç
+          </label>
+          <input
+            id={`term-edit-start-${term.id}`}
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-stuhub-accent"
+          />
+        </div>
+        <div>
+          <label htmlFor={`term-edit-end-${term.id}`} className="mb-1 block text-sm font-medium">
+            Bitiş
+          </label>
+          <input
+            id={`term-edit-end-${term.id}`}
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-stuhub-accent"
+          />
+        </div>
+      </div>
+      {error && <p className="text-sm text-stuhub-error">{error}</p>}
+      <div className="flex gap-3">
+        <button
+          type="submit"
+          disabled={busy}
+          className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-60"
+        >
+          {busy ? 'Kaydediliyor…' : 'Kaydet'}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-sm px-4 py-2 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+        >
+          İptal
+        </button>
+      </div>
+    </form>
+  )
+}
+
 /** Dönemler ana sayfası (Faz 1.1) + streak halkası + 3 adımlı onboarding (Faz V2.4). */
 export function TermsPage() {
   const [terms, setTerms] = useState<Term[]>([])
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [editingTerm, setEditingTerm] = useState<Term | null>(null)
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null)
   const [includeFiles, setIncludeFiles] = useState(false)
   const [importing, setImporting] = useState(false)
@@ -57,6 +160,12 @@ export function TermsPage() {
   const handleCreate = async (input: TermInput) => {
     await termsApi.create(input)
     setShowForm(false)
+    await load()
+  }
+
+  const handleUpdate = async (id: number, input: TermInput) => {
+    await termsApi.update(id, input)
+    setEditingTerm(null)
     await load()
   }
 
@@ -194,7 +303,16 @@ export function TermsPage() {
           </div>
         )}
         {terms.map((term) => (
-          <TermCard key={term.id} term={term} onDelete={handleDelete} />
+          <div key={term.id} className="space-y-3">
+            <TermCard term={term} onDelete={handleDelete} onEdit={setEditingTerm} />
+            {editingTerm?.id === term.id && (
+              <TermEditForm
+                term={term}
+                onSubmit={(input) => handleUpdate(term.id, input)}
+                onCancel={() => setEditingTerm(null)}
+              />
+            )}
+          </div>
         ))}
       </div>
     </section>

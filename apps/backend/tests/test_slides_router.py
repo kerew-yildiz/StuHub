@@ -91,6 +91,26 @@ async def test_slides_validation(client):
     assert resp.status_code == 404
 
 
+async def test_second_deck_continues_slide_numbers(client):
+    chapter_id = await _make_course_with_chapter(client)
+    first = await client.post(
+        f"/api/chapters/{chapter_id}/slides",
+        files={"file": ("a.pptx", _make_pptx_bytes(), PPTX_MIME)},
+    )
+    assert first.status_code == 201
+    assert first.json()[0]["slide_no"] == 1
+
+    second = await client.post(
+        f"/api/chapters/{chapter_id}/slides",
+        files={"file": ("b.pptx", _make_pptx_bytes(), PPTX_MIME)},
+    )
+    assert second.status_code == 201
+    assert second.json()[0]["slide_no"] == 2
+
+    resp = await client.get(f"/api/chapters/{chapter_id}/slides")
+    assert [s["slide_no"] for s in resp.json()] == [1, 2]
+
+
 async def test_delete_slide(client):
     chapter_id = await _make_course_with_chapter(client)
     created = await client.post(

@@ -12,7 +12,7 @@ Not üretiminde her konu için bir kaynak garanti etmek: (1) ders kitabı (mevcu
 ## Kademe 2 — Web Arama
 - Koşul: kademe 1 boş VE `web_search_enabled` açık (settings tablosu `web_search_enabled` → env `STUHUB_WEB_SEARCH_ENABLED` → varsayılan true).
 - Sorgu: **yalnızca** `"{ders adı} {konu}"` — materyal metni asla gönderilmez.
-- Araç: `duckduckgo_search` (MIT, anahtarsız, ücretsiz) → `DDGS().text(query, max_results=3)` → `{title, href, body}`.
+- Araç: `ddgs` (MIT, anahtarsız, ücretsiz; PyPI'de eski adı `duckduckgo_search` — YENİ AD KULLANILIR) → `DDGS().text(query, max_results=3)` → `{title, href, body}`.
 - Kaynak hazırlama: her sonuç için `href` güvenli şema kontrolüyle (yalnız http/https) indirilir, HTML etiketleri ayıklanır, ~3000 karaktere kırpılır; indirme başarısızsa `body` (snippet) kullanılır. `quote` = metnin ilk 240 karakteri.
 - Üretim: `NOTE_GENERATION_WEB_PROMPT` ile stream (kind=`note_generation_web`); atıflar `[n]`; her kaynak `[n] (Web: {title})` etiketli.
 - Atıf kaydı: `{"id": n, "source_type": "web", "source_id": null, "page": null, "slide": null, "chunk_id": "web-{n}", "url": ..., "title": ..., "quote": ...}`; `chunk_text` (dahili doğrulama) = kaynak metni. Atıf doğrulaması (Yetenek 06) web kaynaklarına da uygulanır.
@@ -36,7 +36,7 @@ Not üretiminde her konu için bir kaynak garanti etmek: (1) ders kitabı (mevcu
 ## Gizlilik Sözleşmesi
 - Web'e yalnızca konu sorgusu gider; kitap/slayt içeriği cihazdan çıkmaz.
 - Bu, Ücretsizlik Sözleşmesi'nin kayıtlı istisnalarına eklenir (LLM çıkarımı gibi — kullanıcı yetkisiyle).
-- `duckduckgo_search` kaydı `YETENEKLER/08-ucretsiz-arac-envanteri.md`'dedir.
+- `ddgs` kaydı `YETENEKLER/08-ucretsiz-arac-envanteri.md`'dedir.
 
 ## Kabul Kriterleri
 - Üç kademe testli; "kaynak bulunamadı (uyarılı not)" çıktısı hiçbir yolda üretilmez

@@ -87,12 +87,22 @@ async def upload_guide_slides(
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
             extracted = [{"slide": p["page"], "text": p["text"]} for p in pages]
 
+        # İkinci bir sunum yüklendiğinde slide_no 1'den başlamasın — mevcut destenin
+        # devamından numaralansın (birden fazla deste sorunsuz birleşir).
+        cursor = await db.execute(
+            "SELECT COALESCE(MAX(slide_no), 0) AS max_no FROM slides WHERE chapter_id = ?",
+            (chapter_id,),
+        )
+        offset_row = await cursor.fetchone()
+        offset = offset_row["max_no"] if offset_row is not None else 0
+
         out: list[SlideOut] = []
         for slide_data in extracted:
+            slide_no = slide_data["slide"] + offset
             cursor = await db.execute(
                 "INSERT INTO slides (chapter_id, material_id, slide_no, content_text) "
                 "VALUES (?, ?, ?, ?)",
-                (chapter_id, material_id, slide_data["slide"], slide_data["text"]),
+                (chapter_id, material_id, slide_no, slide_data["text"]),
             )
             await db.commit()
             slide_id = cursor.lastrowid
@@ -103,7 +113,7 @@ async def upload_guide_slides(
                     id=slide_id,
                     chapter_id=chapter_id,
                     material_id=material_id,
-                    slide_no=slide_data["slide"],
+                    slide_no=slide_no,
                     content_text=slide_data["text"],
                 )
             )

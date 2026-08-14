@@ -28,7 +28,7 @@
 | faster-whisper | Yerel STT (ses transkripsiyonu) | MIT | Ücretsiz (yerel) | openai-whisper (MIT) — daha ağır |
 | rapidocr-onnxruntime | Yerel OCR (görsel/PDF yedeği) | Apache-2.0 | Ücretsiz (yerel) | Tesseract (Apache-2.0) |
 | python-docx | DOCX okuma | MIT | Ücretsiz | — |
-| duckduckgo-search | Not üretimi web arama yedeği (anahtarsız, yalnız konu sorgusu — Yetenek 16) | MIT | Ücretsiz | Bing/Google HTML (kırılgan) — **ücretli arama API'leri (Tavily/Serper vb.) YASAK** |
+| ddgs (eski adı: duckduckgo-search) | Not üretimi web arama yedeği (anahtarsız, yalnız konu sorgusu — Yetenek 16) | MIT | Ücretsiz | Bing/Google HTML (kırılgan) — **ücretli arama API'leri (Tavily/Serper vb.) YASAK** |
 | pdfjs-dist | PDF sayfa render (pop-up) | Apache-2.0 | Ücretsiz | — |
 | vite-plugin-pwa | PWA (offline + kurulum) | MIT | Ücretsiz | — |
 | GitHub Actions | CI | Ücretsiz tier | Ücretsiz | — |

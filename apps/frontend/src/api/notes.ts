@@ -3,12 +3,16 @@ import { BASE_URL } from './client'
 /** Kayıtlı not (backend NoteOut ile birebir). */
 export interface Citation {
   id: number
-  source_type: 'textbook' | 'slides' | 'note'
+  source_type: 'textbook' | 'slides' | 'note' | 'web'
   source_id: number | null
   page: number | null
   slide: number | null
   chunk_id: string | null
   quote: string
+  /** Web kaynaklı atıflar için kaynak başlığı (source_type: "web"). */
+  title?: string | null
+  /** Web kaynaklı atıflar için kaynak URL'si (source_type: "web"). */
+  url?: string | null
 }
 
 export interface NoteTopic {

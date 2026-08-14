@@ -96,11 +96,10 @@ async def _generate_batch(
 ) -> list[dict] | None:
     """Bir konu için kart zarfı üretir; yapı/atıf denetiminden geçen kartları döner.
 
-    Kaynak (atıf) yoksa atıflı kart üretilemez → None döner. Atıfsız kartlar reddedilir.
+    Kaynak (atıf) yoksa atıfsız kartlar `citations: []` ile kabul edilir (quiz'in YUMUŞAK
+    GEÇİŞ kalıbı). Atıf varsa mevcut zorunluluk aynen korunur.
     """
     allowed = topic.get("citations", [])
-    if not allowed:
-        return None
     allowed_text = json.dumps(
         [{"id": c.get("id")} for c in allowed if c.get("id") is not None],
         ensure_ascii=False,
@@ -134,11 +133,16 @@ async def _generate_batch(
             card["citations"] = [r for r in card.get("citations", []) if isinstance(r, dict)]
         if not cards:
             continue
-        cards = _enrich_citations(cards, allowed)
-        # atıfsız kart reddedilir (Yetenek 09)
-        cards = [c for c in cards if c["citations"]]
-        if not cards:
-            continue
+        if allowed:
+            cards = _enrich_citations(cards, allowed)
+            # atıf varsa zorunlu: atıfsız kart reddedilir (Yetenek 09)
+            cards = [c for c in cards if c["citations"]]
+            if not cards:
+                continue
+        else:
+            # kaynak yok: atıfsız kartlar citations: [] ile kabul edilir (YUMUŞAK GEÇİŞ)
+            for card in cards:
+                card["citations"] = []
         for card in cards:
             card["topic"] = topic["topic"]
         return cards[:MAX_CARDS_PER_TOPIC]
@@ -228,6 +232,8 @@ async def _generate(chapter_id: int):
             # Asla başarısız olma: sorunlu konu uyarıyla atlanır, set yine teslim edilir.
             warnings.append(f"“{topic['topic']}” için kart üretilemedi (atlandı).")
             continue
+        if not topic.get("citations"):
+            warnings.append(f"“{topic['topic']}”: atıfsız kartlar (kaynak yok)")
         all_cards.extend(cards)
 
     all_cards = _dedup_cards(all_cards)

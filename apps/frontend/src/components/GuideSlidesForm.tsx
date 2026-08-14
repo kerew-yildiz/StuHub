@@ -46,7 +46,11 @@ export function GuideSlidesForm({ onUpload }: GuideSlidesFormProps) {
             className="w-full text-sm"
           />
           <p className="mt-1 text-xs text-stuhub-text-secondary">
-            Bu sunum, chapter notlarının rehberi olarak kullanılacak (guide slides).
+            Bu sunum, chapter notlarının rehberi olarak kullanılacak (guide slides). Birden
+            fazla sunum yükleyebilirsin.
+          </p>
+          <p className="mt-1 text-xs font-medium text-stuhub-info">
+            Bu sunum, mevcut slaytlara EKLENİR.
           </p>
         </div>
         <button

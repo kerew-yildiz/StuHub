@@ -59,11 +59,15 @@ def _record_failure() -> None:
 
 
 def _client() -> AsyncOpenAI:
-    """AsyncOpenAI istemcisi — anahtar yoksa net Türkçe hata."""
+    """AsyncOpenAI istemcisi — anahtar yoksa net Türkçe hata.
+
+    timeout=120: tek çağrının askıda kalması tüm üretimi kilitlemesin
+    (SDK varsayılanı 600 sn idi — kullanıcı geri bildirimiyle düşürüldü).
+    """
     key = settings.deepseek_api_key
     if not key:
         raise LLMError("DeepSeek API anahtarı ayarlanmadı. Ayarlar sayfasından girin.")
-    return AsyncOpenAI(api_key=key, base_url=settings.deepseek_base_url)
+    return AsyncOpenAI(api_key=key, base_url=settings.deepseek_base_url, timeout=120.0)
 
 
 def _friendly_error(exc: Exception) -> str:

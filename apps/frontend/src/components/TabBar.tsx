@@ -5,13 +5,13 @@ interface TabBarProps {
   ariaLabel: string
 }
 
-/** Yatay sekme çubuğu — mod değişimi rota değil (Quizlet/OmniSets deseni). */
+/** Yatay sekme çubuğu — pill mod değiştirici; mod değişimi rota değil (Şema 5). */
 export function TabBar({ tabs, activeId, onSelect, ariaLabel }: TabBarProps) {
   return (
     <div
       role="tablist"
       aria-label={ariaLabel}
-      className="flex flex-wrap gap-1 border-b border-stuhub-border"
+      className="inline-flex max-w-full flex-wrap gap-1 rounded-md border border-stuhub-border bg-stuhub-surface p-1"
     >
       {tabs.map((tab) => {
         const active = tab.id === activeId
@@ -22,10 +22,10 @@ export function TabBar({ tabs, activeId, onSelect, ariaLabel }: TabBarProps) {
             role="tab"
             aria-selected={active}
             onClick={() => onSelect(tab.id)}
-            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors duration-150 ${
+            className={`rounded-sm px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
               active
-                ? 'border-stuhub-accent text-stuhub-accent'
-                : 'border-transparent text-stuhub-text-secondary hover:text-stuhub-text'
+                ? 'bg-stuhub-accent/10 text-stuhub-accent'
+                : 'text-stuhub-text-secondary hover:bg-stuhub-surface-hover hover:text-stuhub-text'
             }`}
           >
             {tab.label}

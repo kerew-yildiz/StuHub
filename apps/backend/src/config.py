@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     not_dili: str = Field(default="tr", alias="STUHUB_NOT_DILI")
     # Streak halkası için günlük etkinlik hedefi (Yetenek 15)
     daily_goal: int = Field(default=3, alias="STUHUB_DAILY_GOAL")
+    # Kitapta kaynak yokken web'den not üretimi (Yetenek 02 §web yedeği)
+    web_search_enabled: bool = Field(default=True, alias="STUHUB_WEB_SEARCH_ENABLED")
 
     @property
     def db_path(self) -> Path:

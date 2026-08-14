@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { chaptersApi, type Chapter } from '../api/chapters'
+import { coursesApi } from '../api/courses'
 import { downloadFile, flashcardSetExportUrl, noteMarkdownUrl } from '../api/exports'
 import { deleteFlashcardSet, listFlashcardSets, type DueCard, type FlashcardSet } from '../api/flashcards'
 import { materialsApi } from '../api/materials'
@@ -16,6 +17,7 @@ import { NoteViewer } from '../components/NoteViewer'
 import { QuizPlayer } from '../components/QuizPlayer'
 import { SlidePreview } from '../components/SlidePreview'
 import { TabBar } from '../components/TabBar'
+import { getCourseHue, hueColorVar } from '../lib/courseColors'
 import { useAnimatedProgress } from '../lib/useAnimatedProgress'
 import { useGenerationStore } from '../stores/generationStore'
 
@@ -46,6 +48,10 @@ export function NotebookPage() {
   const [error, setError] = useState('')
   const [pdfPreview, setPdfPreview] = useState<string | null>(null)
   const [tab, setTab] = useState<NotebookTab>('notes')
+  // Guide slides formu — liste doluysa kapalı, boşsa açık başlar (çoklu sunum)
+  const [slidesFormOpen, setSlidesFormOpen] = useState(true)
+  // Ders rengi — not başlıkları, kart ve quiz şeritleri (Şema 5)
+  const [courseHueId, setCourseHueId] = useState<string | undefined>(undefined)
 
   // Küresel üretim deposu — sayfa değişse bile üretim sürer (madde 2)
   const noteJob = useGenerationStore((s) =>
@@ -74,9 +80,21 @@ export function NotebookPage() {
       ])
       setChapter(chapterData)
       setSlides(slideList)
+      // Liste boşsa yükleme formunu açık, doluysa kapalı tut (çoklu sunum eklenebilir)
+      setSlidesFormOpen(slideList.length === 0)
       setNote(existingNote)
       setQuizzes(quizList)
       setFlashcardSets(flashcardSetList)
+      // Ders rengi — başlık şeritleri ve sekme vurguları için (başarısız olursa sessiz)
+      const numericCourseId = Number(courseId)
+      if (Number.isFinite(numericCourseId)) {
+        try {
+          const courseData = await coursesApi.get(numericCourseId)
+          setCourseHueId(getCourseHue(courseData).id)
+        } catch {
+          setCourseHueId(undefined)
+        }
+      }
       // Slayt materyalinin PDF'i varsa önizleme URL'si hazırla (madde 1)
       const withMaterial = slideList.find((s) => s.material_id != null)
       if (withMaterial?.material_id != null) {
@@ -94,7 +112,7 @@ export function NotebookPage() {
       setState('error')
       setError('Chapter yüklenemedi. Lütfen tekrar deneyin.')
     }
-  }, [numericChapterId])
+  }, [numericChapterId, courseId])
 
   useEffect(() => {
     void load()
@@ -231,13 +249,28 @@ export function NotebookPage() {
         <>
           {/* Guide slides — orijinal dosya önizlemesi (PDF) ya da metin kartı */}
           <div className="mt-8">
-        <h2 className="text-xl font-semibold">Guide Slides</h2>
-        <p className="mt-1 text-sm text-stuhub-text-secondary">
-          Hocanın sunumu — not üretiminin rehberi. PDF ya da PPTX yükleyebilirsin.
-        </p>
-        <div className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface p-5">
-          <GuideSlidesForm onUpload={handleUpload} />
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold">Guide Slides</h2>
+            <p className="mt-1 text-sm text-stuhub-text-secondary">
+              Hocanın sunumu — not üretiminin rehberi. PDF ya da PPTX yükleyebilirsin.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSlidesFormOpen((v) => !v)}
+            aria-expanded={slidesFormOpen}
+            className="shrink-0 rounded-sm border border-stuhub-border bg-stuhub-surface px-3 py-1.5 text-sm font-medium text-stuhub-accent transition-colors duration-150 hover:bg-stuhub-surface-hover"
+          >
+            {slidesFormOpen ? 'Gizle' : 'Yeni sunum ekle +'}
+          </button>
         </div>
+
+        {slidesFormOpen && (
+          <div className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface p-5">
+            <GuideSlidesForm onUpload={handleUpload} />
+          </div>
+        )}
 
         {slidesPdfUrl ? (
           <div className="mt-5 overflow-hidden rounded-md border border-stuhub-border bg-stuhub-surface">
@@ -320,14 +353,14 @@ export function NotebookPage() {
         )}
 
         {!generatingNote && note && (
-          <details open className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface">
-            <summary className="cursor-pointer select-none px-5 py-3 font-medium">
-              Not görüntüle / gizle
-            </summary>
-            <div className="border-t border-stuhub-border px-6 py-5">
-              <NoteViewer note={note} />
-            </div>
-          </details>
+          <div
+            className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface px-6 py-5"
+            style={
+              courseHueId ? { borderLeft: `4px solid ${hueColorVar(courseHueId)}` } : undefined
+            }
+          >
+            <NoteViewer note={note} hueId={courseHueId} />
+          </div>
         )}
         {!generatingNote && !note && !error && (
           <p className="mt-4 text-sm text-stuhub-text-secondary">
@@ -364,6 +397,7 @@ export function NotebookPage() {
                 void refreshFlashcardSets()
               }}
               onExit={() => setPlayingCards(null)}
+              hueId={courseHueId}
             />
           </div>
         ) : (
@@ -392,7 +426,10 @@ export function NotebookPage() {
               {flashcardSets.map((set, setIndex) => (
                 <div
                   key={set.id}
-                  className="flex items-center justify-between rounded-md border border-stuhub-border bg-stuhub-surface px-5 py-4"
+                  className="flex items-center justify-between rounded-md border border-stuhub-border border-l-4 bg-stuhub-surface px-5 py-4"
+                  style={
+                    courseHueId ? { borderLeftColor: hueColorVar(courseHueId) } : undefined
+                  }
                 >
                   <span className="text-sm">
                     <span className="font-medium">
@@ -485,7 +522,12 @@ export function NotebookPage() {
           )}
           {quizzes.map((quiz, index) => (
             <details key={quiz.id} open={index === 0}>
-              <summary className="flex cursor-pointer items-center justify-between rounded-md border border-stuhub-border bg-stuhub-surface px-5 py-3 font-medium">
+              <summary
+                className="flex cursor-pointer items-center justify-between rounded-md border border-stuhub-border border-l-4 bg-stuhub-surface px-5 py-3 font-medium"
+                style={
+                  courseHueId ? { borderLeftColor: hueColorVar(courseHueId) } : undefined
+                }
+              >
                 <span>
                   Quiz {quizzes.length - index} ·{' '}
                   {quiz.questions_json.topics.reduce(

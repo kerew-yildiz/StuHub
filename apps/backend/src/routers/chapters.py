@@ -90,6 +90,25 @@ async def get_chapter(chapter_id: int) -> ChapterOut:
     return ChapterOut(**dict(_require(row)))
 
 
+@router.put("/chapters/{chapter_id}", response_model=ChapterOut)
+async def update_chapter(chapter_id: int, item: ChapterIn) -> ChapterOut:
+    """Chapter başlığını günceller."""
+    db = await get_db()
+    try:
+        row = await _fetch(db, chapter_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Chapter bulunamadı")
+        await db.execute(
+            "UPDATE chapters SET title = ? WHERE id = ?",
+            (item.title, chapter_id),
+        )
+        await db.commit()
+        row = await _fetch(db, chapter_id)
+    finally:
+        await db.close()
+    return ChapterOut(**dict(_require(row)))
+
+
 @router.delete("/chapters/{chapter_id}", status_code=204)
 async def delete_chapter(chapter_id: int) -> None:
     """Chapter'ı siler."""

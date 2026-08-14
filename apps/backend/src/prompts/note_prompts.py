@@ -52,3 +52,33 @@ KAYNAK PARÇA: {chunk_text}
 
 Yalnızca JSON döndür: {{"supported": true}} ya da {{"supported": false}}
 """
+
+NOTE_GENERATION_WEB_PROMPT = """Sen bir üniversite ders notu yazarısın. Aşağıda "{topic}" konusundaki web kaynakları var.
+
+KURALLAR:
+1. SADECE sağlanan web kaynaklarını kullan; kaynaklarda olmayan bilgi EKLEME.
+2. "{topic}" konusunu eksiksiz ve anlaşılır biçimde açıkla; öğrenci seviyesine uygun yaz. {dil_talimati}
+3. Her bilgi parçasının sonuna kaynak atıf numarasını [n] biçiminde koy (n: KAYNAKLAR listesindeki numara).
+4. Kaynak başlığından emin değilsen genel ifade kullan.
+5. Madde işaretleri ve kısa paragraflar kullan; gereksiz tekrar yapma.
+6. Bölümü tam olarak "### {topic}" başlığıyla başlat (başka başlık düzeyi/ifade kullanma).
+
+KONU: {topic}
+
+KAYNAKLAR:
+{numbered_sources}
+
+ÇIKTI: Markdown not bölümü (inline atıflı).
+"""
+
+NOTE_SLIDE_ONLY_PROMPT = """Ders kitabı ve web'de kaynak bulunamadı. Aşağıdaki sunum (rehber) içeriğinden "{topic}" konusunu eksiksiz, öğrenci seviyesinde TAM bir not olarak yaz. Atıf ekleme ([n] kullanma). {dil_talimati}
+
+KURALLAR:
+1. Bölümü tam olarak "### {topic}" başlığıyla başlat (başka başlık düzeyi/ifade kullanma).
+2. Madde işaretleri ve kısa paragraflar kullan; gereksiz tekrar yapma.
+
+REHBER:
+{slide_content}
+
+ÇIKTI: Markdown not bölümü (atıfsız).
+"""
