@@ -14,7 +14,15 @@ from ..db import get_db
 
 router = APIRouter(prefix="/api", tags=["materials"])
 
-_COLUMNS = "id, course_id, type, filepath, extracted_text, page_count, vector_ns, created_at"
+# Sabit SQL şablonları — kullanıcı girdisi asla SQL'e gömülmez (parametreli sorgular)
+_SELECT_BY_ID = (
+    "SELECT id, course_id, type, filepath, extracted_text, page_count, vector_ns, created_at "
+    "FROM materials WHERE id = ?"
+)
+_LIST_BY_COURSE = (
+    "SELECT id, course_id, type, filepath, extracted_text, page_count, vector_ns, created_at "
+    "FROM materials WHERE course_id = ? ORDER BY created_at DESC, id DESC"
+)
 
 ALLOWED_TYPES = {"textbook", "slides"}
 # textbook: PDF; slides: PDF ya da PPTX (Faz 2.1'de çıkarılır)
@@ -87,14 +95,14 @@ async def upload_material(
         )
         await db.commit()
         row_id = cursor.lastrowid
-        assert row_id is not None
-        cursor2 = await db.execute(
-            f"SELECT {_COLUMNS} FROM materials WHERE id = ?", (row_id,)
-        )
+        if row_id is None:
+            raise RuntimeError("materyal kimliği alınamadı")
+        cursor2 = await db.execute(_SELECT_BY_ID, (row_id,))
         row = await cursor2.fetchone()
     finally:
         await db.close()
-    assert row is not None
+    if row is None:
+        raise RuntimeError("beklenen materyal satırı bulunamadı")
     return MaterialOut(**dict(row))
 
 
@@ -103,11 +111,7 @@ async def list_materials(course_id: int) -> list[MaterialOut]:
     """Bir derse ait materyaller."""
     db = await get_db()
     try:
-        cursor = await db.execute(
-            f"SELECT {_COLUMNS} FROM materials WHERE course_id = ? "
-            "ORDER BY created_at DESC, id DESC",
-            (course_id,),
-        )
+        cursor = await db.execute(_LIST_BY_COURSE, (course_id,))
         rows = await cursor.fetchall()
     finally:
         await db.close()

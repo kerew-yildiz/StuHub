@@ -9,7 +9,14 @@ from ..db import get_db
 
 router = APIRouter(prefix="/api/terms", tags=["terms"])
 
-_COLUMNS = "id, name, start_date, end_date, created_at"
+# Sabit SQL şablonları — kullanıcı girdisi asla SQL'e gömülmez (parametreli sorgular)
+_SELECT_BY_ID = (
+    "SELECT id, name, start_date, end_date, created_at FROM terms WHERE id = ?"
+)
+_LIST_SQL = (
+    "SELECT id, name, start_date, end_date, created_at "
+    "FROM terms ORDER BY created_at DESC, id DESC"
+)
 
 
 class TermIn(BaseModel):
@@ -24,9 +31,15 @@ class TermOut(TermIn):
 
 
 async def _fetch(db, term_id: int) -> dict | None:
-    cursor = await db.execute(f"SELECT {_COLUMNS} FROM terms WHERE id = ?", (term_id,))
+    cursor = await db.execute(_SELECT_BY_ID, (term_id,))
     row = await cursor.fetchone()
     return dict(row) if row else None
+
+
+def _require(row: dict | None) -> dict:
+    if row is None:
+        raise RuntimeError("beklenen dönem satırı bulunamadı")
+    return row
 
 
 @router.get("", response_model=list[TermOut])
@@ -34,9 +47,7 @@ async def list_terms() -> list[TermOut]:
     """Dönem listesi (yeniden eskiye)."""
     db = await get_db()
     try:
-        cursor = await db.execute(
-            f"SELECT {_COLUMNS} FROM terms ORDER BY created_at DESC, id DESC"
-        )
+        cursor = await db.execute(_LIST_SQL)
         rows = await cursor.fetchall()
     finally:
         await db.close()
@@ -54,12 +65,12 @@ async def create_term(item: TermIn) -> TermOut:
         )
         await db.commit()
         row_id = cursor.lastrowid
-        assert row_id is not None
+        if row_id is None:
+            raise RuntimeError("dönem kimliği alınamadı")
         term = await _fetch(db, row_id)
     finally:
         await db.close()
-    assert term is not None
-    return TermOut(**term)
+    return TermOut(**dict(_require(term)))
 
 
 @router.get("/{term_id}", response_model=TermOut)
@@ -90,8 +101,7 @@ async def update_term(term_id: int, item: TermIn) -> TermOut:
         term = await _fetch(db, term_id)
     finally:
         await db.close()
-    assert term is not None
-    return TermOut(**term)
+    return TermOut(**dict(_require(term)))
 
 
 @router.delete("/{term_id}", status_code=204)

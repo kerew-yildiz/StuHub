@@ -11,7 +11,15 @@ from ..db import get_db
 
 router = APIRouter(prefix="/api", tags=["courses"])
 
-_COLUMNS = "id, term_id, name, instructor, metadata_json, created_at"
+# Sabit SQL şablonları — kullanıcı girdisi asla SQL'e gömülmez (parametreli sorgular)
+_SELECT_BY_ID = (
+    "SELECT id, term_id, name, instructor, metadata_json, created_at "
+    "FROM courses WHERE id = ?"
+)
+_LIST_BY_TERM = (
+    "SELECT id, term_id, name, instructor, metadata_json, created_at "
+    "FROM courses WHERE term_id = ? ORDER BY created_at DESC, id DESC"
+)
 
 
 class CourseIn(BaseModel):
@@ -33,9 +41,15 @@ def _row_to_out(row: dict) -> CourseOut:
 
 
 async def _fetch(db, course_id: int) -> dict | None:
-    cursor = await db.execute(f"SELECT {_COLUMNS} FROM courses WHERE id = ?", (course_id,))
+    cursor = await db.execute(_SELECT_BY_ID, (course_id,))
     row = await cursor.fetchone()
     return dict(row) if row else None
+
+
+def _require(row: dict | None) -> dict:
+    if row is None:
+        raise RuntimeError("beklenen ders satırı bulunamadı")
+    return row
 
 
 async def _term_exists(db, term_id: int) -> bool:
@@ -48,11 +62,7 @@ async def list_courses(term_id: int) -> list[CourseOut]:
     """Bir döneme ait dersler (yeniden eskiye)."""
     db = await get_db()
     try:
-        cursor = await db.execute(
-            f"SELECT {_COLUMNS} FROM courses WHERE term_id = ? "
-            "ORDER BY created_at DESC, id DESC",
-            (term_id,),
-        )
+        cursor = await db.execute(_LIST_BY_TERM, (term_id,))
         rows = await cursor.fetchall()
     finally:
         await db.close()
@@ -77,12 +87,12 @@ async def create_course(term_id: int, item: CourseIn) -> CourseOut:
         )
         await db.commit()
         row_id = cursor.lastrowid
-        assert row_id is not None
+        if row_id is None:
+            raise RuntimeError("ders kimliği alınamadı")
         row = await _fetch(db, row_id)
     finally:
         await db.close()
-    assert row is not None
-    return _row_to_out(row)
+    return _row_to_out(_require(row))
 
 
 @router.get("/courses/{course_id}", response_model=CourseOut)
@@ -118,8 +128,7 @@ async def update_course(course_id: int, item: CourseIn) -> CourseOut:
         row = await _fetch(db, course_id)
     finally:
         await db.close()
-    assert row is not None
-    return _row_to_out(row)
+    return _row_to_out(_require(row))
 
 
 @router.delete("/courses/{course_id}", status_code=204)

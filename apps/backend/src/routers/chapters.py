@@ -9,7 +9,12 @@ from ..db import get_db
 
 router = APIRouter(prefix="/api", tags=["chapters"])
 
-_COLUMNS = "id, course_id, title, created_at"
+# Sabit SQL şablonları — kullanıcı girdisi asla SQL'e gömülmez (parametreli sorgular)
+_SELECT_BY_ID = "SELECT id, course_id, title, created_at FROM chapters WHERE id = ?"
+_LIST_BY_COURSE = (
+    "SELECT id, course_id, title, created_at FROM chapters "
+    "WHERE course_id = ? ORDER BY created_at ASC, id ASC"
+)
 
 
 class ChapterIn(BaseModel):
@@ -23,9 +28,15 @@ class ChapterOut(ChapterIn):
 
 
 async def _fetch(db, chapter_id: int) -> dict | None:
-    cursor = await db.execute(f"SELECT {_COLUMNS} FROM chapters WHERE id = ?", (chapter_id,))
+    cursor = await db.execute(_SELECT_BY_ID, (chapter_id,))
     row = await cursor.fetchone()
     return dict(row) if row else None
+
+
+def _require(row: dict | None) -> dict:
+    if row is None:
+        raise RuntimeError("beklenen chapter satırı bulunamadı")
+    return row
 
 
 async def _course_exists(db, course_id: int) -> bool:
@@ -38,11 +49,7 @@ async def list_chapters(course_id: int) -> list[ChapterOut]:
     """Bir derse ait chapter'lar (oluşturma sırasıyla)."""
     db = await get_db()
     try:
-        cursor = await db.execute(
-            f"SELECT {_COLUMNS} FROM chapters WHERE course_id = ? "
-            "ORDER BY created_at ASC, id ASC",
-            (course_id,),
-        )
+        cursor = await db.execute(_LIST_BY_COURSE, (course_id,))
         rows = await cursor.fetchall()
     finally:
         await db.close()
@@ -62,12 +69,12 @@ async def create_chapter(course_id: int, item: ChapterIn) -> ChapterOut:
         )
         await db.commit()
         row_id = cursor.lastrowid
-        assert row_id is not None
+        if row_id is None:
+            raise RuntimeError("chapter kimliği alınamadı")
         row = await _fetch(db, row_id)
     finally:
         await db.close()
-    assert row is not None
-    return ChapterOut(**row)
+    return ChapterOut(**dict(_require(row)))
 
 
 @router.delete("/chapters/{chapter_id}", status_code=204)
