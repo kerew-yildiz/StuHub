@@ -13,8 +13,10 @@
   },
   "dependencies": {
     "clsx": "^2.1.1",
+    "pdfjs-dist": "^6.2.108",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^7.18.0",
     "zustand": "^5.0.3"
   },

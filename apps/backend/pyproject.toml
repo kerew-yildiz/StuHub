@@ -13,6 +13,7 @@ dependencies = [
     "python-pptx>=1.0.2",
     "lancedb>=0.37.1",
     "sentence-transformers>=5.7.0",
+    "openai>=1.40",
 ]
 
 [dependency-groups]

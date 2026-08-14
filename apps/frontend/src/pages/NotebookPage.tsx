@@ -2,31 +2,42 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { chaptersApi, type Chapter } from '../api/chapters'
+import { getNote, streamNoteGeneration, type SavedNote } from '../api/notes'
 import { slidesApi, type Slide } from '../api/slides'
 import { GuideSlidesForm } from '../components/GuideSlidesForm'
+import { NoteViewer } from '../components/NoteViewer'
 
 type LoadState = 'loading' | 'ready' | 'error'
 
-/** Chapter detay sayfası — guide slides + (Faz 3+ not/quiz butonları). */
+/** Chapter detay sayfası — guide slides + not üretimi (Faz 2/3). */
 export function NotebookPage() {
   const { courseId, chapterId } = useParams<{ courseId: string; chapterId: string }>()
   const numericChapterId = Number(chapterId)
 
   const [chapter, setChapter] = useState<Chapter | null>(null)
   const [slides, setSlides] = useState<Slide[]>([])
+  const [note, setNote] = useState<SavedNote | null>(null)
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState('')
+
+  // üretim durumu
+  const [generating, setGenerating] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [statusMessage, setStatusMessage] = useState('')
+  const [liveContent, setLiveContent] = useState('')
 
   const load = useCallback(async () => {
     if (!numericChapterId) return
     setState('loading')
     try {
-      const [chapterData, slideList] = await Promise.all([
+      const [chapterData, slideList, existingNote] = await Promise.all([
         chaptersApi.get(numericChapterId),
         slidesApi.listByChapter(numericChapterId),
+        getNote(numericChapterId),
       ])
       setChapter(chapterData)
       setSlides(slideList)
+      setNote(existingNote)
       setState('ready')
     } catch {
       setState('error')
@@ -52,6 +63,34 @@ export function NotebookPage() {
       setError('Slide silinemedi. Lütfen tekrar deneyin.')
     }
   }
+
+  const handleGenerate = async () => {
+    setGenerating(true)
+    setProgress(0)
+    setStatusMessage('Hazırlanıyor…')
+    setLiveContent('')
+    setError('')
+    await streamNoteGeneration(numericChapterId, {
+      onStatus: (percent, message) => {
+        setProgress(percent)
+        setStatusMessage(message)
+      },
+      onDelta: (text) => setLiveContent((prev) => prev + text),
+      onDone: (savedNote) => {
+        setNote(savedNote)
+        setLiveContent('')
+        setProgress(100)
+        setStatusMessage('Not hazır.')
+        setGenerating(false)
+      },
+      onError: (message) => {
+        setError(message)
+        setGenerating(false)
+      },
+    })
+  }
+
+  const canGenerate = slides.length > 0
 
   return (
     <section>
@@ -123,16 +162,51 @@ export function NotebookPage() {
         </div>
       </div>
 
-      {/* Faz 3+ üretim butonları (hazırlık) */}
-      <div className="mt-10 flex gap-4">
-        <button
-          type="button"
-          disabled
-          className="rounded-sm bg-stuhub-surface px-4 py-2 text-sm font-medium text-stuhub-text-secondary"
-          title="Faz 3'te geliyor"
-        >
-          Not Oluştur (Faz 3)
-        </button>
+      {/* Not üretimi */}
+      <div className="mt-10">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">Not</h2>
+          <button
+            type="button"
+            onClick={() => void handleGenerate()}
+            disabled={generating || !canGenerate}
+            className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-50"
+            title={canGenerate ? '' : 'Önce guide slides yükle'}
+          >
+            {generating ? 'Üretiliyor…' : 'Not Oluştur'}
+          </button>
+        </div>
+
+        {generating && (
+          <div className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface p-5">
+            <p className="text-sm font-medium">{statusMessage}</p>
+            <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-stuhub-border">
+              <div
+                className="h-full bg-stuhub-accent transition-all duration-300"
+                style={{ width: `${Math.max(progress, 2)}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs text-stuhub-text-secondary">
+              {Math.round(progress)}% tamamlandı
+            </p>
+            {liveContent && (
+              <pre className="mt-4 max-h-64 overflow-y-auto whitespace-pre-wrap rounded-sm bg-stuhub-bg p-3 text-sm text-stuhub-text-secondary">
+                {liveContent}
+              </pre>
+            )}
+          </div>
+        )}
+
+        {!generating && note && <NoteViewer note={note} />}
+        {!generating && !note && !error && (
+          <p className="mt-4 text-sm text-stuhub-text-secondary">
+            Henüz not yok. Guide slides yükleyip “Not Oluştur” ile başla.
+          </p>
+        )}
+      </div>
+
+      {/* Faz 4 butonu (hazırlık) */}
+      <div className="mt-10">
         <button
           type="button"
           disabled

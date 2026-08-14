@@ -76,9 +76,15 @@ async def upload_guide_slides(
             slides_service.render_pptx_to_pdf(str(dest), str(render_dir))
 
         if ext in (".pptx", ".ppt"):
-            extracted = slides_service.extract_pptx_slides(str(dest))
+            try:
+                extracted = slides_service.extract_pptx_slides(str(dest))
+            except slides_service.SlidesError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
         else:
-            pages = pdf_service.extract_pdf_pages(str(dest))
+            try:
+                pages = pdf_service.extract_pdf_pages(str(dest))
+            except pdf_service.PdfError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
             extracted = [{"slide": p["page"], "text": p["text"]} for p in pages]
 
         out: list[SlideOut] = []

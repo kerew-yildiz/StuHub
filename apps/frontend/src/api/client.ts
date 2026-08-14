@@ -10,7 +10,7 @@ export class ApiError extends Error {
   }
 }
 
-const BASE_URL = '/api'
+export const BASE_URL = '/api'
 
 /** Tipik JSON API çağrısı; hata durumunda Türkçe mesajlı ApiError fırlatır. */
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
