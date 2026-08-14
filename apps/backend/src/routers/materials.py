@@ -75,10 +75,6 @@ async def upload_material(
             detail=f"{type} türü için desteklenen uzantılar: {allowed}",
         )
 
-    content = await file.read()
-    if not content:
-        raise HTTPException(status_code=422, detail="Boş dosya yüklenemez")
-
     db = await get_db()
     try:
         if not await _course_exists(db, course_id):
@@ -88,7 +84,20 @@ async def upload_material(
         course_dir.mkdir(parents=True, exist_ok=True)
         stored_name = f"{uuid.uuid4().hex}_{_safe_filename(file.filename or 'dosya')}"
         dest = course_dir / stored_name
-        dest.write_bytes(content)
+
+        # Büyük kitaplar için akışkan yükleme (parça parça diske yaz)
+        total = 0
+        with dest.open("wb") as handle:
+            while chunk := await file.read(1024 * 1024):
+                handle.write(chunk)
+                total += len(chunk)
+        if total == 0:
+            dest.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=422,
+                detail="Dosya boş (0 bayt). Dosyanın bozuk ya da eksik indirilmiş olmadığından "
+                "emin olup tekrar yükleyin.",
+            )
 
         cursor = await db.execute(
             "INSERT INTO materials (course_id, type, filepath) VALUES (?, ?, ?)",

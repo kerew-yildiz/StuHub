@@ -99,6 +99,23 @@ export async function getNote(chapterId: number): Promise<SavedNote | null> {
   return (await response.json()) as SavedNote
 }
 
+/** Notu PDF olarak indirir (Türkçe karakter destekli). */
+export async function exportNotePdf(noteId: number): Promise<void> {
+  const response = await fetch(`${BASE_URL}/notes/${noteId}/export`)
+  if (!response.ok) {
+    throw new Error('PDF oluşturulamadı. Lütfen tekrar deneyin.')
+  }
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `stuhub-not-${noteId}.pdf`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
 /** Atıf pop-up'ı için kaynak parça (Yetenek 06 §4). */
 export interface ResolvedChunk {
   chunk_id: string

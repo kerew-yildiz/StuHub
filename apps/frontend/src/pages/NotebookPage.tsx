@@ -2,16 +2,23 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { chaptersApi, type Chapter } from '../api/chapters'
-import { getNote, streamNoteGeneration, type SavedNote } from '../api/notes'
+import {
+  exportNotePdf,
+  getNote,
+  streamNoteGeneration,
+  type SavedNote,
+} from '../api/notes'
 import { getQuiz, streamQuizGeneration, type Quiz } from '../api/quizzes'
 import { slidesApi, type Slide } from '../api/slides'
 import { GuideSlidesForm } from '../components/GuideSlidesForm'
 import { NoteViewer } from '../components/NoteViewer'
 import { QuizPlayer } from '../components/QuizPlayer'
+import { SlidePreview } from '../components/SlidePreview'
+import { useAnimatedProgress } from '../lib/useAnimatedProgress'
 
 type LoadState = 'loading' | 'ready' | 'error'
 
-/** Chapter detay sayfası — guide slides + not üretimi + bölüm quizi (Faz 2/3/4). */
+/** Chapter detay sayfası — guide slides + not + bölüm quizi (Faz 2/3/4 + iyileştirmeler). */
 export function NotebookPage() {
   const { courseId, chapterId } = useParams<{ courseId: string; chapterId: string }>()
   const numericChapterId = Number(chapterId)
@@ -23,16 +30,18 @@ export function NotebookPage() {
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState('')
 
-  // üretim durumu
+  // üretim durumu (hedef yüzde — hook animasyonu sürer)
   const [generating, setGenerating] = useState(false)
-  const [progress, setProgress] = useState(0)
+  const [noteTarget, setNoteTarget] = useState(0)
   const [statusMessage, setStatusMessage] = useState('')
   const [liveContent, setLiveContent] = useState('')
+  const noteProgress = useAnimatedProgress(noteTarget)
 
   // quiz durumu
   const [quizGenerating, setQuizGenerating] = useState(false)
-  const [quizProgress, setQuizProgress] = useState(0)
+  const [quizTarget, setQuizTarget] = useState(0)
   const [quizMessage, setQuizMessage] = useState('')
+  const quizProgress = useAnimatedProgress(quizTarget)
   const [quizKey, setQuizKey] = useState(0)
 
   const load = useCallback(async () => {
@@ -75,40 +84,14 @@ export function NotebookPage() {
     }
   }
 
-  const handleGenerate = async () => {
-    setGenerating(true)
-    setProgress(0)
-    setStatusMessage('Hazırlanıyor…')
-    setLiveContent('')
-    setError('')
-    await streamNoteGeneration(numericChapterId, {
-      onStatus: (percent, message) => {
-        setProgress(percent)
-        setStatusMessage(message)
-      },
-      onDelta: (text) => setLiveContent((prev) => prev + text),
-      onDone: (savedNote) => {
-        setNote(savedNote)
-        setLiveContent('')
-        setProgress(100)
-        setStatusMessage('Not hazır.')
-        setGenerating(false)
-      },
-      onError: (message) => {
-        setError(message)
-        setGenerating(false)
-      },
-    })
-  }
-
-  const handleGenerateQuiz = async () => {
+  const handleGenerateQuiz = useCallback(async () => {
     setQuizGenerating(true)
-    setQuizProgress(0)
+    setQuizTarget(0)
     setQuizMessage('Hazırlanıyor…')
     setError('')
     await streamQuizGeneration(numericChapterId, {
       onStatus: (percent, message) => {
-        setQuizProgress(percent)
+        setQuizTarget(percent)
         setQuizMessage(message)
       },
       onDone: (newQuiz) => {
@@ -122,6 +105,43 @@ export function NotebookPage() {
         setQuizGenerating(false)
       },
     })
+  }, [numericChapterId])
+
+  const handleGenerate = async () => {
+    setGenerating(true)
+    setNoteTarget(0)
+    setStatusMessage('Hazırlanıyor…')
+    setLiveContent('')
+    setError('')
+    await streamNoteGeneration(numericChapterId, {
+      onStatus: (percent, message) => {
+        setNoteTarget(percent)
+        setStatusMessage(message)
+      },
+      onDelta: (text) => setLiveContent((prev) => prev + text),
+      onDone: (savedNote) => {
+        setNote(savedNote)
+        setLiveContent('')
+        setNoteTarget(100)
+        setStatusMessage('Not hazır.')
+        setGenerating(false)
+        // Madde 5: quiz not bittikten sonra OTOMATİK oluşturulur
+        void handleGenerateQuiz()
+      },
+      onError: (message) => {
+        setError(message)
+        setGenerating(false)
+      },
+    })
+  }
+
+  const handleExportPdf = async () => {
+    if (!note) return
+    try {
+      await exportNotePdf(note.id)
+    } catch {
+      setError('PDF oluşturulamadı. Lütfen tekrar deneyin.')
+    }
   }
 
   const canGenerate = slides.length > 0
@@ -149,7 +169,7 @@ export function NotebookPage() {
         <p className="mt-8 text-sm text-stuhub-text-secondary">Yükleniyor…</p>
       )}
 
-      {/* Guide slides */}
+      {/* Guide slides — önizleyici (tek tek gösterim) */}
       <div className="mt-8">
         <h2 className="text-xl font-semibold">Guide Slides</h2>
         <p className="mt-1 text-sm text-stuhub-text-secondary">
@@ -159,57 +179,35 @@ export function NotebookPage() {
           <GuideSlidesForm onUpload={handleUpload} />
         </div>
 
-        <div className="mt-5 space-y-3">
-          {slides.length === 0 && (
-            <p className="text-sm text-stuhub-text-secondary">
-              Henüz slide yok. Yukarıdan sunum yükleyerek başla.
-            </p>
-          )}
-          {slides.map((slide) => (
-            <details
-              key={slide.id}
-              className="rounded-md border border-stuhub-border bg-stuhub-surface"
-            >
-              <summary className="flex cursor-pointer items-center justify-between px-5 py-3 font-medium">
-                <span>
-                  Slide {slide.slide_no}
-                  {slide.content_text ? '' : ' (metin yok)'}
-                </span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    void handleDeleteSlide(slide.id)
-                  }}
-                  className="rounded-sm px-2 py-1 text-sm text-stuhub-error transition-colors duration-150 hover:bg-stuhub-surface-hover"
-                  aria-label={`Slide ${slide.slide_no} sil`}
-                >
-                  Sil
-                </button>
-              </summary>
-              {slide.content_text && (
-                <div className="border-t border-stuhub-border px-5 py-3 text-sm leading-relaxed text-stuhub-text-secondary">
-                  {slide.content_text}
-                </div>
-              )}
-            </details>
-          ))}
+        <div className="mt-5">
+          <SlidePreview slides={slides} onDelete={handleDeleteSlide} />
         </div>
       </div>
 
-      {/* Not üretimi */}
+      {/* Not — açılır kapanır pencere + PDF indir */}
       <div className="mt-10">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold">Not</h2>
-          <button
-            type="button"
-            onClick={() => void handleGenerate()}
-            disabled={generating || !canGenerate}
-            className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-50"
-            title={canGenerate ? '' : 'Önce guide slides yükle'}
-          >
-            {generating ? 'Üretiliyor…' : 'Not Oluştur'}
-          </button>
+          <div className="flex gap-3">
+            {note && !generating && (
+              <button
+                type="button"
+                onClick={() => void handleExportPdf()}
+                className="rounded-sm border border-stuhub-border bg-stuhub-surface px-4 py-2 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+              >
+                PDF İndir
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => void handleGenerate()}
+              disabled={generating || !canGenerate}
+              className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-50"
+              title={canGenerate ? '' : 'Önce guide slides yükle'}
+            >
+              {generating ? 'Üretiliyor…' : 'Not Oluştur'}
+            </button>
+          </div>
         </div>
 
         {generating && (
@@ -217,12 +215,12 @@ export function NotebookPage() {
             <p className="text-sm font-medium">{statusMessage}</p>
             <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-stuhub-border">
               <div
-                className="h-full bg-stuhub-accent transition-all duration-300"
-                style={{ width: `${Math.max(progress, 2)}%` }}
+                className="h-full rounded-full bg-stuhub-accent transition-[width] duration-150 ease-out"
+                style={{ width: `${Math.max(noteProgress, 2)}%` }}
               />
             </div>
             <p className="mt-2 text-xs text-stuhub-text-secondary">
-              {Math.round(progress)}% tamamlandı
+              %{Math.round(noteProgress)} tamamlandı
             </p>
             {liveContent && (
               <pre className="mt-4 max-h-64 overflow-y-auto whitespace-pre-wrap rounded-sm bg-stuhub-bg p-3 text-sm text-stuhub-text-secondary">
@@ -232,7 +230,16 @@ export function NotebookPage() {
           </div>
         )}
 
-        {!generating && note && <NoteViewer note={note} />}
+        {!generating && note && (
+          <details open className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface">
+            <summary className="cursor-pointer select-none px-5 py-3 font-medium">
+              Not görüntüle / gizle
+            </summary>
+            <div className="border-t border-stuhub-border px-6 py-5">
+              <NoteViewer note={note} />
+            </div>
+          </details>
+        )}
         {!generating && !note && !error && (
           <p className="mt-4 text-sm text-stuhub-text-secondary">
             Henüz not yok. Guide slides yükleyip “Not Oluştur” ile başla.
@@ -240,8 +247,8 @@ export function NotebookPage() {
         )}
       </div>
 
-      {/* Bölüm quizi */}
-      <div className="mt-10">
+      {/* Bölüm quizi — notun sonunda otomatik */}
+      <div className="mt-8">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold">Quiz</h2>
           <button
@@ -260,21 +267,27 @@ export function NotebookPage() {
             <p className="text-sm font-medium">{quizMessage}</p>
             <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-stuhub-border">
               <div
-                className="h-full bg-stuhub-accent transition-all duration-300"
+                className="h-full rounded-full bg-stuhub-accent transition-[width] duration-150 ease-out"
                 style={{ width: `${Math.max(quizProgress, 2)}%` }}
               />
             </div>
+            <p className="mt-2 text-xs text-stuhub-text-secondary">
+              %{Math.round(quizProgress)} tamamlandı
+            </p>
           </div>
         )}
 
-        {!quizGenerating && quiz && <QuizPlayer key={quizKey} quiz={quiz} />}
+        {!quizGenerating && quiz && (
+          <div className="mt-4">
+            <QuizPlayer key={quizKey} quiz={quiz} />
+          </div>
+        )}
         {!quizGenerating && !quiz && !error && (
           <p className="mt-4 text-sm text-stuhub-text-secondary">
-            Henüz quiz yok. Not oluşturup “Quiz Oluştur” ile başla.
+            Henüz quiz yok. Not oluşturunca otomatik hazırlanır.
           </p>
         )}
       </div>
     </section>
   )
 }
-

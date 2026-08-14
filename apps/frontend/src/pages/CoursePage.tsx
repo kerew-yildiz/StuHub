@@ -7,10 +7,28 @@ import { indexingApi, type IndexingJob } from '../api/indexing'
 import { materialsApi, type Material } from '../api/materials'
 import { getOverallQuiz, streamOverallQuizGeneration, type OverallQuiz } from '../api/overall'
 import { ChapterForm } from '../components/ChapterForm'
+import { FilePreviewModal } from '../components/FilePreviewModal'
 import { MaterialUploadForm } from '../components/MaterialUploadForm'
 import { OverallQuizPlayer } from '../components/OverallQuizPlayer'
+import { useAnimatedProgress } from '../lib/useAnimatedProgress'
 
 type LoadState = 'loading' | 'ready' | 'error'
+
+/** İndeksleme ilerleme çubuğu — hedefe 1'er birim animasyonla yaklaşır. */
+function JobProgressBar({ target }: { target: number }) {
+  const progress = useAnimatedProgress(target)
+  return (
+    <span className="flex items-center gap-2">
+      <span className="h-1.5 w-24 overflow-hidden rounded-full bg-stuhub-border">
+        <span
+          className="block h-full rounded-full bg-stuhub-accent transition-[width] duration-150 ease-out"
+          style={{ width: `${Math.round(progress)}%` }}
+        />
+      </span>
+      <span className="text-stuhub-text-secondary">%{Math.round(progress)}</span>
+    </span>
+  )
+}
 
 /** Ders defteri (notebook) landing sayfası — chapter + materyaller + genel quiz (Faz 1.3/2.2/5). */
 export function CoursePage() {
@@ -24,12 +42,14 @@ export function CoursePage() {
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState('')
   const [showChapterForm, setShowChapterForm] = useState(false)
+  const [previewMaterial, setPreviewMaterial] = useState<Material | null>(null)
 
   // genel quiz durumu
   const [overallQuiz, setOverallQuiz] = useState<OverallQuiz | null>(null)
   const [quizGenerating, setQuizGenerating] = useState(false)
-  const [quizProgress, setQuizProgress] = useState(0)
+  const [quizTarget, setQuizTarget] = useState(0)
   const [quizMessage, setQuizMessage] = useState('')
+  const quizProgress = useAnimatedProgress(quizTarget)
   const [quizKey, setQuizKey] = useState(0)
 
   const refreshJobs = useCallback(async () => {
@@ -67,12 +87,12 @@ export function CoursePage() {
 
   const handleGenerateOverallQuiz = async () => {
     setQuizGenerating(true)
-    setQuizProgress(0)
+    setQuizTarget(0)
     setQuizMessage('Hazırlanıyor…')
     setError('')
     await streamOverallQuizGeneration(numericId, {
       onStatus: (percent, message) => {
-        setQuizProgress(percent)
+        setQuizTarget(percent)
         setQuizMessage(message)
       },
       onDone: (quiz) => {
@@ -255,17 +275,7 @@ export function CoursePage() {
                         Hata
                       </span>
                     )}
-                    {active && (
-                      <span className="flex items-center gap-2">
-                        <span className="h-1.5 w-24 overflow-hidden rounded-full bg-stuhub-border">
-                          <span
-                            className="block h-full bg-stuhub-accent transition-all duration-500"
-                            style={{ width: `${Math.round(job.progress)}%` }}
-                          />
-                        </span>
-                        <span className="text-stuhub-text-secondary">{Math.round(job.progress)}%</span>
-                      </span>
-                    )}
+                    {active && <JobProgressBar target={job.progress} />}
                     {!job && (
                       <button
                         type="button"
@@ -284,6 +294,15 @@ export function CoursePage() {
                         Tekrar dene
                       </button>
                     )}
+                    {material.filepath.toLowerCase().endsWith('.pdf') && (
+                      <button
+                        type="button"
+                        onClick={() => setPreviewMaterial(material)}
+                        className="rounded-sm px-3 py-1 text-xs font-medium text-stuhub-accent transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                      >
+                        Önizle
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => handleDeleteMaterial(material.id)}
@@ -299,6 +318,14 @@ export function CoursePage() {
           </div>
         </div>
       </div>
+
+      {previewMaterial && (
+        <FilePreviewModal
+          url={`/api/materials/${previewMaterial.id}/file`}
+          title={previewMaterial.filepath.split(/[\\/]/).pop() ?? 'Önizleme'}
+          onClose={() => setPreviewMaterial(null)}
+        />
+      )}
 
       {/* Genel quiz */}
       <div className="mt-12">
@@ -325,10 +352,13 @@ export function CoursePage() {
             <p className="text-sm font-medium">{quizMessage}</p>
             <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-stuhub-border">
               <div
-                className="h-full bg-stuhub-accent transition-all duration-300"
+                className="h-full rounded-full bg-stuhub-accent transition-[width] duration-150 ease-out"
                 style={{ width: `${Math.max(quizProgress, 2)}%` }}
               />
             </div>
+            <p className="mt-2 text-xs text-stuhub-text-secondary">
+              %{Math.round(quizProgress)} tamamlandı
+            </p>
           </div>
         )}
 

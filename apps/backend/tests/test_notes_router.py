@@ -50,6 +50,49 @@ async def test_notes_sse_endpoint(client, monkeypatch):
     assert '"type": "done"' in body or '"type":"done"' in body
 
 
+async def test_export_note_pdf(client):
+    """Not PDF export'u Türkçe içerikle çalışmalı (madde 9)."""
+    chapter_id = await _make_chapter(client)
+
+    import json
+
+    import aiosqlite
+
+    async with aiosqlite.connect(settings.db_path) as conn:
+        await conn.execute(
+            "INSERT INTO notes (chapter_id, content_md, citations_json, topics_json, model_used) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (
+                chapter_id,
+                "# Başlık\n\nTürkçe içerik şğı çiçek [1].",
+                json.dumps({"topics": []}, ensure_ascii=False),
+                json.dumps([], ensure_ascii=False),
+                "deepseek-chat",
+            ),
+        )
+        await conn.commit()
+        cursor = await conn.execute(
+            "SELECT id FROM notes WHERE chapter_id = ?", (chapter_id,)
+        )
+        row = await cursor.fetchone()
+        assert row is not None
+        note_id = row[0]
+
+    resp = await client.get(f"/api/notes/{note_id}/export")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/pdf")
+    assert resp.content.startswith(b"%PDF")
+    # PDF'ten geri okunduğunda Türkçe içerik korunmuş olmalı
+    import io
+
+    import pymupdf
+
+    doc = pymupdf.open(stream=io.BytesIO(resp.content), filetype="pdf")
+    text = "".join(str(page.get_text()) for page in doc)
+    assert "Türkçe" in text or "çiçek" in text
+    doc.close()
+
+
 async def test_get_latest_note_roundtrip(client):
     chapter_id = await _make_chapter(client)
 

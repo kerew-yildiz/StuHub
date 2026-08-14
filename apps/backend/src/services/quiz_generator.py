@@ -19,7 +19,7 @@ from .note_generator import topic_matches
 
 logger = logging.getLogger(__name__)
 
-MAX_BATCH_ATTEMPTS = 2
+MAX_BATCH_ATTEMPTS = 3
 MAX_QUESTIONS_PER_TOPIC = 5
 MAX_CORRECT_PER_INDEX = 2
 
@@ -253,7 +253,9 @@ async def _generate(chapter_id: int):
         questions = await _generate_batch(topic, course_id, chapter_id)
         if questions is None:
             raise QuizGenerationError(
-                f"“{topic['topic']}” için geçerli sorular üretilemedi. Lütfen tekrar deneyin."
+                f"“{topic['topic']}” için {MAX_BATCH_ATTEMPTS} deneme sonrasında geçerli "
+                "sorular üretilemedi. Soru sayısı/şema/atıf denetimlerinden geçemedi; "
+                "lütfen tekrar deneyin."
             )
         quizzes_topics.append({"topic": topic["topic"], "questions": questions})
 

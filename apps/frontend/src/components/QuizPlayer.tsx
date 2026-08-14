@@ -49,6 +49,40 @@ export function QuizPlayer({ quiz, onReset }: QuizPlayerProps) {
         >
           Tekrar dene
         </button>
+
+        {/* Açılır kapanır soru önizleme penceresi */}
+        <details open className="mt-5 rounded-md border border-stuhub-border">
+          <summary className="cursor-pointer select-none bg-stuhub-bg px-4 py-2.5 text-sm font-medium">
+            Sorular ve cevaplar
+          </summary>
+          <div className="divide-y divide-stuhub-border">
+            {outcome.results.map((result) => {
+              const selectedLabel = result.options[result.selected_index] ?? '-'
+              const correctLabel = result.options[result.correct_index] ?? '-'
+              return (
+                <div key={result.qid} className="px-4 py-3 text-sm">
+                  <p className="font-medium">{result.question}</p>
+                  <p className="mt-1 text-stuhub-text-secondary">
+                    Senin cevabın: <b>{selectedLabel}</b>
+                    {!result.correct && (
+                      <>
+                        {' · '}Doğru cevap: <b className="text-stuhub-success">{correctLabel}</b>
+                      </>
+                    )}
+                  </p>
+                  <p
+                    className={`mt-1 ${result.correct ? 'text-stuhub-success' : 'text-stuhub-error'}`}
+                  >
+                    {result.correct ? '✓ Doğru' : '✗ Yanlış'} — {result.feedback}
+                  </p>
+                  {!result.correct && result.explanation && (
+                    <p className="mt-1 text-stuhub-text-secondary">{result.explanation}</p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </details>
       </div>
     )
   }

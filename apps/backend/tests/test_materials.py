@@ -55,6 +55,23 @@ async def test_upload_validation(client):
     assert resp.status_code == 404
 
 
+async def test_upload_empty_file_clear_error(client):
+    """0 baytlık dosya net Türkçe mesajla reddedilmeli (bozuk/eksik indirme uyarısı)."""
+    course_id = await _make_course(client)
+    resp = await client.post(
+        f"/api/courses/{course_id}/materials",
+        files={"file": ("kitap.pdf", b"", "application/pdf")},
+        data={"type": "textbook"},
+    )
+    assert resp.status_code == 422
+    detail = resp.json()["detail"].lower()
+    assert "boş" in detail or "0 bayt" in detail
+
+    # materyal satırı oluşmamalı
+    resp = await client.get(f"/api/courses/{course_id}/materials")
+    assert resp.json() == []
+
+
 async def test_delete_material(client):
     course_id = await _make_course(client)
     created = await client.post(

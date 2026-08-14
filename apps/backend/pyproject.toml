@@ -14,6 +14,7 @@ dependencies = [
     "lancedb>=0.37.1",
     "sentence-transformers>=5.7.0",
     "openai>=1.40",
+    "markdown>=3.6",
 ]
 
 [dependency-groups]

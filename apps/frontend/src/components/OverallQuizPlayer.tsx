@@ -49,6 +49,11 @@ export function OverallQuizPlayer({ quiz, onReset }: OverallQuizPlayerProps) {
           toplam: {outcome.open_total} / 50
         </p>
         <div className="mt-5 space-y-3">
+          <details open className="rounded-md border border-stuhub-border">
+            <summary className="cursor-pointer select-none bg-stuhub-bg px-4 py-2.5 text-sm font-medium">
+              Sorular ve cevaplar ({outcome.results.length})
+            </summary>
+            <div className="space-y-3 p-4">
           {outcome.results.map((result) => (
             <details
               key={result.qid}
@@ -102,6 +107,8 @@ export function OverallQuizPlayer({ quiz, onReset }: OverallQuizPlayerProps) {
               </div>
             </details>
           ))}
+            </div>
+          </details>
         </div>
         <button
           type="button"
@@ -199,7 +206,9 @@ export function OverallQuizPlayer({ quiz, onReset }: OverallQuizPlayerProps) {
             ? question.question
             : question.type === 'tf'
               ? question.statement
-              : question.text}
+              : question.type === 'open'
+                ? question.question
+                : question.text}
         </p>
 
         {question.type === 'mcq' && (

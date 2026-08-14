@@ -6,12 +6,13 @@ import json
 from pathlib import Path
 
 import lancedb
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from ..config import settings
 from ..db import get_db
+from ..services.export_service import note_markdown_to_pdf
 from ..services.note_generator import generate_notes_stream
 
 router = APIRouter(prefix="/api", tags=["notes"])
@@ -83,6 +84,29 @@ async def resolve_citation(chunk_id: str) -> dict:
                     "slide": row["slide"],
                 }
     raise HTTPException(status_code=404, detail="Kaynak parça bulunamadı")
+
+
+@router.get("/notes/{note_id}/export")
+async def export_note(note_id: int) -> Response:
+    """Notu PDF olarak indirir (Türkçe karakter destekli)."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT content_md FROM notes WHERE id = ?", (note_id,)
+        )
+        row = await cursor.fetchone()
+    finally:
+        await db.close()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Not bulunamadı")
+    pdf_bytes = note_markdown_to_pdf(row["content_md"])
+    return Response(
+        pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="stuhub-not-{note_id}.pdf"'
+        },
+    )
 
 
 @router.get("/materials/{material_id}/file")
