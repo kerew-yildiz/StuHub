@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Tema değişkenleri (YETENEKLER/07-stil-rehberi.md — tek otorite) ──
+   Aydınlık/karanlık iki tema; varsayılan sistem teması izlenir.
+   Bileşenlerde hardcoded renk YASAK — yalnızca bu tokenlar. */
+
+:root {
+  --stuhub-bg: #f7f7f8;
+  --stuhub-surface: #ffffff;
+  --stuhub-surface-hover: #f4f4f5;
+  --stuhub-border: #e4e4e7;
+  --stuhub-text: #18181b;
+  --stuhub-text-secondary: #52525b;
+  --stuhub-accent: #2563eb;
+  --stuhub-accent-hover: #1d4ed8;
+  --stuhub-on-accent: #ffffff;
+  --stuhub-success: #16a34a;
+  --stuhub-error: #dc2626;
+  --stuhub-on-error: #ffffff;
+  --stuhub-warning: #d97706;
+  --stuhub-info: #0891b2;
+}
+
+.dark {
+  --stuhub-bg: #18181b;
+  --stuhub-surface: #27272a;
+  --stuhub-surface-hover: #323236;
+  --stuhub-border: #3f3f46;
+  --stuhub-text: #fafafa;
+  --stuhub-text-secondary: #a1a1aa;
+  --stuhub-accent: #60a5fa;
+  --stuhub-accent-hover: #3b82f6;
+  --stuhub-on-accent: #0f172a;
+  --stuhub-success: #4ade80;
+  --stuhub-error: #f87171;
+  --stuhub-on-error: #18181b;
+  --stuhub-warning: #fbbf24;
+  --stuhub-info: #22d3ee;
+}
+
+@theme {
+  /* Renkler — Tailwind utility'leri: bg-stuhub-surface, text-stuhub-text, … */
+  --color-stuhub-bg: var(--stuhub-bg);
+  --color-stuhub-surface: var(--stuhub-surface);
+  --color-stuhub-surface-hover: var(--stuhub-surface-hover);
+  --color-stuhub-border: var(--stuhub-border);
+  --color-stuhub-text: var(--stuhub-text);
+  --color-stuhub-text-secondary: var(--stuhub-text-secondary);
+  --color-stuhub-accent: var(--stuhub-accent);
+  --color-stuhub-accent-hover: var(--stuhub-accent-hover);
+  --color-stuhub-on-accent: var(--stuhub-on-accent);
+  --color-stuhub-success: var(--stuhub-success);
+  --color-stuhub-error: var(--stuhub-error);
+  --color-stuhub-on-error: var(--stuhub-on-error);
+  --color-stuhub-warning: var(--stuhub-warning);
+  --color-stuhub-info: var(--stuhub-info);
+
+  /* Tipografi ölçeği (px): 12/14/16/18/20/24/30/36 */
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+  --text-4xl: 36px;
+
+  /* Radius: 6/10/12 px */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+
+  /* Geçiş: 150–200ms, ease-out */
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+}
+
+html {
+  color-scheme: light dark;
+  font-family:
+    Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+}

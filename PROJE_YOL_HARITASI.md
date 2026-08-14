@@ -109,10 +109,10 @@
 | Slide render | LibreOffice headless (PPTX→PDF) + pdfjs | MPL-2.0 / Apache-2.0 | Pop-up'ta slide gösterimi; LibreOffice yoksa metin alıntısı fallback |
 | Atıflama | citations_ledger + doğrulama adımı | — | Her üretimde kanıt tabanlı doğrulama (bkz. `YETENEKLER/06-atif-sistemi.md`) |
 | CI/CD | GitHub Actions | Ücretsiz tier | Entegre, ücretsiz |
-| Paket Yönetimi | npm + uv (Python) | MIT/PSF | Hızlı, modern |
+| Paket Yönetimi | pnpm + uv (Python) | MIT/PSF | Hızlı, modern |
 | Kod QA (backend) | ruff + pyright + pytest | MIT | Lint + tip + test |
 | Kod QA (frontend) | eslint + tsc + vitest + playwright | MIT | Lint + tip + test + E2E |
-| Güvenlik SAST | bandit, pip-audit, npm audit, semgrep | MIT/Apache | Çok-katmanlı tarama |
+| Güvenlik SAST | bandit, pip-audit, pnpm audit, semgrep | MIT/Apache | Çok-katmanlı tarama |
 | Sırlar tarama | trufflehog / gitleaks | MIT | API anahtarı sızıntısı engeli |
 
 ### 2.2 Frontend ↔ Backend İletişimi
@@ -322,7 +322,7 @@ Session Sonu (state persist)
 #### Başlatma (Kickoff) Protokolü — kullanıcı "Başla" dediğinde
 
 1. Ana Ajan `PROJE_YOL_HARITASI.md` → `SİSTEM_YETENEKLERİ.md` sırasıyla okur; uzun soluklu teslimat hedefi oluşturur (`create_goal` — yalnızca doğrudan insan isteğiyle) ve hedefi teslimata kadar sürdürür. Session resume/fork sonrası goal disarm edilmişse `update_goal` action: resume ile yeniden silahlanır; `complete` yalnızca hedef gerçekten bittiğinde verilir.
-2. Mevcut durumu denetler; Faz 0.0 ön koşullarını tek tek doğrular: git init + `.gitignore` (`data/`, `.env`) + gitleaks pre-commit; Python ≥ 3.11 + uv ve Node ≥ 20 + npm sürümleri; DSH çalışır durumda. DeepSeek API anahtarı Faz 3'ten önce temin edilecek şekilde planlanır (anahtar eksikse Faz 0–2 bloklanmaz). Eksik araç/kurulum varsa kullanıcıya bildirir (`ask_user_question`).
+2. Mevcut durumu denetler; Faz 0.0 ön koşullarını tek tek doğrular: git init + `.gitignore` (`data/`, `.env`) + gitleaks pre-commit; Python ≥ 3.11 + uv ve Node ≥ 20 + pnpm sürümleri; DSH çalışır durumda. DeepSeek API anahtarı Faz 3'ten önce temin edilecek şekilde planlanır (anahtar eksikse Faz 0–2 bloklanmaz). Eksik araç/kurulum varsa kullanıcıya bildirir (`ask_user_question`).
 3. Faz 0'dan başlayarak faz faz ilerler: her faz için görevleri parçalar → paralel/sıralı plan → delegasyon → kalite kapıları → faz raporu.
 4. Gerektiğinde yeni session'lar ve alt ajanlar açar; durumu her checkpoint'te yol haritasına ve git geçmişine işler.
 5. Ürün, Bölüm 12 kalite kapılarının tamamından geçtiğinde teslim raporu sunar.
@@ -345,10 +345,10 @@ Session Sonu (state persist)
 | Essay Grader | `YETENEKLER/05-acik-uclu-puanlama.md`, `06-atif-sistemi.md` |
 | Değerlendirme | Tüm üretim yetenekleri (01–06) + test altyapısı; eval kümesi oluşturma |
 | Backend Geliştirici | `PROJE_YOL_HARITASI.md` Bölüm 3, 8, 11; `YETENEKLER/01–06` (runtime sözleşmeler); pwsh (uv, pytest) |
-| Frontend Geliştirici | `YETENEKLER/07-stil-rehberi.md`; `AJANLAR/02-stil-ajani.md` denetimi; npm/vitest/playwright |
+| Frontend Geliştirici | `YETENEKLER/07-stil-rehberi.md`; `AJANLAR/02-stil-ajani.md` denetimi; pnpm/vitest/playwright |
 | Test Mühendisi | pytest/vitest/Playwright; pwsh |
 | DevOps | GitHub Actions; pwsh (build, audit); README + kullanıcı dokümantasyonu |
-| Güvenlik Denetim | Bölüm 8; bandit/pip-audit/npm audit/gitleaks; pwsh |
+| Güvenlik Denetim | Bölüm 8; bandit/pip-audit/pnpm audit/gitleaks; pwsh |
 
 > **Ortak referans:** Tüm ajanların DSH davranışına dair yetki dosyası `SİSTEM_YETENEKLERİ.md`'dir (araç kataloğu, sandbox/onay kuralları, orkestrasyon rehberi); tam kazı ve kaynak dokümantasyon `DSH_ARASTIRMA_RAPORU.md`'dedir. DSH'in somut davranışında şüphede canlı referans: `C:\Users\kerew\deepseek-harness\docs\`.
 
@@ -357,7 +357,7 @@ Session Sonu (state persist)
 ## 6. Faz Planı (8 Hafta)
 
 ### Faz 0 — Temeller (Hafta 1)
-- 0.0 **Ön Koşullar (Ana Ajan Faz 0 başında doğrular):** git; Python ≥ 3.11 + uv; Node ≥ 20 + pnpm; DeepSeek API anahtarı (kullanıcı sağlar, Ayarlar sayfasına girilir); isteğe bağlı LibreOffice (PPTX render; yoksa metin fallback); gitleaks
+- 0.0 **Ön Koşullar (Ana Ajan Faz 0 başında doğrular):** git; Python ≥ 3.11 + uv; Node ≥ 20 + pnpm; DeepSeek API anahtarı (kullanıcı sağlar, Ayarlar sayfasına girilir); isteğe bağlı LibreOffice (PPTX render; yoksa metin fallback); gitleaks. Proje-yerel araçlar `.tools/` altında toplanır (mevcut: uv-python 3.12, gitleaks — kickoff'ta sürümler doğrulanır)
 - 0.1 Repo & Tooling (monorepo, CI, lint, type-check, gitleaks pre-commit)
 - 0.2 SQLite Şema & Migration (Bölüm 3)
 - 0.3 Backend İskeleti & Health Check
@@ -480,19 +480,19 @@ Session Sonu (state persist)
 cd apps/backend && uv run uvicorn src.main:app --reload --port 8000
 
 # Frontend (geliştirme)
-cd apps/frontend && npm run dev        # http://localhost:5173 → proxy:8000
+cd apps/frontend && pnpm run dev        # http://localhost:5173 → proxy:8000
 
 # Testler
 cd apps/backend && uv run pytest -v
-cd apps/frontend && npm test
+cd apps/frontend && pnpm test
 
 # Lint & Tip
 cd apps/backend && uv run ruff check . && uv run pyright
-cd apps/frontend && npm run lint && npm run typecheck
+cd apps/frontend && pnpm run lint && pnpm run typecheck
 
 # Güvenlik
 cd apps/backend && uv run bandit -r src && uv run pip-audit
-cd apps/frontend && npm audit
+cd apps/frontend && pnpm audit
 gitleaks detect --source .             # her commit öncesi
 
 # Embedding modeli (bir kez, ücretsiz)
@@ -510,7 +510,7 @@ gitleaks detect --source .             # her commit öncesi
 | Unit testler | pytest / vitest | %100 geçiş, flaky yok |
 | Lint temiz | ruff / eslint | 0 hata, 0 uyarı |
 | Tipler temiz | pyright / tsc | 0 hata |
-| Güvenlik tarama | bandit / pip-audit / npm audit | 0 high/critical |
+| Güvenlik tarama | bandit / pip-audit / pnpm audit | 0 high/critical |
 | Sırlar tarama | gitleaks / trufflehog | 0 sızıntı (anahtar asla commit'te) |
 | Atıflar geçerli | atıf doğrulama adımı (`06-atif-sistemi.md`) | 0 çözümsüz atıf, %80+ coverage |
 | Quiz halüsinasyonu | atıf denetimi | Her soru geçerli chunk'a atıflı; atıfsız soru = fail |
@@ -592,6 +592,23 @@ StuHub DS/
 | (bu oturum) | 4.1 | **DSH kataloğuna göre ince ayar:** Bölüm 0'a geliştirme katmanı sınırı (ürün kodu DSH plugin'i değildir) + ikinci zorunlu okuma notu; Bölüm 2.1'e DSH satırı; 4.2'ye Settings→Models notu; 4.5'e delegasyonda dosya yolu + `read` stratejisi (context optimizasyonu) ve `job_output` toplama kuralı; Başlatma Protokolü'ne goal semantiği (create/resume/complete) + `ask_user_question` yalnız-kök-ajan kuralı + `ralph` sınırı; Bölüm 11'e Windows süreç/sandbox pratikleri |
 | (bu oturum) | 4.2 | **Ücretsizlik istisnası genişletildi (kullanıcı kararı):** yerel LLM çalıştırılmayacak; LLM gerektiren tüm görevlerde ücretli API kullanımına izin verilir (birincil: DeepSeek API; alternatif OpenAI uyumlu sağlayıcı yalnızca kullanıcı onayıyla). Yerel embedding modeli LLM sayılmaz, yerelde kalır; Bölüm 13'teki yerel model uzantısı kaldırıldı, alternatif sağlayıcı geçişine çevrildi |
 | (bu oturum) | 4.3 | **Başlangıç öncesi denetim düzeltmeleri:** uzak embedding fallback'i (HF Inference) kaldırıldı — embedding kesinlikle yerel (gizlilik sözleşmesi); FIB feedback şeması tamamlandı + LLM hakem yedeği kaldırıldı (üretim anında genişletilmiş kabul listesi, interaksiyonda LLM çağrısı yok); batch/üst zarf JSON şemaları tanımlandı (03/04); marker-pdf lisansı GPL-3.0 olarak düzeltildi; `quizzes.type` kaldırıldı; puanlama riskindeki tanımsız "flag/override" çıkarıldı; Faz 0–2 sahipliği için **Frontend Geliştirici + Backend Geliştirici ajanları eklendi (toplam 15 ajan)** |
+| (bu oturum) | 5.0 | **Faz 0 tamamlandı (checkpoint commit).** Ön koşullar: uv 0.12.4 + Python 3.12.13 workspace-managed (`.tools/uv-python`, `.tools/uv-cache`), gitleaks 8.30.1 pre-commit hook (`.githooks/`, `core.hooksPath`), git + `.gitignore`. Monorepo: `apps/backend` (FastAPI 0.141 + SQLite/aiosqlite; `sql/schema.sql` v4.3'e uyumlu — `quizzes.type` yok; config/db/main; `GET /health`, `/api/settings` maskeli anahtar, `/api/terms` iskeleti; 5 pytest geçti) + `apps/frontend` (Vite 6 + React 18 + TS strict + Tailwind v4 token tabanlı tema + Zustand + react-router 7; proxy 5173→8000; sağlık banner'ı; eslint/tsc/vitest/build yeşil; `npm audit` 0 yüksek/kritik). CI: GitHub Actions (gitleaks + backend ruff/pyright/pytest + frontend lint/typecheck/test/build). Kök: `.env.example`, `README.md`. Kalite kapıları Bölüm 12 (bu fazda uygulanabilir olanlar): unit/lint/tip/sır/coverage — geçti; atıf/quiz/RAG kapıları uygulanamaz (Faz 3+) |
+
+---
+
+## 16. Faz Durumu (Checkpoint Takibi)
+
+> Ana Ajan her faz geçişinde bu tabloyu günceller. "TAMAM" işareti, Bölüm 12 kalite kapılarının o faz kapsamında geçtiği anlamına gelir.
+
+| Faz | Ad | Durum | Tarih | Not |
+|-----|----|-------|-------|-----|
+| 0 | Temeller | ✅ TAMAM | 2026-08-14 | uv+Python workspace-managed, gitleaks hook, monorepo, CI, SQLite şema (Bölüm 3), FastAPI iskeleti + /health, frontend scaffold (tema + sayfalar + sağlık banner'ı). Kapılar: ruff/pyright/pytest 5/5, eslint/tsc/vitest/build, npm audit 0 yüksek/kritik, gitleaks temiz |
+| 1 | Dönem & Ders Yönetimi | ⏳ | | Dönem/ders CRUD + PDF yükleme + Ayarlar sayfası |
+| 2 | Chapter & Guide Slides | ⏳ | | Chapter CRUD + slide çıkarımı + vektör indeksleme |
+| 3 | Not Oluşturma | ⏳ | | Map-reduce üretim + SSE + atıflı görüntüleyici |
+| 4 | Bölüm Quiz | ⏳ | | 5 MCQ/konu + anında feedback |
+| 5 | Genel Quiz | ⏳ | | 50 soru, 4 tip + otomatik puanlama |
+| 6 | Polish, Kalite & Teslim | ⏳ | | Stil cilası, ölçümler, dokümantasyon, güvenlik |
 
 ---
 

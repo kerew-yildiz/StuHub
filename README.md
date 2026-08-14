@@ -16,7 +16,7 @@
 
 ## Geliştirme
 
-Ön koşullar: Node ≥ 20 + npm, [uv](https://docs.astral.sh/uv/) (Python 3.12 yönetimi), git.
+Ön koşullar: Node ≥ 20 + pnpm, [uv](https://docs.astral.sh/uv/) (Python 3.12 yönetimi), git.
 
 ```bash
 # Backend (veri dizini: data/)
@@ -26,8 +26,8 @@ uv run uvicorn src.main:app --reload --port 8000
 
 # Frontend (ayrı terminal; /api → 127.0.0.1:8000 proxy'li)
 cd apps/frontend
-npm install
-npm run dev        # http://localhost:5173
+pnpm install
+pnpm run dev        # http://localhost:5173
 ```
 
 Sağlık kontrolü: `GET http://127.0.0.1:8000/health`
@@ -36,7 +36,7 @@ Test / lint / tip:
 
 ```bash
 cd apps/backend && uv run ruff check . && uv run pyright && uv run pytest -v
-cd apps/frontend && npm run lint && npm run typecheck && npm test
+cd apps/frontend && pnpm run lint && pnpm run typecheck && pnpm test
 ```
 
 ## Güvenlik & Gizlilik

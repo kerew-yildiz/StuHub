@@ -28,7 +28,7 @@
 | GitHub Actions | CI | Ücretsiz tier | Ücretsiz | — |
 | ruff / pyright / pytest | Backend QA | MIT | Ücretsiz | — |
 | eslint / tsc / vitest / playwright | Frontend QA | MIT/Apache-2.0 | Ücretsiz | — |
-| bandit / pip-audit / npm audit | Güvenlik tarama | Apache-2.0/ISC | Ücretsiz | — |
+| bandit / pip-audit / pnpm audit | Güvenlik tarama | Apache-2.0/ISC | Ücretsiz | — |
 | gitleaks / trufflehog | Sırlar tarama | MIT | Ücretsiz | — |
 
 ## Yasak Liste (özet — tam metin yol haritası Bölüm 7'de)

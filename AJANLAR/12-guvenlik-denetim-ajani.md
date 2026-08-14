@@ -26,7 +26,7 @@ Varsayılan V4 Flash; Ana Ajan pre-release denetimlerde **V4 Pro'ya yükseltir**
 
 ## İş Akışı
 1. Sır taraması: gitleaks/trufflehog ile commit geçmişi dahil tüm depoyu tara; `DEEPSEEK_API_KEY` veya benzeri desen arar.
-2. Bağımlılık audit: bandit + pip-audit (backend), npm audit (frontend) — 0 high/critical şart.
+2. Bağımlılık audit: bandit + pip-audit (backend), pnpm audit (frontend) — 0 high/critical şart.
 3. Kod denetimi: anahtarın log'a, hata mesajına veya frontend'e sızabileceği her yol kapatılmış mı; `settings`/`.env` erişimleri yalnızca backend'de mi.
 4. Gizlilik denetimi: API'ye giden veri yalnızca gerekli chunk'lar mı; gereksiz içerik gönderen kod yolu var mı.
 5. Bulguları raporla; kritik/yüksek bulgu varsa sürümü RED'le ve düzeltme talimatı ver.
@@ -41,7 +41,7 @@ Varsayılan V4 Flash; Ana Ajan pre-release denetimlerde **V4 Pro'ya yükseltir**
 ## İlgili Yetenekler
 - `PROJE_YOL_HARITASI.md` Bölüm 8
 - `AJANLAR/03-ucretsizlik-ajani.md` (istisna yönetimiyle iş birliği)
-- Araçlar: pwsh (gitleaks, bandit, pip-audit, npm audit)
+- Araçlar: pwsh (gitleaks, bandit, pip-audit, pnpm audit)
 
 ## Bitirme Kriteri
 - 0 kritik/yüksek bulgu; rapor Ana Ajan'a sunulmuş; sürüm kararı yazılı
