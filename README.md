@@ -1,6 +1,6 @@
 # StuHub DS
 
-Üniversite öğrencileri için **yerel** (localhost) çalışan ders notu ve quiz uygulaması. Ders dönemlerini klasörler, her ders için notebook oluşturur, dersin PDF kitapları ve hoca sunumları (guide slides) üzerinden **atıflı AI notları**, **bölüm quizleri** ve **ders geneli 50 soruluk quiz** üretir. Tüm veri cihazınızda kalır.
+Üniversite öğrencileri için **yerel** (localhost) çalışan ders notu ve quiz uygulaması. Ders dönemlerini klasörler, her ders için notebook oluşturur, dersin PDF kitapları ve hoca sunumları (guide slides) üzerinden **atıflı AI notları**, **bölüm quizleri** ve **ders geneli 55 soruluk quiz** üretir. Tüm veri cihazınızda kalır.
 
 > ✅ **1.0 sürümü teslim edildi** (Faz 0–6 tamamlandı). Tek kaynak doğrusu: [`PROJE_YOL_HARITASI.md`](./PROJE_YOL_HARITASI.md). Kullanım için: **[`KULLANIM.md`](./KULLANIM.md)**.
 
@@ -10,7 +10,7 @@
 - **Materyal yükleme** — kitap PDF'leri + sunumlar (PDF/PPTX); yerel vektör indeksleme (LanceDB + bge-m3)
 - **Atıflı not üretimi** — guide slides rehberli, kitap taramalı, konu başına map-reduce üretim; tıklanabilir atıflar
 - **Bölüm quizi** — her konu için 5 çoktan seçmeli soru; anında açıklamalı geri bildirim
-- **Genel quiz** — 50 soru (15 MCQ + 15 D/Y + 15 boşluk + 5 açık uçlu); açık uçlular otomatik puanlanır (rubrik + ideal cevap)
+- **Genel quiz** — 55 soru (20 MCQ + 15 D/Y + 15 boşluk + 5 açık uçlu); açık uçlular otomatik puanlanır (rubrik + ideal cevap)
 - **Maliyet gözetimi** — her LLM çağrısı `generation_logs`'ta; Türkçe hata mesajları, üstel bekleme + devre kesici
 
 ## Mimari

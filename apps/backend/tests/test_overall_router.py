@@ -137,8 +137,8 @@ async def test_submit_overall_attempt(client, monkeypatch):
     )
     assert resp.status_code == 200
     body = resp.json()
-    # kapalı: 3/3 doğru → 50 puan; açık: 8 → 8 puan; toplam 58
-    assert body["score"] == 58
+    # kapalı: 3/3 doğru → 3 puan; açık: 8 puan; toplam 11 (mcq/tf/fib 1'er, açık 10)
+    assert body["score"] == 11
     assert body["closed_correct"] == 3
     assert body["open_total"] == 8
     assert body["results"][2]["correct"] is True

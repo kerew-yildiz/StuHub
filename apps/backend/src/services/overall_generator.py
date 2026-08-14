@@ -1,4 +1,4 @@
-"""Genel quiz üretimi — 50 soru (15 MCQ + 15 TF + 15 FIB + 5 açık uçlu), seed'li karışık (Faz 5.1)."""
+"""Genel quiz üretimi — 55 soru (20 MCQ + 15 TF + 15 FIB + 5 açık uçlu), seed'li karışık (Faz 5.1)."""
 # ruff: noqa: E501 — uzun Türkçe etiket satırları
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ BATCH_PLAN: list[tuple[str, int]] = [
     ("mcq", 5),
     ("mcq", 5),
     ("mcq", 5),
+    ("mcq", 5),
     ("tf", 8),
     ("tf", 7),
     ("fib", 5),
@@ -26,7 +27,8 @@ BATCH_PLAN: list[tuple[str, int]] = [
     ("fib", 5),
     ("open", 5),
 ]
-EXPECTED_COUNTS = {"mcq": 15, "tf": 15, "fib": 15, "open": 5}
+# Puanlama: mcq 20×1 + tf 15×1 + fib 15×1 + açık uçlu 5×10 = 100
+EXPECTED_COUNTS = {"mcq": 20, "tf": 15, "fib": 15, "open": 5}
 MIN_TF_TRUE = 7
 MAX_TF_TRUE = 8
 MAX_BATCH_ATTEMPTS = 3
@@ -213,12 +215,16 @@ async def _generate_batch(
 
     last_data: dict | None = None
     for _ in range(MAX_BATCH_ATTEMPTS):
-        data = await llm_service.chat_json(
-            [{"role": "user", "content": prompt}],
-            kind=f"overall_{category}",
-            course_id=course_id,
-            max_tokens=4096,  # 5 açık uçlu + answer_key'ler uzun çıktıdır (Yetenek 04 hata modları)
-        )
+        try:
+            data = await llm_service.chat_json(
+                [{"role": "user", "content": prompt}],
+                kind=f"overall_{category}",
+                course_id=course_id,
+                max_tokens=4096,  # 5 açık uçlu + answer_key'ler uzun çıktıdır (Yetenek 04 hata modları)
+            )
+        except llm_service.LLMError:
+            # API/JSON hatası: batch sessizce atlanır — kullanıcıya hata gösterilmez
+            return None
         last_data = data
         questions = data.get("questions", [])
         if not isinstance(questions, list) or len(questions) != count:

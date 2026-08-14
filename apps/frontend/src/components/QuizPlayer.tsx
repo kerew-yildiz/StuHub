@@ -147,8 +147,10 @@ export function QuizPlayer({ quiz, onDelete }: QuizPlayerProps) {
                 >
                   {result.correct ? '✓ Doğru' : '✗ Yanlış'} — {result.feedback}
                 </p>
-                {!result.correct && result.explanation && (
-                  <p className="mt-1 text-stuhub-text-secondary">{result.explanation}</p>
+                {result.explanation && (
+                  <p className="mt-1 text-stuhub-text-secondary">
+                    <b>Açıklama:</b> {result.explanation}
+                  </p>
                 )}
               </div>
             ))}

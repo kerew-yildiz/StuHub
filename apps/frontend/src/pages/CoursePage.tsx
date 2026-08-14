@@ -330,7 +330,7 @@ export function CoursePage() {
           <div>
             <h2 className="text-xl font-semibold">Genel Quiz</h2>
             <p className="mt-1 text-sm text-stuhub-text-secondary">
-              Dersin tüm chapter notlarından 50 soru: çoktan seçmeli, doğru-yanlış, boşluk
+              Dersin tüm chapter notlarından 55 soru: çoktan seçmeli, doğru-yanlış, boşluk
               doldurma ve açık uçlu (otomatik puanlama). Tüm quizler kaydedilir.
             </p>
           </div>

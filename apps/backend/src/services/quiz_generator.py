@@ -169,12 +169,16 @@ async def _generate_batch(
 
     last_data: dict | None = None
     for _ in range(MAX_BATCH_ATTEMPTS):
-        data = await llm_service.chat_json(
-            [{"role": "user", "content": prompt}],
-            kind="quiz_batch",
-            course_id=course_id,
-            chapter_id=chapter_id,
-        )
+        try:
+            data = await llm_service.chat_json(
+                [{"role": "user", "content": prompt}],
+                kind="quiz_batch",
+                course_id=course_id,
+                chapter_id=chapter_id,
+            )
+        except llm_service.LLMError:
+            # API/JSON hatası: konu sessizce atlanır — kullanıcıya hata gösterilmez
+            return None
         last_data = data
         questions = data.get("questions", [])
         if not isinstance(questions, list) or len(questions) != MAX_QUESTIONS_PER_TOPIC:

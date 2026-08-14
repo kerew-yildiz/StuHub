@@ -15,9 +15,6 @@ from ..services.overall_generator import generate_overall_quiz_stream
 
 router = APIRouter(prefix="/api", tags=["overall-quiz"])
 
-CLOSED_WEIGHT = 50  # 45 kapalı soru (mcq/tf/fib) → 50 puan
-OPEN_WEIGHT = 50  # 5 açık uçlu × 10 puan → 50 puan
-
 
 def _sse(event: dict) -> str:
     return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
@@ -34,7 +31,7 @@ class OverallAttemptIn(BaseModel):
 
 @router.post("/courses/{course_id}/overall-quiz")
 async def generate_overall_quiz(course_id: int) -> StreamingResponse:
-    """Ders seviyesinde 50 soruluk genel quiz üretir; SSE akışı."""
+    """Ders seviyesinde 55 soruluk genel quiz üretir; SSE akışı."""
     async def event_stream():
         async for event in generate_overall_quiz_stream(course_id):
             yield _sse(event)
@@ -84,7 +81,7 @@ def _numbered_sources(question: dict) -> str:
 
 @router.post("/overall-quizzes/{quiz_id}/attempts")
 async def submit_overall_attempt(quiz_id: int, payload: OverallAttemptIn) -> dict:
-    """50 soruyu değerlendirir; mcq/tf/fib anında, açık uçlu Essay Grader (LLM) ile."""
+    """55 soruyu değerlendirir; mcq/tf/fib anında, açık uçlu Essay Grader (LLM) ile."""
     db = await get_db()
     try:
         cursor = await db.execute(
@@ -198,9 +195,8 @@ async def submit_overall_attempt(quiz_id: int, payload: OverallAttemptIn) -> dic
             )
 
     closed_count = sum(1 for q in questions if q["type"] in ("mcq", "tf", "fib"))
-    score = 0
-    if closed_count:
-        score = round(closed_correct * CLOSED_WEIGHT / closed_count + open_total)
+    # Puanlama (madde 1): mcq/tf/fib 1'er puan (toplam 50) + açık uçlu 5×10 (toplam 50) = 100
+    score = closed_correct + open_total
     score = max(0, min(100, score))
 
     score_json = {

@@ -202,6 +202,31 @@ async def chat_stream(
     raise LLMError("LLM isteği başarısız oldu.")
 
 
+def _extract_json(content: str) -> dict | None:
+    """Model yanıtından JSON sözlüğünü dayanıklı şekilde çıkarır.
+
+    - ```json ... ``` fence'lerini kaldırır
+    - ilk '{' ile son '}' arasını dener (modelin etrafa metin yazmasına karşı)
+    """
+    text = content.strip()
+    # markdown fence
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1]
+        text = text.rsplit("```", 1)[0].strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end > start:
+        try:
+            return json.loads(text[start : end + 1])
+        except json.JSONDecodeError:
+            return None
+    return None
+
+
 async def chat_json(
     messages: list[dict],
     *,
@@ -211,26 +236,24 @@ async def chat_json(
     course_id: int | None = None,
     chapter_id: int | None = None,
 ) -> dict:
-    """JSON çıktılı sohbet çağrısı — geçersiz JSON'da 1 yeniden deneme."""
+    """JSON çıktılı sohbet çağrısı — geçersiz JSON'da ek denemelerle kendini onarır."""
     await _apply_table_config()
     _check_breaker()
     client = _client()
     delay = BASE_DELAY
+    json_failures = 0
 
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             messages_for_call = list(messages)
-            needs_json_note = attempt > 1 and (
-                "önceki yanıt geçerli JSON değildi"
-                not in str(messages_for_call[-1]).lower()
-            )
-            if needs_json_note:
+            if json_failures > 0:
                 messages_for_call.append(
                     {
                         "role": "user",
                         "content": (
                             "Önceki yanıt geçerli JSON değildi. Yalnızca istenen JSON "
-                            "şemasına uygun geçerli JSON döndür."
+                            "şemasına uygun, ek açıklama olmadan geçerli JSON döndür "
+                            "(``` işareti kullanma)."
                         ),
                     }
                 )
@@ -245,13 +268,13 @@ async def chat_json(
             usage = getattr(response, "usage", None)
             prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
             completion_tokens = getattr(usage, "completion_tokens", 0) or 0
-            try:
-                data = json.loads(content)
-            except json.JSONDecodeError:
-                if attempt == 1:
-                    await asyncio.sleep(0.5)
-                    continue
-                raise LLMError("Model geçerli JSON üretemedi. Lütfen tekrar deneyin.") from None
+            data = _extract_json(content)
+            if data is None:
+                json_failures += 1
+                if json_failures >= 3:
+                    raise LLMError("Model geçerli JSON üretemedi. Lütfen tekrar deneyin.") from None
+                await asyncio.sleep(0.5)
+                continue
             _record_success()
             await log_generation(
                 kind=kind,

@@ -31,7 +31,7 @@ const TYPE_LABELS: Record<string, string> = {
   open: 'Açık uçlu',
 }
 
-/** Genel quiz oynatıcı — kayıtlı denemeyi geri yükler, 50 soru, 4 tip (Faz 5 + iyileştirme). */
+/** Genel quiz oynatıcı — kayıtlı denemeyi geri yükler, 55 soru, 4 tip (Faz 5 + iyileştirme). */
 export function OverallQuizPlayer({ quiz, onDelete }: OverallQuizPlayerProps) {
   const questions = quiz.questions_json.questions
   const [phase, setPhase] = useState<'loading' | 'answering' | 'finished'>('loading')
@@ -119,99 +119,126 @@ export function OverallQuizPlayer({ quiz, onDelete }: OverallQuizPlayerProps) {
           )}
         </div>
 
-        {/* Açılır kapanır tam soru önizleme (madde 7: seçeneklerle birlikte) */}
+        {/* Açılır kapanır tam soru önizleme (madde 3: soru + seçenekler + cevap + feedback) */}
         <div className="mt-5 space-y-3">
           <details open className="rounded-md border border-stuhub-border">
             <summary className="cursor-pointer select-none bg-stuhub-bg px-4 py-2.5 text-sm font-medium">
               Sorular ve cevaplar ({outcome.results.length})
             </summary>
-            <div className="space-y-3 p-4">
+            <div className="space-y-4 p-4">
               {outcome.results.map((result) => (
-                <details key={result.qid} className="rounded-md border border-stuhub-border bg-stuhub-bg">
-                  <summary className="cursor-pointer px-4 py-2.5 text-sm font-medium">
-                    {result.type === 'open' ? (
-                      <span className="text-stuhub-text">
-                        {result.question.slice(0, 80)} · <b>{result.score} / 10</b>
-                      </span>
-                    ) : result.correct ? (
-                      <span className="text-stuhub-success">✓ {result.question.slice(0, 80)}</span>
-                    ) : (
-                      <span className="text-stuhub-error">✗ {result.question.slice(0, 80)}</span>
-                    )}
-                  </summary>
-                  <div className="border-t border-stuhub-border px-4 py-3 text-sm">
-                    {result.type === 'mcq' && result.options && (
-                      <div className="mb-2 space-y-1.5">
-                        {result.options.map((option, index) => {
-                          let className =
-                            'rounded-sm border border-stuhub-border px-3 py-1.5 text-stuhub-text-secondary'
-                          if (index === result.correct_index) {
-                            className =
-                              'rounded-sm border border-stuhub-success bg-stuhub-success/10 px-3 py-1.5 text-stuhub-success'
-                          } else if (index === result.selected_index && !result.correct) {
-                            className =
-                              'rounded-sm border border-stuhub-error bg-stuhub-error/10 px-3 py-1.5 text-stuhub-error'
-                          }
-                          return (
-                            <div key={index} className={className}>
-                              {option}
-                              {index === result.correct_index && ' ✓'}
-                              {index === result.selected_index && !result.correct && ' (senin cevabın)'}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-                    {result.type === 'tf' && result.statement != null && (
-                      <p className="mb-2 text-stuhub-text-secondary">
-                        Cevabın: {result.selected_tf === 1 ? 'Doğru' : 'Yanlış'} · Doğru cevap:{' '}
-                        {result.answer ? 'Doğru' : 'Yanlış'}
-                      </p>
-                    )}
-                    {result.type === 'fib' && (
-                      <p className="mb-2 text-stuhub-text-secondary">
-                        Cevabın: “{result.user_answer}” · Kabul edilen:{' '}
-                        {(result.accepted_answers ?? []).join(', ') || '—'}
-                      </p>
-                    )}
-                    {result.type === 'open' && (
-                      <p className="mb-2 text-stuhub-text-secondary">
-                        Cevabın: “{(result.user_answer ?? '').slice(0, 120)}”
-                      </p>
-                    )}
-                    {result.feedback && (
-                      <p className={`font-medium ${result.correct ? 'text-stuhub-success' : 'text-stuhub-error'}`}>
-                        {result.feedback}
-                      </p>
-                    )}
-                    {result.explanation && (
-                      <p className="mt-1 text-stuhub-text-secondary">{result.explanation}</p>
-                    )}
-                    {result.grade && (
-                      <div className="mt-2 space-y-1 text-stuhub-text-secondary">
-                        <p>
-                          <b>Doğru:</b> {result.grade.correct.join(', ') || 'yok'}
-                        </p>
-                        <p>
-                          <b>Eksik:</b> {result.grade.missing.join(', ') || 'yok'}
-                        </p>
-                        <p>
-                          <b>Yanlış:</b> {result.grade.incorrect.join(', ') || 'yok'}
-                        </p>
-                        <p>
-                          <b>Gereksiz:</b> {result.grade.unnecessary.join(', ') || 'yok'}
-                        </p>
-                        <p className="mt-1">{result.grade.explanation}</p>
-                        {result.grade.ideal_answer && (
-                          <div className="mt-2 rounded-sm bg-stuhub-surface p-3">
-                            <p className="font-medium">İdeal cevap:</p>
-                            <p className="mt-1">{result.grade.ideal_answer}</p>
+                <div
+                  key={result.qid}
+                  className="rounded-md border border-stuhub-border bg-stuhub-bg p-4"
+                >
+                  <p className="text-sm font-medium leading-relaxed">{result.question}</p>
+
+                  {result.type === 'mcq' && result.options && (
+                    <div className="mt-2 space-y-1.5">
+                      {result.options.map((option, index) => {
+                        const isCorrect = index === result.correct_index
+                        const isSelected = index === result.selected_index
+                        let className =
+                          'rounded-sm border border-stuhub-border px-3 py-1.5 text-stuhub-text-secondary'
+                        if (isCorrect) {
+                          className =
+                            'rounded-sm border border-stuhub-success bg-stuhub-success/10 px-3 py-1.5 text-stuhub-success'
+                        } else if (isSelected) {
+                          className =
+                            'rounded-sm border border-stuhub-error bg-stuhub-error/10 px-3 py-1.5 text-stuhub-error'
+                        }
+                        return (
+                          <div key={index} className={className}>
+                            {option}
+                            {isCorrect && ' ✓ (doğru cevap)'}
+                            {isSelected && !isCorrect && ' ← senin cevabın'}
                           </div>
-                        )}
-                      </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {result.type === 'tf' && result.statement != null && (
+                    <div className="mt-2 rounded-sm border border-stuhub-border px-3 py-2 text-stuhub-text-secondary">
+                      Senin cevabın: <b>{result.selected_tf === 1 ? 'Doğru' : 'Yanlış'}</b>
+                      {result.selected_tf !== (result.answer ? 1 : 0) && (
+                        <>
+                          {' · '}
+                          Doğru cevap: <b className="text-stuhub-success">{result.answer ? 'Doğru' : 'Yanlış'}</b>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {result.type === 'fib' && (
+                    <div className="mt-2 rounded-sm border border-stuhub-border px-3 py-2 text-stuhub-text-secondary">
+                      Senin cevabın: “{result.user_answer}”
+                      {!result.correct && (
+                        <>
+                          {' · '}Doğru cevap:{' '}
+                          <b className="text-stuhub-success">
+                            {(result.accepted_answers ?? []).join(' / ') || '—'}
+                          </b>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {result.type === 'open' && (
+                    <div className="mt-2 rounded-sm border border-stuhub-border px-3 py-2 text-stuhub-text-secondary">
+                      Senin cevabın: “{(result.user_answer ?? '').slice(0, 160)}”
+                    </div>
+                  )}
+
+                  <div
+                    className={`mt-2 rounded-sm px-3 py-2 text-sm leading-relaxed ${
+                      result.type === 'open'
+                        ? 'bg-stuhub-info/10 text-stuhub-text'
+                        : result.correct
+                          ? 'bg-stuhub-success/10 text-stuhub-success'
+                          : 'bg-stuhub-error/10 text-stuhub-error'
+                    }`}
+                  >
+                    <p className="font-medium">
+                      {result.type === 'open'
+                        ? `Puan: ${result.score} / 10`
+                        : result.correct
+                          ? '✓ Doğru'
+                          : '✗ Yanlış'}
+                      {result.feedback ? ` — ${result.feedback}` : ''}
+                    </p>
+                    {/* Açıklama her durumda gösterilir: doğruysa neden doğru, yanlışsa öğretici metin */}
+                    {result.explanation && (
+                      <p className="mt-1">
+                        <b>Açıklama:</b> {result.explanation}
+                      </p>
                     )}
                   </div>
-                </details>
+
+                  {result.grade && (
+                    <div className="mt-2 space-y-1 text-sm text-stuhub-text-secondary">
+                      <p>
+                        <b>Doğru:</b> {result.grade.correct.join(', ') || 'yok'}
+                      </p>
+                      <p>
+                        <b>Eksik:</b> {result.grade.missing.join(', ') || 'yok'}
+                      </p>
+                      <p>
+                        <b>Yanlış:</b> {result.grade.incorrect.join(', ') || 'yok'}
+                      </p>
+                      <p>
+                        <b>Gereksiz:</b> {result.grade.unnecessary.join(', ') || 'yok'}
+                      </p>
+                      <p className="mt-1">{result.grade.explanation}</p>
+                      {result.grade.ideal_answer && (
+                        <div className="mt-2 rounded-sm bg-stuhub-surface p-3">
+                          <p className="font-medium">İdeal cevap:</p>
+                          <p className="mt-1">{result.grade.ideal_answer}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </details>

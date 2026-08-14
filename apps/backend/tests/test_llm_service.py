@@ -176,3 +176,44 @@ async def test_chat_json_invalid_then_valid(monkeypatch):
     monkeypatch.setattr(llm_service, "_client", lambda: client)
     data = await llm_service.chat_json([{"role": "user", "content": "json üret"}])
     assert data == {"ok": 1}
+
+
+async def test_chat_json_extracts_fenced_json(monkeypatch):
+    """Model ```json fence içinde döndürse de dayanıklı ayrıştırma çalışmalı."""
+    resp = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content='Açıklama:\n```json\n{"ok": 1}\n```\nBitti.')
+            )
+        ],
+        usage=SimpleNamespace(prompt_tokens=1, completion_tokens=1),
+    )
+
+    class _FakeCompletionsJson:
+        async def create(self, **kwargs):
+            return resp
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=_FakeCompletionsJson()))
+    monkeypatch.setattr(llm_service, "_client", lambda: client)
+    data = await llm_service.chat_json([{"role": "user", "content": "json üret"}])
+    assert data == {"ok": 1}
+
+
+async def test_chat_json_recovers_from_garbage_then_valid(monkeypatch):
+    """Ardışık geçersiz yanıtlardan sonra geçerli JSON ile kendini onarır."""
+    calls = {"count": 0}
+
+    class _FakeCompletionsJson:
+        async def create(self, **kwargs):
+            calls["count"] += 1
+            content = "bunlar json değil" if calls["count"] == 1 else '{"ok": true}'
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content=content))],
+                usage=SimpleNamespace(prompt_tokens=1, completion_tokens=1),
+            )
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=_FakeCompletionsJson()))
+    monkeypatch.setattr(llm_service, "_client", lambda: client)
+    data = await llm_service.chat_json([{"role": "user", "content": "json üret"}])
+    assert data == {"ok": True}
+    assert calls["count"] == 2

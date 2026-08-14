@@ -122,11 +122,11 @@ async def test_overall_generation_full_flow(client, monkeypatch):
     assert events[-1]["type"] == "done"
     quiz = events[-1]["quiz"]
     questions = quiz["questions"]
-    assert len(questions) == 50
+    assert len(questions) == 55
     counts = {
         cat: sum(1 for q in questions if q["type"] == cat) for cat in ("mcq", "tf", "fib", "open")
     }
-    assert counts == {"mcq": 15, "tf": 15, "fib": 15, "open": 5}
+    assert counts == {"mcq": 20, "tf": 15, "fib": 15, "open": 5}
     # atıflar çözümlenmiş
     mcq = next(q for q in questions if q["type"] == "mcq")
     assert mcq["citations"][0]["chunk_id"] == "chk_9_1_1"

@@ -57,8 +57,9 @@ Tarayıcıda **http://localhost:5173** açılır. Backend kapalıysa üstte uyar
    - **Not Oluştur** — sunumdaki konuları rehber alıp kitaptan atıflı not üretir (canlı akış).
    - Notta **`[1]`, `[2]`** atıfları tıklanabilir; kaynak parça pop-up'ta açılır.
    - **Quiz Oluştur** — her konu için 5 çoktan seçmeli soru; cevap verince anında açıklamalı geri bildirim.
-5. **Ders sayfası → Genel Quiz Oluştur** — tüm chapter notlarından **50 soru**
-   (15 çoktan seçmeli + 15 doğru-yanlış + 15 boşluk doldurma + 5 açık uçlu), karışık sırayla.
+5. **Ders sayfası → Genel Quiz Oluştur** — tüm chapter notlarından **55 soru**
+   (20 çoktan seçmeli + 15 doğru-yanlış + 15 boşluk doldurma + 5 açık uçlu), karışık sırayla.
+   - Puanlama: açık uçlu 5 × 10 puan + kapalı uçlu 50 × 1 puan = **100 puan**.
    - Açık uçlu cevaplar gönderildiğinde **0-10 arası otomatik puanlanır**; doğru/eksik/yanlış/gereksiz
      bölümleri ve **ideal cevap** gösterilir.
 
