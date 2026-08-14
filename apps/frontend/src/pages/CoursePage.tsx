@@ -3,14 +3,17 @@ import { Link, useParams } from 'react-router-dom'
 
 import { chaptersApi, type Chapter } from '../api/chapters'
 import { coursesApi, type Course } from '../api/courses'
+import { courseFlashcardsExportUrl, downloadFile } from '../api/exports'
 import { fetchDueCards, type DueCard } from '../api/flashcards'
 import { indexingApi, type IndexingJob } from '../api/indexing'
 import { materialsApi, type Material } from '../api/materials'
 import { listOverallQuizzes, removeOverallQuiz, type OverallQuiz } from '../api/overall'
 import { ChapterForm } from '../components/ChapterForm'
 import { ChatPanel } from '../components/ChatPanel'
+import { EssayGraderForm } from '../components/EssayGraderForm'
 import { FilePreviewModal } from '../components/FilePreviewModal'
 import { FlashcardPlayer } from '../components/FlashcardPlayer'
+import { GuidePanel } from '../components/GuidePanel'
 import { MaterialUploadForm } from '../components/MaterialUploadForm'
 import { OverallQuizPlayer } from '../components/OverallQuizPlayer'
 import { TabBar } from '../components/TabBar'
@@ -24,6 +27,8 @@ const COURSE_TABS = [
   { id: 'quiz', label: 'Genel Quiz' },
   { id: 'ask', label: 'Materyale Sor' },
   { id: 'cards', label: "Bugünün Kartları" },
+  { id: 'guide', label: 'Rehber' },
+  { id: 'essay', label: 'Ödev Değerlendir' },
 ] as const
 
 type CourseTab = (typeof COURSE_TABS)[number]['id']
@@ -450,7 +455,25 @@ export function CoursePage() {
         <>
           {/* Bugünün kartları — due tekrar kuyruğu (Faz V2.2) */}
           <div className="mt-12">
-        <h2 className="text-xl font-semibold">Bugünün Kartları</h2>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h2 className="text-xl font-semibold">Bugünün Kartları</h2>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => downloadFile(courseFlashcardsExportUrl(numericId, 'apkg'))}
+              className="rounded-sm border border-stuhub-border bg-stuhub-surface px-3 py-1 text-xs font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+            >
+              Tüm kartları Anki'ye aktar (.apkg)
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadFile(courseFlashcardsExportUrl(numericId, 'csv'))}
+              className="rounded-sm border border-stuhub-border bg-stuhub-surface px-3 py-1 text-xs font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+            >
+              CSV
+            </button>
+          </div>
+        </div>
         {playingDue ? (
           <div className="mt-4">
             <FlashcardPlayer
@@ -491,6 +514,24 @@ export function CoursePage() {
           <ChatPanel courseId={numericId} />
         </div>
       </div>
+        </>
+      )}
+
+      {tab === 'guide' && <GuidePanel scope="course" scopeId={numericId} />}
+
+      {tab === 'essay' && (
+        <>
+          {/* Ödev değerlendirme — AI puanlama (Faz V2.5) */}
+          <div className="mt-12">
+            <h2 className="text-xl font-semibold">Ödev Değerlendir</h2>
+            <p className="mt-1 text-sm text-stuhub-text-secondary">
+              Ödev metnini yapıştır; AI ölçütlere göre puanlayıp güçlü/zayıf yönleriyle geri
+              bildirim verir.
+            </p>
+            <div className="mt-4">
+              <EssayGraderForm courseId={numericId} />
+            </div>
+          </div>
         </>
       )}
     </section>

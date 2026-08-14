@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { chaptersApi, type Chapter } from '../api/chapters'
+import { downloadFile, flashcardSetExportUrl, noteMarkdownUrl } from '../api/exports'
 import { deleteFlashcardSet, listFlashcardSets, type DueCard, type FlashcardSet } from '../api/flashcards'
 import { materialsApi } from '../api/materials'
 import { exportNotePdf, getNote, type SavedNote } from '../api/notes'
@@ -9,6 +10,7 @@ import { listQuizzes, removeQuiz, type Quiz } from '../api/quizzes'
 import { slidesApi, type Slide } from '../api/slides'
 import { FilePreviewModal } from '../components/FilePreviewModal'
 import { FlashcardPlayer } from '../components/FlashcardPlayer'
+import { GuidePanel } from '../components/GuidePanel'
 import { GuideSlidesForm } from '../components/GuideSlidesForm'
 import { NoteViewer } from '../components/NoteViewer'
 import { QuizPlayer } from '../components/QuizPlayer'
@@ -23,6 +25,7 @@ const NOTEBOOK_TABS = [
   { id: 'notes', label: 'Notlar' },
   { id: 'cards', label: 'Kartlar' },
   { id: 'quiz', label: 'Quiz' },
+  { id: 'guide', label: 'Rehber' },
 ] as const
 
 type NotebookTab = (typeof NOTEBOOK_TABS)[number]['id']
@@ -269,13 +272,22 @@ export function NotebookPage() {
           <h2 className="text-xl font-semibold">Not</h2>
           <div className="flex gap-3">
             {note && !generatingNote && (
-              <button
-                type="button"
-                onClick={() => void handleExportPdf()}
-                className="rounded-sm border border-stuhub-border bg-stuhub-surface px-4 py-2 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
-              >
-                PDF İndir
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => downloadFile(noteMarkdownUrl(note.id))}
+                  className="rounded-sm border border-stuhub-border bg-stuhub-surface px-4 py-2 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                >
+                  MD İndir
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleExportPdf()}
+                  className="rounded-sm border border-stuhub-border bg-stuhub-surface px-4 py-2 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                >
+                  PDF İndir
+                </button>
+              </>
             )}
             <button
               type="button"
@@ -396,6 +408,22 @@ export function NotebookPage() {
                   <span className="flex shrink-0 items-center gap-3">
                     <button
                       type="button"
+                      onClick={() => downloadFile(flashcardSetExportUrl(set.id, 'apkg'))}
+                      className="rounded-sm border border-stuhub-border px-2 py-1 text-xs font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                      title="Anki'ye aktar (.apkg)"
+                    >
+                      Anki
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => downloadFile(flashcardSetExportUrl(set.id, 'csv'))}
+                      className="rounded-sm border border-stuhub-border px-2 py-1 text-xs font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                      title="CSV indir"
+                    >
+                      CSV
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => handleStudySet(set)}
                       className="rounded-sm bg-stuhub-accent px-3 py-1 text-xs font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
                     >
@@ -492,6 +520,8 @@ export function NotebookPage() {
       </div>
         </>
       )}
+
+      {tab === 'guide' && <GuidePanel scope="chapter" scopeId={numericChapterId} />}
 
       {pdfPreview && (
         <FilePreviewModal

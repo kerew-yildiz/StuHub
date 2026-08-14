@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { coursesApi, type Course, type CourseInput } from '../api/courses'
+import { downloadFile, termArchiveUrl } from '../api/exports'
 import { termsApi, type Term } from '../api/terms'
 import { CourseForm } from '../components/CourseForm'
 
@@ -17,6 +18,7 @@ export function TermDetailPage() {
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [includeFiles, setIncludeFiles] = useState(false)
 
   const load = useCallback(async () => {
     if (!numericId) return
@@ -60,15 +62,32 @@ export function TermDetailPage() {
             Derslerini buradan yönetebilirsin.
           </p>
         </div>
-        {!showForm && (
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-stuhub-text-secondary">
+            <input
+              type="checkbox"
+              checked={includeFiles}
+              onChange={(e) => setIncludeFiles(e.target.checked)}
+            />
+            Materyal dosyalarıyla
+          </label>
           <button
             type="button"
-            onClick={() => setShowForm(true)}
-            className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
+            onClick={() => downloadFile(termArchiveUrl(numericId, includeFiles))}
+            className="rounded-sm border border-stuhub-border bg-stuhub-surface px-4 py-2 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
           >
-            Yeni ders
+            Dönem Arşivi İndir (.zip)
           </button>
-        )}
+          {!showForm && (
+            <button
+              type="button"
+              onClick={() => setShowForm(true)}
+              className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
+            >
+              Yeni ders
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
