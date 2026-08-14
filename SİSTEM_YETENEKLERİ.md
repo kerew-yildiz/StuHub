@@ -2,7 +2,7 @@
 
 > **Kullanım:** Bu dosya, StuHub DS projesinin üzerinde çalıştığı **DeepSeek Harness (DSH)** çalışma zamanının yetenek kataloğu ve ajan kullanım rehberidir. `PROJE_YOL_HARITASI.md` ile birlikte her session başında context'e alınır. Ana Ajan delegasyon yaparken hedef ajanın `AJANLAR/` dosyasına ek olarak bu dosyanın ilgili bölümlerini prompt'a katar.
 >
-> **Kaynak:** `C:\Users\kerew\deepseek-harness` checkout'unun tam kazısı (`DSH_ARASTIRMA_RAPORU.md`) — sürüm: developer preview. Ayrıntı, kod örneği ve kaynak bağlantıları için rapora bakın; burası ajanların günlük karar referansıdır.
+> **Kaynak:** Yerel DSH checkout'unun tam kazısı (`DSH_ARASTIRMA_RAPORU.md`) — sürüm: developer preview. Ayrıntı, kod örneği ve kaynak bağlantıları için rapora bakın; burası ajanların günlük karar referansıdır.
 
 ---
 
@@ -10,7 +10,7 @@
 
 - **DeepSeek Harness (`dsh`)**, DeepSeek AI'ın geliştirdiği açık kaynak (MIT) ajan harness'ıdır. Mimari ilkesi: **"her şey bir plugin'dir"** — model adaptörü, araç kayıt defteri, session log, dosya erişimi, onay politikası, hatta ajan döngüsünün kendisi bile Cordis plugin framework'ü (`@deepseek-ai/cordis`) üzerinde değiştirilebilir bileşenlerdir.
 - **İki kullanım yüzü:** (1) `dsh web` — Web GUI (varsayılan `http://127.0.0.1:3080`); (2) `dsh --profile headless "<görev>"` — tek görev çalıştırıp çıkan başsız mod. Ayrıca Python SDK ve JSON-RPC/ACP arayüzleriyle programatik kullanım.
-- **Durum:** developer preview — hızlı gelişiyor, uyumluluk kırıcı değişiklikler olabilir. Bu yüzden StuHub DS tarafında DSH'in somut davranışına bağlı kritik işlerde checkout dokümantasyonu (`C:\Users\kerew\deepseek-harness\docs\`) canlı otoritedir.
+- **Durum:** developer preview — hızlı gelişiyor, uyumluluk kırıcı değişiklikler olabilir. Bu yüzden StuHub DS tarafında DSH'in somut davranışına bağlı kritik işlerde checkout dokümantasyonu (yerel `docs\` dizini) canlı otoritedir.
 - **StuHub DS bağlamı:** Projenin 15 ajanı (yol haritası Bölüm 4.1) DSH üzerinde çalışır; Ana Ajan'ın orkestrasyon araçları (subagent, workflow, goal, jobs) DSH yetenekleridir.
 
 ## 2. Çalışma Modeli (ajan perspektifinden)
@@ -159,4 +159,4 @@ DSH'i genişletmenin üç seviyesi (detay: rapordaki cookbook bölümleri):
 - Session başında okuma sırası: `PROJE_YOL_HARITASI.md` → bu dosya → durum tespiti. Bu sıra bozulmaz.
 - Modelin gördüğü her bilgi loglanabilir olmalı; "model-visible ⟺ logged" ilkesi prompt tasarımında gözetilir (uzun context'ler session log ve compaction'a tabidir).
 - Sandbox politikası ihlali komut hatası değildir; tekrarlanmaz, yalnızca tek seferlik, dar kapsamlı ve gerekçeli genişletme talep edilir.
-- DSH developer preview olduğundan, davranışta şüphede `C:\Users\kerew\deepseek-harness\docs\` canlı referanstır.
+- DSH developer preview olduğundan, davranışta şüphede yerel DSH checkout'unun `docs\` dizini canlı referanstır.

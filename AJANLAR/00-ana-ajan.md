@@ -67,7 +67,7 @@ Kullanıcı "Başla" dediği andan ürün teslim edilene kadar projeyi kusursuz 
 - **Arka plan iş yönetimi:** başlatılan her job id'sini takip et; bitişler bildirimle gelir, busy-poll yapma; final cevaptan önce ilgili işleri `job_output` ile topla, gereksizleri `job_kill` ile kapat.
 - **Sandbox reddi politikadır:** reddedilen komut başka yoldan tekrarlanmaz; yalnız gerçek reddin ardından aynı komut bir kez, en dar geniş modla (`sandbox_permissions`) + gerekçeyle talep edilir.
 - **`ralph` yalnızca kullanıcı açıkça Ralph/fresh-agent döngüsü isterse kullanılır.**
-- **DSH developer preview'dur:** davranışta şüphede `C:\Users\kerew\deepseek-harness\docs\` canlı otoritedir.
+- **DSH developer preview'dur:** davranışta şüphede yerel DSH checkout'unun `docs\` dizini canlı otoritedir.
 
 ## İlgili Yetenekler
 - `PROJE_YOL_HARITASI.md` (Bölüm 4: Ajan Mimarisi, Bölüm 4.5: Session Yaşam Döngüsü + Başlatma Protokolü, Bölüm 6: Faz Planı)

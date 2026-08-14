@@ -2,7 +2,7 @@
 
 > **BELKEMİK BELGESİ** — Bu dosya projenin tek kaynak doğrusudur. Her session başlangıcında bu belge context'e alınır ve ancak ondan sonra işe devam edilir. Tüm ajanlar ve session'lar bu belgeyi referans alır. Belgeyi yalnızca Ana Ajan koordinasyonunda ve Ücretsizlik Ajanı (Teknoloji Envanteri + Değişiklik Günlüğü) düzenleyebilir; her değişiklik Sürüm Geçmişi'ne işlenir.
 >
-> **Kaynak:** Bu belge `C:\Users\kerew\.hermes\plans\PROJE_YOL_HARITASI.md` (v1.0) temel alınarak StuHub DS workspace'ine taşınmıştır. v2.0'da platform ve LLM kararları, v3.0'da mimari denetim raporundaki 17 düzeltme, v4.0'da DeepSeek Harness kazısı (DSH_ARASTIRMA_RAPORU.md + SİSTEM_YETENEKLERİ.md), v4.1'de DSH kataloğu ince ayarı, v4.2'de LLM çıkarımı istisnasının genişletilmesi uygulanmıştır (bkz. Bölüm 15).
+> **Kaynak:** Bu belge v1.0 planı (yerel `.hermes/plans` kaynağı) temel alınarak StuHub DS workspace'ine taşınmıştır. v2.0'da platform ve LLM kararları, v3.0'da mimari denetim raporundaki 17 düzeltme, v4.0'da DeepSeek Harness kazısı (DSH_ARASTIRMA_RAPORU.md + SİSTEM_YETENEKLERİ.md), v4.1'de DSH kataloğu ince ayarı, v4.2'de LLM çıkarımı istisnasının genişletilmesi uygulanmıştır (bkz. Bölüm 15).
 
 ---
 
@@ -14,7 +14,7 @@
 
 **Ürün dili:** Türkçe (UI, prompt'lar, dokümantasyon).
 
-**Geliştirme katmanı:** Proje, DeepSeek Harness (DSH, MIT — ücretsiz) üzerinde geliştirilir. DSH yalnızca geliştirme/orkestrasyon katmanıdır; ürün kodu (FastAPI/React) DSH plugin'i değildir (sınır: `SİSTEM_YETENEKLERİ.md` Bölüm 7). Her session başında `PROJE_YOL_HARITASI.md`'den sonra ikinci zorunlu okuma `SİSTEM_YETENEKLERİ.md`'dir; DSH davranışında şüphede `C:\Users\kerew\deepseek-harness\docs\` canlı otoritedir.
+**Geliştirme katmanı:** Proje, DeepSeek Harness (DSH, MIT — ücretsiz) üzerinde geliştirilir. DSH yalnızca geliştirme/orkestrasyon katmanıdır; ürün kodu (FastAPI/React) DSH plugin'i değildir (sınır: `SİSTEM_YETENEKLERİ.md` Bölüm 7). Her session başında `PROJE_YOL_HARITASI.md`'den sonra ikinci zorunlu okuma `SİSTEM_YETENEKLERİ.md`'dir; DSH davranışında şüphede yerel DSH checkout'unun `docs\` dizini canlı otoritedir.
 
 ---
 
@@ -350,7 +350,7 @@ Session Sonu (state persist)
 | DevOps | GitHub Actions; pwsh (build, audit); README + kullanıcı dokümantasyonu |
 | Güvenlik Denetim | Bölüm 8; bandit/pip-audit/pnpm audit/gitleaks; pwsh |
 
-> **Ortak referans:** Tüm ajanların DSH davranışına dair yetki dosyası `SİSTEM_YETENEKLERİ.md`'dir (araç kataloğu, sandbox/onay kuralları, orkestrasyon rehberi); tam kazı ve kaynak dokümantasyon `DSH_ARASTIRMA_RAPORU.md`'dedir. DSH'in somut davranışında şüphede canlı referans: `C:\Users\kerew\deepseek-harness\docs\`.
+> **Ortak referans:** Tüm ajanların DSH davranışına dair yetki dosyası `SİSTEM_YETENEKLERİ.md`'dir (araç kataloğu, sandbox/onay kuralları, orkestrasyon rehberi); tam kazı ve kaynak dokümantasyon `DSH_ARASTIRMA_RAPORU.md`'dedir. DSH'in somut davranışında şüphede canlı referans: yerel DSH checkout'unun `docs\` dizini.
 
 ---
 
@@ -585,10 +585,10 @@ StuHub DS/
 
 | Tarih | Sürüm | Değişiklik |
 |-------|-------|------------|
-| 2026-08-12 | 1.0 | İlk resmi belkemiği belgesi (`C:\Users\kerew\.hermes\plans\PROJE_YOL_HARITASI.md`): Tauri masaüstü, yerel llama.cpp, 12 ajan, 8 haftalık faz planı |
+| 2026-08-12 | 1.0 | İlk resmi belkemiği belgesi (yerel `.hermes/plans` kaynağı): Tauri masaüstü, yerel llama.cpp, 12 ajan, 8 haftalık faz planı |
 | (bu oturum) | 2.0 | StuHub DS workspace'ine taşındı. **Karar deltaları:** platform → localhost web (Tauri kaldırıldı); LLM → kullanıcının DeepSeek API anahtarı (llama.cpp kaldırıldı, Model Yönetimi → API Yapılandırması); embedding → sentence-transformers çok dilli; güvenlik bölümü revize edildi; Açık Sorular #1-#3 çözüldü |
 | (bu oturum) | 3.0 | **Mimari denetim raporu (17 düzeltme) uygulandı:** PPTX→PDF render pipeline; çok dilli embedding; batch quiz üretimi; map-reduce not üretimi; `slides` tablosu; Ayarlar sayfası + `generation_logs` + maliyet bekçisi; Faz 6 kapsamı (fazlalıklar genişletilebilirliğe taşındı); puanlama güven kontrolü; FIB normalizasyonu; Değerlendirme Ajanı (13. ajan); hibrit retrieval somutlaştırıldı; SSE streaming; `models` tablosu kaldırıldı; atıf doğrulama somutlaştırıldı; Effort kuralı (Ana Ajan V4 Pro sabit, diğerleri V4 Flash + yükseltme); Başlatma Protokolü eklendi |
-| (bu oturum) | 4.0 | **DeepSeek Harness (DSH) tam kazısı entegre edildi.** `C:\Users\kerew\deepseek-harness` checkout'u (developer preview, 0.1.0-rc.5) derinlemesine araştırıldı: Cordis mimarisi, profil/bundle katmanları, 44 araçlık katalog, config/persistence katalogları, 50+ alt sistem, 47 paket grubu, CLI/Web/Python SDK/native/örnekler. Çıktılar: (1) `DSH_ARASTIRMA_RAPORU.md` — tam kazı raporu; (2) `SİSTEM_YETENEKLERİ.md` — araştırmanın ajan promptuna dönüştürülmüş hali (araç kataloğu, sandbox/onay kuralları, orkestrasyon rehberi, StuHub DS eşlemesi). Session başlangıç akışına (Bölüm 4.5) ve Bölüm 5/14'e referanslar işlendi |
+| (bu oturum) | 4.0 | **DeepSeek Harness (DSH) tam kazısı entegre edildi.** Yerel DSH checkout'u (developer preview, 0.1.0-rc.5) derinlemesine araştırıldı: Cordis mimarisi, profil/bundle katmanları, 44 araçlık katalog, config/persistence katalogları, 50+ alt sistem, 47 paket grubu, CLI/Web/Python SDK/native/örnekler. Çıktılar: (1) `DSH_ARASTIRMA_RAPORU.md` — tam kazı raporu; (2) `SİSTEM_YETENEKLERİ.md` — araştırmanın ajan promptuna dönüştürülmüş hali (araç kataloğu, sandbox/onay kuralları, orkestrasyon rehberi, StuHub DS eşlemesi). Session başlangıç akışına (Bölüm 4.5) ve Bölüm 5/14'e referanslar işlendi |
 | (bu oturum) | 4.1 | **DSH kataloğuna göre ince ayar:** Bölüm 0'a geliştirme katmanı sınırı (ürün kodu DSH plugin'i değildir) + ikinci zorunlu okuma notu; Bölüm 2.1'e DSH satırı; 4.2'ye Settings→Models notu; 4.5'e delegasyonda dosya yolu + `read` stratejisi (context optimizasyonu) ve `job_output` toplama kuralı; Başlatma Protokolü'ne goal semantiği (create/resume/complete) + `ask_user_question` yalnız-kök-ajan kuralı + `ralph` sınırı; Bölüm 11'e Windows süreç/sandbox pratikleri |
 | (bu oturum) | 4.2 | **Ücretsizlik istisnası genişletildi (kullanıcı kararı):** yerel LLM çalıştırılmayacak; LLM gerektiren tüm görevlerde ücretli API kullanımına izin verilir (birincil: DeepSeek API; alternatif OpenAI uyumlu sağlayıcı yalnızca kullanıcı onayıyla). Yerel embedding modeli LLM sayılmaz, yerelde kalır; Bölüm 13'teki yerel model uzantısı kaldırıldı, alternatif sağlayıcı geçişine çevrildi |
 | (bu oturum) | 4.3 | **Başlangıç öncesi denetim düzeltmeleri:** uzak embedding fallback'i (HF Inference) kaldırıldı — embedding kesinlikle yerel (gizlilik sözleşmesi); FIB feedback şeması tamamlandı + LLM hakem yedeği kaldırıldı (üretim anında genişletilmiş kabul listesi, interaksiyonda LLM çağrısı yok); batch/üst zarf JSON şemaları tanımlandı (03/04); marker-pdf lisansı GPL-3.0 olarak düzeltildi; `quizzes.type` kaldırıldı; puanlama riskindeki tanımsız "flag/override" çıkarıldı; Faz 0–2 sahipliği için **Frontend Geliştirici + Backend Geliştirici ajanları eklendi (toplam 15 ajan)** |

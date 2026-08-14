@@ -1,6 +1,6 @@
 # DEEPSEEK HARNESS (DSH) — KAPSAMLI ARAŞTIRMA RAPORU
 
-> **Meta:** Bu rapor, `C:\Users\kerew\deepseek-harness` checkout'unun (developer preview, paket sürümü `0.1.0-rc.5`) sistematik kazısıyla üretilmiştir. Yöntem: çekirdek dokümanlar, alt sistem dokümanları, paket README/package.json'ları, cookbook'lar ve kullanıcı rehberleri ilk elden + paralel araştırma ajanlarıyla tarandı; ayrıca web'deki güncel haber/kaynaklar doğrulandı. Amaç: harness'ın ne olduğu, içindeki her bileşenin ne işe yaradığı, nasıl kullanıldığı ve neler yapabildiği. Bu raporun ajan-prompt karşılığı `SİSTEM_YETENEKLERİ.md` dosyasındadır; ikisi birlikte StuHub DS belkemiği dokümanlarına bağlanmıştır.
+> **Meta:** Bu rapor, yerel DeepSeek Harness (DSH) checkout'unun (developer preview, paket sürümü `0.1.0-rc.5`) sistematik kazısıyla üretilmiştir. Yöntem: çekirdek dokümanlar, alt sistem dokümanları, paket README/package.json'ları, cookbook'lar ve kullanıcı rehberleri ilk elden + paralel araştırma ajanlarıyla tarandı; ayrıca web'deki güncel haber/kaynaklar doğrulandı. Amaç: harness'ın ne olduğu, içindeki her bileşenin ne işe yaradığı, nasıl kullanıldığı ve neler yapabildiği. Bu raporun ajan-prompt karşılığı `SİSTEM_YETENEKLERİ.md` dosyasındadır; ikisi birlikte StuHub DS belkemiği dokümanlarına bağlanmıştır.
 
 ---
 
@@ -579,7 +579,7 @@ Replay'lenebilir event ailesi (tek business id, `(kind,id)` başına en fazla bi
 4. **Sandbox pratiği:** StuHub DS workspace'i `workspace-write` modunda çalışır; workspace dışı yazmalar (ör. DSH checkout'una müdahale) reddedilir — bu beklenen davranıştır. Genişletme yalnızca gerçek bir reddin ardından, tek seferlik ve dar kapsamlı talep edilir.
 5. **Kalite kapıları ↔ DSH test felsefesi:** "dünyayı doğrula, self-report'u değil" ilkesi StuHub DS'in Kalite Kontrol Ajanı'na birebir aktarılabilir; keyless snapshot yaklaşımı quiz/not üretiminin deterministik kalite testleri için ilhamdır.
 6. **Maliyet gözetimi ↔ DSH pratiği:** DSH'in `generation_logs` benzeri `token-meter` + compaction ayarları (thresholdRatio 0.8, retainRatio 0.16) StuHub DS prompt bütçelemesine model olabilir.
-7. **Gizlilik notu:** DSH kendisi (geliştirme ortamı) ayrı bir güven yüzeyidir; ürünün gizlilik sözleşmesi (yol haritası Bölüm 8) ürün verisini kapsar. DSH checkout'u `C:\Users\kerew\deepseek-harness` ürün verisi içermez.
+7. **Gizlilik notu:** DSH kendisi (geliştirme ortamı) ayrı bir güven yüzeyidir; ürünün gizlilik sözleşmesi (yol haritası Bölüm 8) ürün verisini kapsar. DSH checkout'u ürün verisi içermez.
 8. **Uyumluluk riski:** Developer preview — StuHub DS yol haritası DSH'in iç API'lerine bağımlılık kurmaz; yalnızca model-facing araçlar ve CLI kullanılır (bunlar dokümante yüzeydir).
 
 ---
