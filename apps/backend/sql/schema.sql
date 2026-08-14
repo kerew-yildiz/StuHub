@@ -24,11 +24,12 @@ CREATE TABLE IF NOT EXISTS courses (
     created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Materyaller: ders kitabı PDF'i ya da hoca sunumu (guide slides)
+-- Materyaller: ders kitabı PDF'i, hoca sunumu ya da v2 medya türleri
+-- (youtube, audio, docx, epub, image, text — YETENEKLER/11-medya-alimi.md)
 CREATE TABLE IF NOT EXISTS materials (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     course_id      INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
-    type           TEXT NOT NULL CHECK (type IN ('textbook', 'slides')),
+    type           TEXT NOT NULL CHECK (type IN ('textbook', 'slides', 'youtube', 'audio', 'docx', 'epub', 'image', 'text')),
     filepath       TEXT NOT NULL,
     extracted_text TEXT,
     page_count     INTEGER,
@@ -97,6 +98,7 @@ CREATE TABLE IF NOT EXISTS overall_attempts (
 );
 
 -- Vektör indeksleme işleri (arka plan, Faz 2.2)
+-- kind: 'index' (çıkarım+embed) | 'transcribe' (v2: ses/youtube → transkript, ardından index zincirlenir)
 CREATE TABLE IF NOT EXISTS indexing_jobs (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     course_id   INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
@@ -104,6 +106,7 @@ CREATE TABLE IF NOT EXISTS indexing_jobs (
     status      TEXT NOT NULL DEFAULT 'pending',
     progress    REAL NOT NULL DEFAULT 0,
     error       TEXT,
+    kind        TEXT NOT NULL DEFAULT 'index',
     created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -137,6 +140,81 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT NOT NULL
 );
 
+-- ── v2 tabloları (Niş Analizi Entegrasyonu — migration 0002 ile de kurulur) ──
+
+-- Flashcard desteleri (chapter veya ders seviyesi; kartlar denormalize JSON)
+CREATE TABLE IF NOT EXISTS flashcard_sets (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    course_id   INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    chapter_id  INTEGER REFERENCES chapters(id) ON DELETE CASCADE,
+    cards_json  TEXT NOT NULL,
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    model_used  TEXT
+);
+
+-- SM-2 uzamsal tekrar durumu (Yetenek 09; kart = cards_json[indeks])
+CREATE TABLE IF NOT EXISTS card_reviews (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    set_id        INTEGER NOT NULL REFERENCES flashcard_sets(id) ON DELETE CASCADE,
+    card_index    INTEGER NOT NULL,
+    ease_factor   REAL NOT NULL DEFAULT 2.5,
+    interval_days REAL NOT NULL DEFAULT 0,
+    repetitions   INTEGER NOT NULL DEFAULT 0,
+    due_at        TIMESTAMP,
+    last_rating   TEXT,
+    reviewed_at   TIMESTAMP,
+    UNIQUE(set_id, card_index)
+);
+
+-- "Materyale Sor" sohbet geçmişi (yerel; atıflar JSON)
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    course_id      INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    role           TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+    content        TEXT NOT NULL,
+    citations_json TEXT NOT NULL DEFAULT '[]',
+    mode           TEXT NOT NULL DEFAULT 'direct' CHECK (mode IN ('direct', 'socratic', 'quiz')),
+    created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Çalışma rehberi çıktıları (özet / kavram haritası)
+CREATE TABLE IF NOT EXISTS study_guides (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    course_id    INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    chapter_id   INTEGER REFERENCES chapters(id) ON DELETE CASCADE,
+    kind         TEXT NOT NULL CHECK (kind IN ('summary', 'concept_map')),
+    content_json TEXT NOT NULL,
+    created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    model_used   TEXT
+);
+
+-- Genel ödev değerlendirme gönderimleri (Yetenek 14)
+CREATE TABLE IF NOT EXISTS essay_submissions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    course_id   INTEGER REFERENCES courses(id) ON DELETE CASCADE,
+    chapter_id  INTEGER REFERENCES chapters(id) ON DELETE CASCADE,
+    prompt      TEXT NOT NULL,
+    user_text   TEXT NOT NULL,
+    grade_json  TEXT,
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Öğrenme alışkanlıkları — streak/günlük hedef için etkinlik sayacı (Yetenek 15)
+CREATE TABLE IF NOT EXISTS activity_log (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    date      TEXT NOT NULL,
+    kind      TEXT NOT NULL CHECK (kind IN ('note', 'quiz', 'flashcard', 'chat')),
+    count     INTEGER NOT NULL DEFAULT 1,
+    course_id INTEGER
+);
+
+-- Uygulanan şema migration'larının kaydı (db.py migration runner'ı)
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version    INTEGER PRIMARY KEY,
+    name       TEXT NOT NULL,
+    applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Sık sorgu indeksleri
 CREATE INDEX IF NOT EXISTS idx_courses_term        ON courses(term_id);
 CREATE INDEX IF NOT EXISTS idx_materials_course    ON materials(course_id);
@@ -145,3 +223,12 @@ CREATE INDEX IF NOT EXISTS idx_slides_chapter      ON slides(chapter_id);
 CREATE INDEX IF NOT EXISTS idx_notes_chapter       ON notes(chapter_id);
 CREATE INDEX IF NOT EXISTS idx_quizzes_chapter     ON quizzes(chapter_id);
 CREATE INDEX IF NOT EXISTS idx_overall_quizzes_course ON overall_quizzes(course_id);
+CREATE INDEX IF NOT EXISTS idx_flashcard_sets_course     ON flashcard_sets(course_id);
+CREATE INDEX IF NOT EXISTS idx_flashcard_sets_chapter    ON flashcard_sets(chapter_id);
+CREATE INDEX IF NOT EXISTS idx_card_reviews_due          ON card_reviews(due_at);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_course      ON chat_messages(course_id);
+CREATE INDEX IF NOT EXISTS idx_study_guides_course       ON study_guides(course_id);
+CREATE INDEX IF NOT EXISTS idx_essay_submissions_course  ON essay_submissions(course_id);
+CREATE INDEX IF NOT EXISTS idx_activity_log_date         ON activity_log(date);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_activity_day_kind_course
+    ON activity_log(date, kind, COALESCE(course_id, 0));

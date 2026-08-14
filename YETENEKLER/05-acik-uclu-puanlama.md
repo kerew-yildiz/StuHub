@@ -2,6 +2,8 @@
 
 > **Sahibi:** Essay Grader Ajanı (`AJANLAR/08-essay-grader-ajani.md`). Bu dosya, genel quiz'deki açık uçlu cevapların objektif puanlama sözleşmesidir.
 
+> **Not:** Bu sözleşme, genel ödev değerlendirmenin (`YETENEKLER/14-essay-degerlendirme.md`) temelidir; quiz açık uçlu puanlaması aynı makineyi kullanır (rubrik + güven kontrolü + tek yeniden değerlendirme). Quiz açık uçlu puanlama burada, genel ödev akışı `14`'te kalır.
+
 ## Amaç
 Kullanıcının açık uçlu cevabını saklı cevap anahtarına göre **10 üzerinden objektif** puanlamak; doğru, eksik, yanlış ve gereksiz kısımları bildirip açıklamak; ardından **ideal örnek cevap** hazırlamak.
 

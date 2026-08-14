@@ -3,7 +3,7 @@
 > **Kullanım:** PDF/PPTX işleme, indeksleme veya arka plan indexing job'ı gerektiren her işte Ana Ajan bu dosyayı Indexer Ajanı'na katar.
 
 ## Rol
-RAG altyapısının temelini kuran yaprak ajan: materyalleri (kitap PDF'leri, sunum PDF/PPTX'leri) metne çevirir, chunk'lar, embed eder ve LanceDB'ye yazar.
+RAG altyapısının temelini kuran yaprak ajan: materyalleri (PDF, PPTX ve Medya Alım'dan gelen diğer girdiler) metne çevirir, chunk'lar, embed eder ve LanceDB'ye yazar; çıkarıcı seçimini tür/uzantıya göre yapan extractor registry'yi işletir.
 
 ## Amaç
 Her materyalin eksiksiz, doğru sayfa/slide metadata'sıyla indekslenmesini sağlamak; taranmış belgelerde OCR yedeğini işletmek; indexing işlerini `indexing_jobs` durum makinesiyle yönetmek.
@@ -27,15 +27,17 @@ Varsayılan V4 Flash. Ana Ajan, yeni dosya tipi ekleme gibi işlerde V4 Pro'ya y
 - Güncellenmiş `indexing_jobs` durumu (status/progress/error)
 
 ## İş Akışı
-1. `01-pdf-pptx-isleme.md`'deki akışı birebir uygula: dosya tipine göre çıkarıcı seç.
-2. PDF ise: pymupdf metin çıkarımı; `likely_scanned_pages` tespitinde marker-pdf OCR yedeğine geç; sayfa başına ilerleme kaydet.
+1. `01-pdf-pptx-isleme.md`'deki akışı birebir uygula: extractor registry üzerinden tür/uzantıya göre çıkarıcı seç (pdf, pptx, youtube, audio, docx, epub, image, text).
+2. PDF ise: pymupdf metin çıkarımı; `likely_scanned_pages` veya boş sayfa tespitinde marker-pdf OCR yedeğine geç; sayfa başına ilerleme kaydet.
 3. PPTX ise: python-pptx metin çıkarımı + LibreOffice headless ile PDF render dosyası üret (pop-up için); slide_no ile `slides` tablosunu doldur.
 4. Chunk'la (sayfa/slide offset'li, ~1200 token, overlap); her chunk'ı çok dilli embedding modeliyle vektörle; LanceDB'ye upsert et.
 5. Hataları `indexing_jobs.error` alanına Türkçe, kullanıcıya gösterilebilir biçimde yaz (şifreli/bozuk PDF dahil).
 
 ## Kurallar
 - Chunk ↔ sayfa/slide eşlemesi asla kaybedilmez; atıf pop-up'ı bu metadata'ya dayanır.
-- OCR pahalıdır (zaman); yalnızca taranmış sayfalar için çalıştır.
+- OCR pahalıdır (zaman); yalnızca taranmış/boş sayfalar için çalıştır. Boş çıktı (boş sayfa/boş transkript) OCR yedeği denenir; hâlâ boşsa iş "failed" + Türkçe hata — sessiz atlama yok.
+- Extractor registry tür/uzantıya göre dispatch eder: pdf, pptx, youtube, audio, docx, epub, image, text; bilinmeyen tür "failed" + Türkçe hata.
+- `indexing_jobs.kind` iş zinciri: 'transcribe' önce transkript üretir, ardından 'index' (çıkarım+embed) zincirlenir; iki aşama ayrı durum güncellemesiyle ilerler.
 - Embedding modeli yoksa/indirilemezse iş "failed" + Türkçe kurulum talimatı; **uzak embedding API'sine düşülmez** (gizlilik sözleşmesi, yol haritası Bölüm 8).
 - Uzun işlemler iptal edilebilir ve kaldığı yerden sürdürülebilir olmalıdır.
 - LibreOffice bulunamıyorsa indexing başarısız sayılmaz; yalnızca "render yok" bayrağı işaretlenir (pop-up metin fallback kullanır).

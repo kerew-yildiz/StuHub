@@ -33,6 +33,16 @@ class Settings(BaseSettings):
     model: str = Field(default="deepseek-chat", alias="STUHUB_MODEL")
     embed_model: str = Field(default="", alias="STUHUB_EMBED_MODEL")
 
+    # ── v2 (Niş Analizi Entegrasyonu) ──────────────────────────────────────
+    # Yerel STT modeli (faster-whisper) — ses/YouTube transkripsiyonu (Yetenek 11)
+    whisper_model: str = Field(default="small", alias="STUHUB_WHISPER_MODEL")
+    # Taranmış PDF sayfaları + görsel materyaller için OCR (rapidocr, yerel)
+    ocr_enabled: bool = Field(default=True, alias="STUHUB_OCR_ENABLED")
+    # Not/quiz/flashcard üretim dili: tr | en | auto (Yetenek 13/15)
+    not_dili: str = Field(default="tr", alias="STUHUB_NOT_DILI")
+    # Streak halkası için günlük etkinlik hedefi (Yetenek 15)
+    daily_goal: int = Field(default=3, alias="STUHUB_DAILY_GOAL")
+
     @property
     def db_path(self) -> Path:
         return self.data_dir / "stuhub.db"

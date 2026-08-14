@@ -24,12 +24,19 @@
 | marker-pdf | OCR yedeği | GPL-3.0 (kişisel yerel kullanımda kabul) | Ücretsiz | Tesseract (Apache-2.0) — dağıtımda zorunlu değişim |
 | python-pptx | PPTX metin çıkarımı | MIT | Ücretsiz | — |
 | LibreOffice headless | PPTX→PDF render | MPL-2.0 | Ücretsiz | Yok → metin fallback |
+| yt-dlp | YouTube altyazı/indirme | Unlicense | Ücretsiz | yt-dlp `--skip-download` (altyazı) |
+| faster-whisper | Yerel STT (ses transkripsiyonu) | MIT | Ücretsiz (yerel) | openai-whisper (MIT) — daha ağır |
+| rapidocr-onnxruntime | Yerel OCR (görsel/PDF yedeği) | Apache-2.0 | Ücretsiz (yerel) | Tesseract (Apache-2.0) |
+| python-docx | DOCX okuma | MIT | Ücretsiz | — |
 | pdfjs-dist | PDF sayfa render (pop-up) | Apache-2.0 | Ücretsiz | — |
+| vite-plugin-pwa | PWA (offline + kurulum) | MIT | Ücretsiz | — |
 | GitHub Actions | CI | Ücretsiz tier | Ücretsiz | — |
 | ruff / pyright / pytest | Backend QA | MIT | Ücretsiz | — |
 | eslint / tsc / vitest / playwright | Frontend QA | MIT/Apache-2.0 | Ücretsiz | — |
 | bandit / pip-audit / pnpm audit | Güvenlik tarama | Apache-2.0/ISC | Ücretsiz | — |
 | gitleaks / trufflehog | Sırlar tarama | MIT | Ücretsiz | — |
+
+> **Not:** EPUB çıkarımı **stdlib (`zipfile` + XHTML)** ile yapılır; AGPL-3.0 lisanslı `ebooklib` **bilinçli olarak KULLANILMAZ** (gerekçe: ücretsizlik sözleşmesi + lisans hijyeni — yol haritası Bölüm 7).
 
 ## Yasak Liste (özet — tam metin yol haritası Bölüm 7'de)
 

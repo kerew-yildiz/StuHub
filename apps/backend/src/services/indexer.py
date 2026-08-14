@@ -1,9 +1,15 @@
-"""İndeksleme orkestrasyonu — extract → chunk → embed → LanceDB (Faz 2.2)."""
+"""İndeksleme orkestrasyonu — extract → chunk → embed → LanceDB (Faz 2.2 + v2 extractor registry).
+
+v2 (Niş Analizi Entegrasyonu): materyal çıkarımı bir registry üzerinden dağıtılır.
+Yeni medya türleri (youtube, audio, docx, epub, image, text) Faz V2.6'da
+`register_extractor` ile kaydolur (sözleşme: YETENEKLER/11-medya-alimi.md).
+"""
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from pathlib import Path
 
 from ..db import get_db
@@ -13,21 +19,42 @@ logger = logging.getLogger(__name__)
 
 EMBED_BATCH_SIZE = 32
 
+# Extractor imzası: (dosya yolu) -> (parça listesi, 'pages' | 'slides' | 'segments')
+ExtractorFn = Callable[[str], tuple[list[dict], str]]
 
-def _extract_material(material: dict) -> tuple[list[dict], str]:
-    """Materyal türüne göre sayfa/slide listesi çıkarır. (bloklayıcı — to_thread ile çağrılır)
 
-    Dönüş: (sayfa/slide listesi, 'pages' | 'slides')
-    """
-    path = material["filepath"]
-    mtype = material["type"]
-    if mtype == "textbook":
-        return pdf_service.extract_pdf_pages(path), "pages"
+def _extract_textbook(path: str) -> tuple[list[dict], str]:
+    return pdf_service.extract_pdf_pages(path), "pages"
+
+
+def _extract_slides(path: str) -> tuple[list[dict], str]:
     ext = Path(path).suffix.lower()
     if ext == ".pptx":
         return slides_service.extract_pptx_slides(path), "slides"
     pages = pdf_service.extract_pdf_pages(path)
     return [{"slide": p["page"], "text": p["text"]} for p in pages], "slides"
+
+
+EXTRACTORS: dict[str, ExtractorFn] = {
+    "textbook": _extract_textbook,
+    "slides": _extract_slides,
+}
+
+
+def register_extractor(mtype: str, fn: ExtractorFn) -> None:
+    """v2 genişletme noktası: yeni materyal türleri çıkarıcılarını kaydeder (Yetenek 11)."""
+    EXTRACTORS[mtype] = fn
+
+
+def _extract_material(material: dict) -> tuple[list[dict], str]:
+    """Materyal türüne göre sayfa/slide/segment listesi çıkarır (to_thread ile çağrılır).
+
+    Dönüş: (parça listesi, 'pages' | 'slides' | 'segments')
+    """
+    extractor = EXTRACTORS.get(material["type"])
+    if extractor is None:
+        raise RuntimeError(f"'{material['type']}' türü için çıkarıcı bulunamadı")
+    return extractor(material["filepath"])
 
 
 def _embed_batch(texts: list[str]) -> list[list[float]]:

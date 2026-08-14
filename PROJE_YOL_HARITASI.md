@@ -188,7 +188,7 @@ Genel Quiz:
 terms (id, name, start_date, end_date, created_at)
 courses (id, term_id, name, instructor, metadata_json, created_at)
 materials (
-  id, course_id, type,             -- 'textbook' | 'slides'
+  id, course_id, type,             -- 'textbook' | 'slides' | 'youtube' | 'audio' | 'docx' | 'epub' | 'image' | 'text' (v2)
   filepath, extracted_text,
   page_count,                      -- render + chunk offset için
   vector_ns,                       -- LanceDB namespace (course_{id}_chunks)
@@ -203,15 +203,26 @@ quizzes (id, chapter_id, questions_json, created_at)
 quiz_attempts (id, quiz_id, user_answers_json, score, feedback_json, created_at)
 overall_quizzes (id, course_id, questions_json, created_at)
 overall_attempts (id, overall_quiz_id, answers_json, score_json, created_at)
-indexing_jobs (id, course_id, material_id, status, progress, error, created_at, updated_at)
+indexing_jobs (id, course_id, material_id, status, progress, error, kind, created_at, updated_at)
+                                                        -- v2: kind = 'index' | 'transcribe'
 citations_ledger (id, chunk_id, text, source_type, source_id, page, slide)
 generation_logs (id, kind, course_id, chapter_id, model, prompt_tokens, completion_tokens, created_at)
 settings (key, value)               -- API anahtarı, model adı vb. (yerel, commit dışı)
+-- ── v2 tabloları (Bölüm 17; migration 0001/0002 — sql/schema.sql tek doğruluk kaynağı) ──
+flashcard_sets (id, course_id, chapter_id, cards_json, created_at, model_used)
+card_reviews (id, set_id, card_index, ease_factor, interval_days, repetitions, due_at, last_rating, reviewed_at)
+chat_messages (id, course_id, role, content, citations_json, mode, created_at)   -- mode: direct|socratic|quiz
+study_guides (id, course_id, chapter_id, kind, content_json, created_at, model_used)  -- kind: summary|concept_map
+essay_submissions (id, course_id, chapter_id, prompt, user_text, grade_json, created_at)
+activity_log (id, date, kind, count, course_id)          -- kind: note|quiz|flashcard|chat
+schema_migrations (version, name, applied_at)
 ```
 
 LanceDB chunk satırı: `{ chunk_id, course_id, material_id, page, slide, text, vector }` — `page/slide` offset'leri atıf pop-up'ının doğru bölümü açmasını sağlar.
 
 **Not:** Sorular `questions_json` içinde kasıtlı denormalize tutulur (kişisel uygulama ölçeği). Atıf doğrulama bu blob'u ayrıştırıp `citations_ledger` ile eşleştirir. `models` tablosu (v1.0'dan) kaldırılmıştır; yerel LLM kullanıcı kararıyla kapsam dışıdır, alternatif sağlayıcı geçişi Bölüm 13'tedir.
+
+**v2 migration runner (Bölüm 17):** `init_db`, `schema.sql`'i uyguladıktan sonra `sql/migrations/NNN_*.sql` dosyalarını sırayla işler ve `schema_migrations`'a kaydeder; migration dosyaları idempotenttir (politika: `sql/migrations/README.md`).
 
 ---
 
@@ -219,7 +230,7 @@ LanceDB chunk satırı: `{ chunk_id, course_id, material_id, page, slide, text, 
 
 > **Rol ayrımı:** Üretim ajanlarının (04–08) md dosyaları hem DSH üzerindeki geliştirme rolünü hem de uygulamanın çalışma anı (runtime) pipeline sözleşmesini tanımlar. DSH ajanları ürünü **geliştirir**; ürün çalışırken aynı sözleşmeyi `apps/backend/src/agents/` altındaki FastAPI servisleri yürütür (Bölüm 14). İki katman birbirinin yerine geçmez.
 
-### 4.1 Ajan Kataloğu (15 ajan)
+### 4.1 Ajan Kataloğu (20 ajan)
 
 | # | Ajan | Dosya | Rol | Tetik | Effort |
 |---|------|-------|-----|-------|--------|
@@ -236,8 +247,13 @@ LanceDB chunk satırı: `{ chunk_id, course_id, material_id, page, slide, text, 
 | 10 | **Test Mühendisi Ajan** | `AJANLAR/10-test-muhendisi-ajani.md` | leaf | Yeni özellik, coverage eksiği | Flash (yükseltilebilir) |
 | 11 | **DevOps Ajan** | `AJANLAR/11-devops-ajani.md` | leaf | CI/CD, build, dokümantasyon | Flash (yükseltilebilir) |
 | 12 | **Güvenlik Denetim Ajanı** | `AJANLAR/12-guvenlik-denetim-ajani.md` | leaf | Pre-release, gizlilik değişikliği | Flash; pre-release denetimlerde **V4 Pro'ya yükseltilir** |
-| 13 | **Frontend Geliştirici Ajan** | `AJANLAR/13-frontend-gelistirici-ajani.md` | leaf | Faz 0–6 UI işleri, yeni sayfa/bileşen | Flash (yükseltilebilir) |
-| 14 | **Backend Geliştirici Ajan** | `AJANLAR/14-backend-gelistirici-ajani.md` | leaf | Faz 0–6 API/servis/şema işleri | Flash (yükseltilebilir) |
+| 13 | **Frontend Geliştirici Ajan** | `AJANLAR/13-frontend-gelistirici-ajani.md` | leaf | Faz 0–6 + v2 UI işleri, yeni sayfa/bileşen | Flash (yükseltilebilir) |
+| 14 | **Backend Geliştirici Ajan** | `AJANLAR/14-backend-gelistirici-ajani.md` | leaf | Faz 0–6 + v2 API/servis/şema işleri | Flash (yükseltilebilir) |
+| 15 | **Flashcard Ajan** | `AJANLAR/15-flashcard-ajani.md` | leaf | "Flashcard Oluştur" butonu, V2.2 işleri | Flash (yükseltilebilir) |
+| 16 | **Materyale Sor Ajan** | `AJANLAR/16-materyal-sor-ajani.md` | leaf | Chat mesajı, V2.1 işleri | Flash (yükseltilebilir) |
+| 17 | **Medya Alım Ajan** | `AJANLAR/17-medya-alim-ajani.md` | leaf | Medya yükleme (YouTube/ses/doküman), V2.6 işleri | Flash (yükseltilebilir) |
+| 18 | **İhracat Ajan** | `AJANLAR/18-ihracat-ajani.md` | leaf | Export/import aksiyonları, V2.3 işleri | Flash (yükseltilebilir) |
+| 19 | **Çalışma Rehberi Ajan** | `AJANLAR/19-calisma-rehberi-ajani.md` | leaf | "Rehber" sekmesi, V2.7 işleri | Flash (yükseltilebilir) |
 
 ### 4.2 Effort Kuralı (Kullanıcı Kararı)
 
@@ -270,6 +286,16 @@ Ana Ajan (V4 Pro: analiz eder, parçalar, effort atar, delegate eder)
     │       │ ▼
     │   Kalite Kontrol
     │
+    ├─► Flashcard Ajan [not+quiz sonrası; chapter başına paralel]
+    │
+    ├─► Materyale Sor Ajan [kullanıcı mesajıyla; yanıt atıf zorunlu]
+    │
+    ├─► Medya Alım Ajan [yükleme sonrası; transkripsiyon arka planda]
+    │
+    ├─► İhracat Ajan [export/import aksiyonuyla]
+    │
+    ├─► Çalışma Rehberi Ajan [rehber sekmesiyle]
+    │
     ├─► Değerlendirme Ajan (faz sonu ölçüm → Kalite Kontrol'e kanıt)
     ├─► Backend Geliştirici Ajan [API/servis/şema — modül başına]
     ├─► Frontend Geliştirici Ajan [UI — Stil Ajanı denetiminde]
@@ -282,6 +308,10 @@ Ana Ajan (V4 Pro: analiz eder, parçalar, effort atar, delegate eder)
 ### 4.4 Paralellik Kuralları
 
 - **Indexer:** Her zaman arka planda (bekleyen `indexing_jobs` işlenir)
+- **Medya Alım/Transkripsiyon:** Her zaman arka planda (`indexing_jobs.kind='transcribe'` → otomatik `'index'` zinciri)
+- **Flashcard Üretimi:** Chapter başına paralel (o chapter'ın notu + quiz'i hazır olduktan sonra)
+- **Materyale Sor:** Kullanıcı mesajları eş zamanlı; yanıt üretimi diğer üretimleri bloklamaz
+- **Çalışma Rehberi:** Chapter bazında paralel; ders seviyesi rehber, chapter rehberlerinin birleşimidir
 - **Not Üretimi → Chapter Quiz:** Sıralı (quiz notlara ihtiyaç duyar)
 - **Tüm Chapter Quizleri:** Chapter başına paralel
 - **Overall Quiz:** Tüm chapter notları bittikten sonra; kategori batch'leri paralel üretilebilir
@@ -342,9 +372,14 @@ Session Sonu (state persist)
 | Not Üretici | `YETENEKLER/02-rag-not-uretimi.md`, `06-atif-sistemi.md` |
 | Chapter Quiz | `YETENEKLER/03-chapter-quiz-uretimi.md`, `06-atif-sistemi.md` |
 | Overall Quiz | `YETENEKLER/04-overall-quiz-uretimi.md`, `06-atif-sistemi.md` |
-| Essay Grader | `YETENEKLER/05-acik-uclu-puanlama.md`, `06-atif-sistemi.md` |
-| Değerlendirme | Tüm üretim yetenekleri (01–06) + test altyapısı; eval kümesi oluşturma |
-| Backend Geliştirici | `PROJE_YOL_HARITASI.md` Bölüm 3, 8, 11; `YETENEKLER/01–06` (runtime sözleşmeler); pwsh (uv, pytest) |
+| Essay Grader | `YETENEKLER/05-acik-uclu-puanlama.md`, `14-essay-degerlendirme.md`, `06-atif-sistemi.md` |
+| Flashcard | `YETENEKLER/09-flashcard-ve-uzamsal-tekrar.md`, `06-atif-sistemi.md` |
+| Materyale Sor | `YETENEKLER/10-materyale-sor.md`, `06-atif-sistemi.md` |
+| Medya Alım | `YETENEKLER/11-medya-alimi.md`, `01-pdf-pptx-isleme.md` |
+| İhracat | `YETENEKLER/12-ihracat-formatlari.md` |
+| Çalışma Rehberi | `YETENEKLER/13-calisma-rehberi.md`, `06-atif-sistemi.md` |
+| Değerlendirme | Tüm üretim yetenekleri (01–15) + test altyapısı; eval kümesi oluşturma |
+| Backend Geliştirici | `PROJE_YOL_HARITASI.md` Bölüm 3, 8, 11, 17; `YETENEKLER/01–15` (runtime sözleşmeler); pwsh (uv, pytest) |
 | Frontend Geliştirici | `YETENEKLER/07-stil-rehberi.md`; `AJANLAR/02-stil-ajani.md` denetimi; pnpm/vitest/playwright |
 | Test Mühendisi | pytest/vitest/Playwright; pwsh |
 | DevOps | GitHub Actions; pwsh (build, audit); README + kullanıcı dokümantasyonu |
@@ -467,9 +502,9 @@ Session Sonu (state persist)
 1. ~~Desktop vs Web-first?~~ **ÇÖZÜLDÜ:** Localhost web uygulaması (kullanıcı kararı, bu oturum).
 2. ~~Türkçe dil desteği?~~ **ÇÖZÜLDÜ:** Tüm UI ve prompt'lar Türkçe.
 3. ~~LLM çalışma zamanı?~~ **ÇÖZÜLDÜ:** Yerel LLM çalıştırılmayacak (kullanıcı kararı); LLM gerektiren görevlerde ücretli API kullanımına izin — birincil sağlayıcı: DeepSeek API. Alternatif OpenAI uyumlu sağlayıcılar yalnızca kullanıcı onayıyla (Ücretsizlik Ajanı kaydıyla).
-4. **Kullanıcı auth / çoklu cihaz?** Başlangıç: local-only (tek kullanıcı, auth yok). Sonra opsiyonel sync.
-5. **Anki/PDF/Markdown export formatı?** Genişletilebilirlik Noktası (Bölüm 13); başlangıç kapsamı dışı.
-6. **Mobil companion?** İleri tarihli. Ertele.
+4. **Kullanıcı auth / çoklu cihaz?** Local-only (tek kullanıcı, auth yok) korunur. **v2 kararı (Bölüm 17):** bulut sync hesap/telemetri yasağıyla çelişir — yerel karşılığı dönem arşivi export/import; gerçek bulut sync gelecekte kullanıcı kararıyla feature-flag arkasında.
+5. **Anki/PDF/Markdown export formatı?** **v2 kararı:** V2.3'te uygulanır (MD + Anki `.apkg` stdlib ile + CSV; PDF not export'u zaten var — yol haritası 5.7/9).
+6. **Mobil companion?** **v2 kararı:** native yerine PWA + aynı ağdan erişim (V2.8); veri yine bilgisayarda kalır.
 
 ---
 
@@ -547,30 +582,34 @@ StuHub DS/
 ├── PROJE_YOL_HARITASI.md     ← BU BELGE (belkemiği)
 ├── SİSTEM_YETENEKLERİ.md     ← DSH yetenek kataloğu + ajan kullanım rehberi (prompt)
 ├── DSH_ARASTIRMA_RAPORU.md   ← DSH checkout'unun tam kazı raporu (kaynak dokümantasyon)
-├── AJANLAR/                  ← Ajan prompt dosyaları (15 adet, Bölüm 4.1)
-├── YETENEKLER/               ← Yetenek/capability dokümanları (8 adet, Bölüm 5)
+├── NİŞ_ANALİZİ_RAPORU.md     ← v2 kaynağı (30 uygulama kataloğu + 16 öneri; Bölüm 17)
+├── KULLANIM.md               ← kullanıcı kılavuzu
+├── AJANLAR/                  ← Ajan prompt dosyaları (20 adet, Bölüm 4.1)
+├── YETENEKLER/               ← Yetenek/capability dokümanları (15 adet, Bölüm 5)
 ├── apps/
 │   ├── frontend/              # React + TS + Vite
 │   │   ├── src/
-│   │   │   ├── pages/         (TermsPage, CoursePage, NotebookPage, SettingsPage)
-│   │   │   ├── components/    (TermCard, CourseForm, ChapterList, NoteViewer,
-│   │   │   │                   CitationPopup, QuizPlayer, OverallQuizPlayer, ...)
-│   │   │   ├── api/           (client.ts, sse.ts)
-│   │   │   └── lib/           (utils.ts)
+│   │   │   ├── pages/         (TermsPage, TermDetailPage, CoursePage, NotebookPage, SettingsPage)
+│   │   │   ├── components/    (NoteViewer, CitationPopup, QuizPlayer, OverallQuizPlayer, ...)
+│   │   │   ├── api/           (client.ts, sse.ts, ...)
+│   │   │   ├── stores/        (appStore, generationStore)
+│   │   │   └── lib/           (utils.ts, useAnimatedProgress.ts)
 │   │   └── package.json
 │   └── backend/               # FastAPI + Python
 │       ├── src/
 │       │   ├── main.py
 │       │   ├── config.py
-│       │   ├── db.py
-│       │   ├── routers/       (terms, courses, chapters, notes, quizzes, materials, settings)
-│       │   ├── services/      (pdf_service, slides_service, embed_service, rag_service,
-│       │   │                   llm_service, export_service)
-│       │   ├── agents/        (note_generator, quiz_generator, overall_quiz_generator, essay_grader)
-│       │   ├── prompts/       (Faz 3+'ta oluşturulur; şablonlar YETENEKLER/02-06'dan taşınır)
+│       │   ├── db.py          # init_db + v2 migration runner (schema_migrations)
+│       │   ├── routers/       (terms, courses, chapters, slides, materials, indexing,
+│       │   │                   notes, quizzes, overall, settings)
+│       │   ├── services/      (pdf_service, slides_service, chunking, embed_service,
+│       │   │                   vector_store, retrieval, indexer, llm_service,
+│       │   │                   note_generator, quiz_generator, overall_generator,
+│       │   │                   essay_grader, export_service, fib_utils)
+│       │   ├── prompts/       (note_prompts, quiz_prompts, overall_prompts)
 │       │   └── workers/       (indexer.py)
 │       ├── sql/               (schema.sql, migrations/)
-│       ├── tests/               (birim testler + eval/ altın veri kümeleri)
+│       ├── tests/
 │       └── pyproject.toml
 ├── data/                      # Uygulama verisi (SQLite, LanceDB, materials/) — git'e GİRMEZ
 ├── .tools/                    # Proje-yerel araçlar (uv-python, gitleaks) — git'e GİRMEZ
@@ -602,6 +641,7 @@ StuHub DS/
 | (bu oturum) | 5.7 | **Kullanıcı geri bildirim turu (10 madde).** 1) PDF yükleme: kök neden demo kitabının 0 bayt olması; akışkan (chunk) yükleme + net Türkçe boş-dosya hatası (geçerli 5 MB PDF doğrulandı). 2) Slaytlar artık önizleyiciyle teker teker (SlidePreview: ok tuşları + sayfa atlamaları), tüm sayfa listesi değil. 3) Kitap/materyal önizleme: Önizle butonu → iframe PDF penceresi (Range destekli `/file`). 4) Quiz üretimi sağlamlaştırıldı: 3 deneme + ayrıntılı hata mesajı. 5) Not bitince bölüm quizi OTOMATİK üretilir, notun altında görünür. 6) Animasyonlu progress bar (`useAnimatedProgress`: %1 adımlarla) — not/quiz/genel quiz/indeksleme tümünde. 7) Genel quiz açık uçlu soru görünümü düzeltildi. 8) Quiz bitişi → açılır-kapanır "Sorular ve cevaplar" önizleme penceresi (her iki oynatıcı). 9) Not PDF export (`GET /api/notes/{id}/export`, markdown→pymupdf, Türkçe glifli) + "PDF İndir" butonu. 10) Notlar açılır-kapanır panelde. Testler: backend 77 pytest (boş dosya + export); frontend 8 vitest; ruff/pyright/eslint/tsc 0; canlı doğrulama (boş→422 net mesaj, geçerli PDF→201) |
 | (bu oturum) | 5.8 | **Kullanıcı geri bildirim turu 2 (8 madde).** 1) Chapter slaytları: ders sayfası gibi şık önizleyici (kart görünümü, sayfa atlama) + "Sunumu aç" → PDF penceresi (`GET /api/materials/{id}`). 2) Üretimler sayfadan bağımsız KÜRESEL: `stores/generationStore` + App genelinde ilerleme paneli — sayfa değişse bile üretim sürer, her sayfada görünür. 3) Quizler DAİMA kaydedilir: geçmiş listesi (`GET /api/chapters/{id}/quizzes`, `GET /api/courses/{id}/overall-quizzes`) + silme uçları; "yenile" kaldırıldı, "Yeni Oluştur" her zaman ekler. 4) PDF export görsel hatası: kelime bazlı satır sarma (taşma yok, doğrulandı) + kalın başlık fontu. 5) Quiz üretimi ASLA BAŞARISIZ OLMAZ: yumuşak geçiş (şema-geçerli sorular kabul, atıf self-heal, denge), sorunlu konu/batch uyarıyla atlanır, içerik daima teslim edilir (`warnings` listesi). 6) Denemeler KALICI: oynatıcılar kayıtlı denemeyi geri yükler (bitmiş quiz yeniden başlamaz), "Yeniden çöz" + "Cevapları sil" + "Quiz'i sil" (`GET /api/quizzes/{id}/attempts`, DELETE uçları). 7) Önizlemede soru + TÜM seçenekler (seçilen/doğru işaretli); genel quiz sonuçlarına options/correct_index/statement/user_answer eklendi. 8) Dosya adları UUID öneksiz özgün adla gösterilir (`display_name`). Testler: backend 77 pytest + frontend 8 vitest; canlı doğrulama (display_name, geçmiş uçları, 404'ler) |
 | (bu oturum) | 5.9 | **Kullanıcı geri bildirim turu 3 (3 madde).** 1) Genel quiz **55 soru: 20 çoktan seçmeli + 15 doğru-yanlış + 15 boşluk doldurma + 5 açık uçlu**; puanlama: kapalı 50×1 + açık 5×10 = **100 puan** (`overall_generator.BATCH_PLAN` 4×5 MCQ, `overall.py` skor = closed_correct + open_total; CoursePage/KULLANIM/README metinleri güncellendi). 2) Bölüm quizi JSON hatası KÖK NEDEN çözümü: `llm_service.chat_json` → `_extract_json` (``` fence'lerini sıyırır, ilk `{`…son `}` ayıklama) + JSON hatasında 3'e kadar yeniden deneme ("geçerli JSON döndür" notu ile); batch/topic düzeyinde `LLMError` yutulur, sorunlu batch uyarıyla atlanır, kullanıcıya hata YÜZEYE ÇIKMAZ — içerik daima teslim edilir. 3) Genel quiz sonuçları TAM GÖSTERİM: her soru satır içi açık (kapalı `<details>` kaldırıldı) — tam soru + tüm seçenekler (doğru ✓ / senin cevabın ← işaretli) + TF doğru/yanlış cevabın + FIB kabul edilen cevaplar + açık uçlu puan kırılımı (doğru/eksik/yanlış/gereksiz + ideal cevap) + **doğruysa "neden doğru", yanlışsa öğretici açıklama**; bölüm quizi önizlemesinde de doğru cevaplara açıklama eklendi. Testler: backend 79 pytest (20-MCQ sayıları, skor 100 modeli, `_extract_json` + garbage→valid kurtarma); frontend 8 vitest + build ✓; ruff/pyright/eslint/tsc 0 |
+| (bu oturum) | 5.10 | **Faz V2.0 tamamlandı (checkpoint commit) — Niş Analizi Entegrasyonu başladı.** `NİŞ_ANALİZİ_RAPORU.md` (30 uygulama kataloğu + 16 öneri) repoya alındı; yol haritasına Bölüm 17 (v2 sözleşmesi) eklendi, Bölüm 3/4.1/4.3/4.4/5/10/14/16 güncellendi. Backend: migration runner (`schema_migrations`; `sql/migrations/0001_materials_tipleri.sql` + `0002_yeni_tablolar.sql` — veri koruyan, idempotent), 7 yeni tablo (`flashcard_sets`, `card_reviews`, `chat_messages`, `study_guides`, `essay_submissions`, `activity_log`, `schema_migrations`), `indexing_jobs.kind`, extractor registry refactor'u (v1 davranışı birebir korundu), config v2 alanları (whisper_model/ocr_enabled/not_dili/daily_goal) + `.env.example`. Ajan kataloğu 15→20 (`15-flashcard`, `16-materyal-sor`, `17-medya-alim`, `18-ihracat`, `19-calisma-rehberi` yeni; 00/04/05/08 güncellendi), yetenek kataloğu 8→15 (09–15 yeni; 05/06/08 güncellendi). Bağımlılıklar: yt-dlp (Unlicense), faster-whisper (MIT), rapidocr-onnxruntime (Apache-2.0), python-docx (MIT), vite-plugin-pwa (MIT). Kapılar: ruff/pyright 0, **pytest 82/82** (3 yeni migration testi), bandit 0, pip-audit 0, eslint/tsc 0, vitest 8/8, build ✓, npm audit 0, gitleaks temiz |
 
 ---
 
@@ -618,6 +658,59 @@ StuHub DS/
 | 4 | Bölüm Quiz | ✅ TAMAM | 2026-08-14 | 4.1 Konu başına 5 MCQ (atıf zorunlu, denge yeniden düzenleme ile); 4.2 Anında feedback (interaksiyonda LLM çağrısı yok) + QuizPlayer. Kapılar: pytest 62/62, vitest 7/7, bandit 0. **Canlı E2E (gerçek LLM): not→quiz→10/10 deneme** |
 | 5 | Genel Quiz | ✅ TAMAM | 2026-08-14 | 5.1 50 soru (15/15/15/5, seed'li karışık, answer_key saklı); 5.2 FIB deterministik eşleşme; 5.3 açık uçlu otomatik puanlama (rubrik + güven kontrolü). Kapılar: pytest 75/75, vitest 8/8, bandit 0. **Canlı E2E: 2 not → 50 soru → deneme + essay puanlama** |
 | 6 | Polish, Kalite & Teslim | ✅ TAMAM | 2026-08-14 | 6.1 Stil denetimi (bileşenlerde hardcoded renk yok, tokenlar); 6.2 Kalite kapıları tam geçiş (75 pytest + 8 vitest + tüm lint/type/audit 0); 6.3 Canlı uçtan uca kabul akışı doğrulandı (kullanıcı son testini yapar); 6.4 KULLANIM.md + README; 6.5 Güvenlik denetimi (gitleaks 0, anahtar sızıntısı yok, answer_key gizliliği testli). **Üretim modu: FastAPI inşa edilmiş SPA'yi tek adreste sunar (v1.0.0)** |
+| V2.0 | v2 Mimari İskelet | ✅ TAMAM | (bu oturum) | Migration runner (schema_migrations) + 0001/0002 + yeni tablolar + extractor registry + config v2 + 5 yeni ajan (15–19) + 7 yeni yetenek (09–15) + bağımlılıklar (yt-dlp, faster-whisper, rapidocr, python-docx, vite-plugin-pwa). Kapılar: ruff/pyright 0, pytest 82/82, bandit 0, pip-audit 0, eslint/tsc 0, vitest 8/8, build ✓, npm audit 0, gitleaks temiz. v1 davranışı birebir korundu |
+| V2.1 | Materyale Sor | ⬜ PLANLI | — | RAG chat (SSE, zorunlu atıf) + direct/socratic/quiz modları + ChatPanel + chat_messages geçmişi |
+| V2.2 | Flashcard + SM-2 | ⬜ PLANLI | — | Not+quiz'den atıflı kart üretimi, yerel SM-2 (Again/Hard/Good/Easy), FlashcardPlayer, kurs due kuyruğu |
+| V2.3 | Export + Arşiv | ⬜ PLANLI | — | Not MD/PDF, Anki `.apkg` (stdlib), CSV, dönem arşivi export/import (manifest v1) |
+| V2.4 | UI Paketi | ⬜ PLANLI | — | Notebook/kurs mod sekmeleri, Dönem→Ders→Chapter sidebar ağacı, streak + günlük hedef halkası, 3 adımlı onboarding |
+| V2.5 | Essay Değerlendirici | ⬜ PLANLI | — | Genel "ödev yükle → değerlendir" akışı (rubrikli 0–100 + alıntılı yorumlar), essay_submissions |
+| V2.6 | Medya Alımı | ⬜ PLANLI | — | YouTube/ses/DOCX/EPUB/OCR/metin yapıştırma + taranmış PDF OCR fallback + transkripsiyon iş hattı |
+| V2.7 | Rehber + Çok Dilli | ⬜ PLANLI | — | Chapter/ders özeti + anahtar terimler + kavram haritası (SVG) + `not_dili` (tr/en/auto) |
+| V2.8 | PWA + LAN | ⬜ PLANLI | — | vite-plugin-pwa (manifest/SW/ikonlar), FastAPI statik istisnaları, `--host 0.0.0.0` dokümantasyonu |
+| V2.9 | Teslim v2.0.0 | ⬜ PLANLI | — | Kalite kapıları tam turu, README/KULLANIM güncellemesi, canlı E2E, sürüm geçmişi |
+
+---
+
+## 17. v2 — Niş Analizi Entegrasyonu (StudyFetch/Mindgrasp + 30 Uygulama Kataloğu)
+
+> **Kaynak:** [`NİŞ_ANALİZİ_RAPORU.md`](./NİŞ_ANALİZİ_RAPORU.md) (30 uygulama kataloğu, iki anchor derin incelemesi, 13 uygulamalık arayüz örneklemi, 16 geliştirme önerisi). Bu bölüm, raporun StuHub'a uygulanmasının sözleşmesidir; faz durumu Bölüm 16'dadır.
+
+### 17.1 Strateji
+
+StuHub rakiplerin zayıf olduğu yerlerde zaten güçlü: **yerel-öncelikli gizlilik (hesap/telemetri yok), üretim çıktısının kendisinde atıf derinliği, abonelik/kredi yok (BYO DeepSeek anahtarı), Türkçe**. v2, nişin standartlarına en ucuz yoldan yetişir (flashcard, chat, streak) ve raporun "bilinçli yapılmayacaklar" listesine dokunmaz.
+
+### 17.2 Özellik → Faz Haritası
+
+| # | Özellik | Faz | Durum | Ana bileşenler |
+|---|---------|-----|-------|----------------|
+| 1 | Flashcard + yerel spaced repetition (SM-2) | V2.2 | ⬜ | `flashcard_sets`/`card_reviews`, `services/srs.py` + `flashcard_generator.py`, `FlashcardPlayer` |
+| 2 | Materyale Sor (atıflı RAG chat) | V2.1 | ⬜ | `chat_messages`, `services/chat_service.py`, `ChatPanel` (atıf çipli) |
+| 3 | Çalışma modu sekmeleri (Notlar\|Flashcard\|Quiz\|Rehber) | V2.4 | ⬜ | `NotebookPage`/`CoursePage` sekme hub'ı (yeni rota yok) |
+| 4 | Anki + Markdown export | V2.3 | ⬜ | `export_service.py` genişletme + `anki_export.py` (stdlib apkg) |
+| 5 | Streak + günlük hedef halkası (yerel) | V2.4 | ⬜ | `activity_log`, `services/streak_service.py`, `StreakRing` |
+| 6 | 3 adımlı onboarding + klasör ağacı sidebar | V2.4 | ⬜ | `OnboardingWizard`, `SidebarNav` (Dönem→Ders→Chapter) |
+| 7 | Essay/ödev değerlendirici | V2.5 | ⬜ | `essay_submissions`, `essay_grader.py` genellemesi, `essays.py` router |
+| 8 | YouTube → içerik | V2.6 | ⬜ | `media_extractors/youtube.py` (yt-dlp; whisper fallback) |
+| 9 | Ses/ders kaydı → not | V2.6 | ⬜ | `media_extractors/audio.py` (faster-whisper, yerel STT) |
+| 10 | Çalışma rehberi + kavram haritası | V2.7 | ⬜ | `study_guides`, `services/guide_service.py`, `GuideView` (SVG) |
+| 11 | Mobil erişim (PWA + LAN) | V2.8 | ⬜ | vite-plugin-pwa, `/sw.js` + `/manifest.webmanifest` rotaları |
+| 12 | Sokratik chat modu | V2.1 | ⬜ | `chat_service.py` modları (`direct\|socratic\|quiz`) |
+| 13 | Çok cihaz sync | — | 📄 KARAR | Bulut sync yok (Bölüm 10/4); yerel karşılığı: dönem arşivi export/import (#16). Gerçek bulut sync = gelecekte kullanıcı kararı + feature-flag |
+| 14 | DOCX/EPUB/fotoğraf (OCR)/metin yapıştırma | V2.6 | ⬜ | `media_extractors/{docx,epub,ocr}.py`; EPUB stdlib (AGPL'li ebooklib yasak) |
+| 15 | Çok dilli not (tr/en/auto) | V2.7 | ⬜ | settings `not_dili` → tüm üretim promptlarına dil talimatı |
+| 16 | Paylaşım/paket export (dönem arşivi) | V2.3 | ⬜ | `services/archive_service.py`, manifest v1 export/import |
+
+### 17.3 Bilinçli Yapılmayacaklar (rapor 7.6 — bağlayıcı)
+
+Paylaşımlı içerik kütüphanesi/sosyal katman, leaderboard/çok oyunculu oyunlaştırma, LMS entegrasyonları, kredi/kota ekonomisi, yerel LLM çalıştırma — hiçbiri v2'ye girmez.
+
+### 17.4 Teknik Sözleşme
+
+- **Şema:** Bölüm 3'ün v2 blokları; `init_db` → `schema.sql` → migration runner (`schema_migrations`). Yeni migration: `sql/migrations/NNN_aciklama.sql` (idempotent zorunlu).
+- **Yeni LLM çağrıları:** `generation_logs` kind'ları: `flashcards`, `chat`, `guide`, `essay_grade` (mevcut: note/quiz/overall/essay_grade). Maliyet bekçiliği + Türkçe hatalar tümünde geçerli.
+- **Yerel araçlar:** yt-dlp (Unlicense), faster-whisper (MIT), rapidocr-onnxruntime (Apache-2.0), python-docx (MIT), vite-plugin-pwa (MIT) — Ücretsizlik Ajanı kaydı `YETENEKLER/08`'dedir. Tüm çıkarım yerel; model indirmeleri (whisper/OCR) ilk kullanımda, ayarlarla kapatılabilir.
+- **Gizlilik değişmez:** hesap/telemetri yok; yeni medya verileri de `data/` içinde; `answer_key` ön yüze asla çıkmaz.
+- **Ajan/yetenek eşlemesi:** Bölüm 4.1 (20 ajan) + Bölüm 5. Yeni runtime sözleşmeleri: Yetenekler 09–15.
 
 ---
 

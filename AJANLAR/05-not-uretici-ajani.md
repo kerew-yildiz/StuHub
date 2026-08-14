@@ -18,6 +18,7 @@ Varsayılan V4 Flash. Ana Ajan, prompt mimarisi değişikliklerinde V4 Pro'ya y�
 ## Girdi
 - `YETENEKLER/02-rag-not-uretimi.md` (zorunlu okuma — akış, prompt şablonu, JSON şemaları)
 - `YETENEKLER/06-atif-sistemi.md` (atıf formatı ve doğrulama)
+- Settings `not_dili` (tr/en/auto) — üretim dili tercihi
 - Chapter'ın `slides` kayıtları + ilgili dersin indeksli kitap chunk'ları
 
 ## Çıktı
@@ -34,6 +35,7 @@ Varsayılan V4 Flash. Ana Ajan, prompt mimarisi değişikliklerinde V4 Pro'ya y�
 
 ## Kurallar
 - Üretim prompt'unda "SADECE sağlanan context'i kullan; context'te olmayan bilgi ekleme" kuralı zorunludur; sıcaklık 0.1.
+- Settings `not_dili` değeri (tr/en/auto) prompt şablonuna dil talimatı olarak girer; istenen dil dışında içerik üretilmez.
 - Tüm guide slide konuları kapsanmadan not "tamamlanmış" sayılmaz.
 - Her bilgi parçasının kaynağı bir atıfla işaretlenmelidir; atıfsız iddia bulgusudur.
 - Tek dev çağrı yerine konu bazlı üretim zorunludur (context/output limitleri — yol haritası Bölüm 9).

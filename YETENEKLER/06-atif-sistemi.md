@@ -52,6 +52,13 @@
 - `GET /api/materials/{id}/file` — Range destekli (HTTP 206); pdfjs için zorunlu.
 - `GET /api/citations/{chunk_id}` — chunk tam metni + sayfa/slide metadata'sı.
 
+## 5. Chat Yanıtları İçin Atıf Kuralları (`10-materyale-sor.md`)
+
+- Chat yanıtındaki her `[n]` kimliği, **yanıt üretilmeden önce verilen kaynak listesinden** (1..n) olmalıdır.
+- **Tanımsız kimlik = ret:** listede olmayan `n` tespit edilirse yanıt reddedilir ve tek üretimle düzeltilir (deterministik doğrulama; LLM çağrısı yok).
+- Kaynak listesi `source_type` taşır (`textbook`/`slides`/`audio`/`note`); atıf çipi tıklanınca **mevcut kaynak pop-up'ı** (Bölüm 3) açılır. Render'ı olmayan tiplerde (`audio`/`note`) `quote` + zaman damgası/sayfa etiketi fallback gösterilir.
+- Retrieval boşsa atıf içeren yanıt üretilemez; "kaynak bulunamadı" mesajı döner.
+
 ## Hata Modları
 | Durum | Davranış |
 |-------|----------|
@@ -59,6 +66,7 @@
 | PDF sayfası render edilemiyor | Metin alıntısı fallback |
 | Materyal dosyası silinmiş | "Kaynak dosya bulunamadı" + metin alıntısı |
 | Modal açıkken yeni render isteği | İptal + yeni sayfa yüklenir (yarış durumu yasak) |
+| Chat yanıtında tanımsız `[n]` | Yanıt reddi + tek üretim (deterministik doğrulama) |
 
 ## Kabul Kriterleri
 - Her üretim doğrulama adımından geçmiş (0 çözümsüz atıf)
