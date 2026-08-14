@@ -1,6 +1,9 @@
 # ── Uygulama verisi (asla commit edilmez) ─────────────────────────────
 data/
 
+# ── Kullanıcı materyalleri (demo/test dosyaları) ──────────────────────
+Demo/
+
 # ── Sırlar ────────────────────────────────────────────────────────────
 .env
 .env.*
