@@ -1,17 +1,24 @@
-"""StuHub DS — FastAPI giriş noktası (Faz 0.3 + Faz 2.2 worker)."""
+"""StuHub DS — FastAPI giriş noktası (Faz 0.3 + worker + üretim statik servis)."""
 
 from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from .db import init_db
 from .routers import api_router
 from .workers.indexer import recover_stale_jobs, worker_loop
 
-APP_VERSION = "0.2.0"
+APP_VERSION = "1.0.0"
+
+# Üretim: inşa edilmiş frontend (apps/frontend/dist) — varsa servis edilir (yol haritası 2.2.2)
+FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+INDEX_HTML = FRONTEND_DIST / "index.html"
 
 
 @asynccontextmanager
@@ -38,12 +45,29 @@ app = FastAPI(
 app.include_router(api_router)
 
 
-@app.get("/")
-async def root() -> dict[str, str]:
-    return {"app": "stuhub-backend", "version": APP_VERSION, "docs": "/docs"}
-
-
 @app.get("/health")
 async def health() -> dict[str, str]:
     """Sağlık kontrolü — frontend 5 saniyede bir yoklar (yol haritası 2.2.4)."""
     return {"status": "ok", "app": "stuhub-backend", "version": APP_VERSION}
+
+
+# ── Üretim modu: inşa edilmiş SPA'yi servis et ─────────────────────────
+# dist yoksa (geliştirme) yalnızca API çalışır; frontend Vite dev sunucusundan gelir.
+
+if INDEX_HTML.exists():
+    assets_dir = FRONTEND_DIST / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/", include_in_schema=False)
+    async def root_spa():
+        return FileResponse(INDEX_HTML)
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa_fallback(full_path: str):
+        """SPA fallback: API dışındaki yollar index.html'e düşer."""
+        if full_path.startswith(("api/", "health")):
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=404)
+        return FileResponse(INDEX_HTML)
