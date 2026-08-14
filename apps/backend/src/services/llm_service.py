@@ -77,6 +77,25 @@ def _friendly_error(exc: Exception) -> str:
     return "LLM isteği başarısız oldu. Lütfen tekrar deneyin."
 
 
+async def _apply_table_config() -> None:
+    """Ayarlar tablosundaki (Ayarlar sayfası) anahtar/model'i runtime'a uygular.
+
+    Öncelik: Ayarlar tablosu → .env/ortam değişkeni (yol haritası 2.5).
+    Tablo boşsa mevcut (env) değerler korunur.
+    """
+    db = await get_db()
+    try:
+        cursor = await db.execute("SELECT key, value FROM settings")
+        rows = await cursor.fetchall()
+    finally:
+        await db.close()
+    values = {r["key"]: r["value"] for r in rows}
+    if values.get("deepseek_api_key"):
+        settings.deepseek_api_key = values["deepseek_api_key"]
+    if values.get("model"):
+        settings.model = values["model"]
+
+
 async def log_generation(
     *,
     kind: str,
@@ -133,6 +152,7 @@ async def chat_stream(
 
     Kullanım: `async for delta in chat_stream(...): ...`
     """
+    await _apply_table_config()
     _check_breaker()
     client = _client()
     delay = BASE_DELAY
@@ -192,6 +212,7 @@ async def chat_json(
     chapter_id: int | None = None,
 ) -> dict:
     """JSON çıktılı sohbet çağrısı — geçersiz JSON'da 1 yeniden deneme."""
+    await _apply_table_config()
     _check_breaker()
     client = _client()
     delay = BASE_DELAY

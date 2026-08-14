@@ -3,13 +3,15 @@ import { Link, useParams } from 'react-router-dom'
 
 import { chaptersApi, type Chapter } from '../api/chapters'
 import { getNote, streamNoteGeneration, type SavedNote } from '../api/notes'
+import { getQuiz, streamQuizGeneration, type Quiz } from '../api/quizzes'
 import { slidesApi, type Slide } from '../api/slides'
 import { GuideSlidesForm } from '../components/GuideSlidesForm'
 import { NoteViewer } from '../components/NoteViewer'
+import { QuizPlayer } from '../components/QuizPlayer'
 
 type LoadState = 'loading' | 'ready' | 'error'
 
-/** Chapter detay sayfası — guide slides + not üretimi (Faz 2/3). */
+/** Chapter detay sayfası — guide slides + not üretimi + bölüm quizi (Faz 2/3/4). */
 export function NotebookPage() {
   const { courseId, chapterId } = useParams<{ courseId: string; chapterId: string }>()
   const numericChapterId = Number(chapterId)
@@ -17,6 +19,7 @@ export function NotebookPage() {
   const [chapter, setChapter] = useState<Chapter | null>(null)
   const [slides, setSlides] = useState<Slide[]>([])
   const [note, setNote] = useState<SavedNote | null>(null)
+  const [quiz, setQuiz] = useState<Quiz | null>(null)
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState('')
 
@@ -26,18 +29,26 @@ export function NotebookPage() {
   const [statusMessage, setStatusMessage] = useState('')
   const [liveContent, setLiveContent] = useState('')
 
+  // quiz durumu
+  const [quizGenerating, setQuizGenerating] = useState(false)
+  const [quizProgress, setQuizProgress] = useState(0)
+  const [quizMessage, setQuizMessage] = useState('')
+  const [quizKey, setQuizKey] = useState(0)
+
   const load = useCallback(async () => {
     if (!numericChapterId) return
     setState('loading')
     try {
-      const [chapterData, slideList, existingNote] = await Promise.all([
+      const [chapterData, slideList, existingNote, existingQuiz] = await Promise.all([
         chaptersApi.get(numericChapterId),
         slidesApi.listByChapter(numericChapterId),
         getNote(numericChapterId),
+        getQuiz(numericChapterId),
       ])
       setChapter(chapterData)
       setSlides(slideList)
       setNote(existingNote)
+      setQuiz(existingQuiz)
       setState('ready')
     } catch {
       setState('error')
@@ -90,7 +101,31 @@ export function NotebookPage() {
     })
   }
 
+  const handleGenerateQuiz = async () => {
+    setQuizGenerating(true)
+    setQuizProgress(0)
+    setQuizMessage('Hazırlanıyor…')
+    setError('')
+    await streamQuizGeneration(numericChapterId, {
+      onStatus: (percent, message) => {
+        setQuizProgress(percent)
+        setQuizMessage(message)
+      },
+      onDone: (newQuiz) => {
+        setQuiz(newQuiz)
+        setQuizKey((k) => k + 1)
+        setQuizGenerating(false)
+        setQuizMessage('')
+      },
+      onError: (message) => {
+        setError(message)
+        setQuizGenerating(false)
+      },
+    })
+  }
+
   const canGenerate = slides.length > 0
+  const canGenerateQuiz = note !== null
 
   return (
     <section>
@@ -205,17 +240,41 @@ export function NotebookPage() {
         )}
       </div>
 
-      {/* Faz 4 butonu (hazırlık) */}
+      {/* Bölüm quizi */}
       <div className="mt-10">
-        <button
-          type="button"
-          disabled
-          className="rounded-sm bg-stuhub-surface px-4 py-2 text-sm font-medium text-stuhub-text-secondary"
-          title="Faz 4'te geliyor"
-        >
-          Quiz (Faz 4)
-        </button>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">Quiz</h2>
+          <button
+            type="button"
+            onClick={() => void handleGenerateQuiz()}
+            disabled={quizGenerating || !canGenerateQuiz}
+            className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-50"
+            title={canGenerateQuiz ? '' : 'Önce not oluştur'}
+          >
+            {quizGenerating ? 'Üretiliyor…' : quiz ? 'Quiz\'i Yenile' : 'Quiz Oluştur'}
+          </button>
+        </div>
+
+        {quizGenerating && (
+          <div className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface p-5">
+            <p className="text-sm font-medium">{quizMessage}</p>
+            <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-stuhub-border">
+              <div
+                className="h-full bg-stuhub-accent transition-all duration-300"
+                style={{ width: `${Math.max(quizProgress, 2)}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {!quizGenerating && quiz && <QuizPlayer key={quizKey} quiz={quiz} />}
+        {!quizGenerating && !quiz && !error && (
+          <p className="mt-4 text-sm text-stuhub-text-secondary">
+            Henüz quiz yok. Not oluşturup “Quiz Oluştur” ile başla.
+          </p>
+        )}
       </div>
     </section>
   )
 }
+

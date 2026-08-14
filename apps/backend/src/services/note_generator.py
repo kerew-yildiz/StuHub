@@ -46,6 +46,22 @@ def _normalize(text: str) -> str:
     return re.sub(r"[^\w\s]", "", text.lower()).strip()
 
 
+def topic_matches(heading: str, topic: str) -> bool:
+    """Başlık ↔ konu adı eşleşmesi (tam ya da anlamlı alt-metin).
+
+    LLM başlığı konu adından sapabilir; kapsama/atıf eşlemesinde esneklik sağlar.
+    """
+    a = _normalize(heading)
+    b = _normalize(topic)
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    if len(b) >= 4 and b in a:
+        return True
+    return len(a) >= 4 and a in b
+
+
 def _fuzzy_match(quote: str, chunk_text: str) -> bool:
     """Normalize fuzzy substring eşleşmesi (Yetenek 06 §2)."""
     q = _normalize(quote)
@@ -89,9 +105,13 @@ def _strip_own_heading(section: str, topic_name: str) -> str:
 
 
 def _section_for_topic(content_md: str, topic_name: str) -> str:
-    pattern = re.compile(rf"^#{{1,4}}\s+{re.escape(topic_name)}\s*$", re.MULTILINE)
-    match = pattern.search(content_md)
-    if not match:
+    pattern = re.compile(r"^(#{1,4})\s+(.+?)\s*$", re.MULTILINE)
+    match = None
+    for m in pattern.finditer(content_md):
+        if topic_matches(m.group(2), topic_name):
+            match = m
+            break
+    if match is None:
         return ""
     start = match.end()
     next_heading = re.search(r"^#{1,4}\s+", content_md[start:], re.MULTILINE)

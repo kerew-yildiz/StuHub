@@ -21,6 +21,7 @@ KURALLAR:
 2. "{topic}" konusunu eksiksiz ve anlaşılır biçimde açıkla; öğrenci seviyesine uygun Türkçe yaz.
 3. Her bilgi parçasının sonuna kaynak atıf numarasını [n] biçiminde koy (n: KAYNAKLAR listesindeki numara).
 4. Madde işaretleri ve kısa paragraflar kullan; gereksiz tekrar yapma.
+5. Bölümü tam olarak "### {topic}" başlığıyla başlat (başka başlık düzeyi/ifade kullanma).
 
 KONU: {topic}
 

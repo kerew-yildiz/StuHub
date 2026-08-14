@@ -16,6 +16,17 @@ interface RenderedSection {
 
 const CITATION_SCHEME = 'stuhub-citation://'
 
+/** Başlık ↔ konu adı esnek eşleşmesi (LLM başlıkları konu adından sapabilir). */
+function topicMatches(heading: string, topic: string): boolean {
+  const normalize = (s: string) => s.toLowerCase().replace(/[^\w\s]/g, '').trim()
+  const a = normalize(heading)
+  const b = normalize(topic)
+  if (!a || !b) return false
+  if (a === b) return true
+  if (b.length >= 4 && a.includes(b)) return true
+  return a.length >= 4 && b.includes(a)
+}
+
 /** content_md'yi başlık bazlı bölerek her bölüme kendi atıf haritasını bağlar. */
 function splitSections(note: SavedNote): RenderedSection[] {
   const topicMap = new Map<string, Citation[]>()
@@ -32,7 +43,14 @@ function splitSections(note: SavedNote): RenderedSection[] {
     if (match) {
       if (current) sections.push(current)
       const heading = match[2]
-      current = { heading, body: '', citations: topicMap.get(heading) ?? [] }
+      let citations: Citation[] = []
+      for (const [topicName, topicCitations] of topicMap) {
+        if (topicMatches(heading, topicName)) {
+          citations = topicCitations
+          break
+        }
+      }
+      current = { heading, body: '', citations }
     } else if (current) {
       current.body += `${line}\n`
     }
