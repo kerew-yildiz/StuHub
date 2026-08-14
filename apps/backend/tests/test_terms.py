@@ -45,6 +45,10 @@ async def test_term_validation_and_404(client):
     resp = await client.post("/api/terms", json={"name": ""})
     assert resp.status_code == 422
 
+    # var olmayan dönem detayı → 404
+    resp = await client.get("/api/terms/9999")
+    assert resp.status_code == 404
+
     # var olmayan güncelle → 404
     resp = await client.put("/api/terms/9999", json={"name": "Yok"})
     assert resp.status_code == 404

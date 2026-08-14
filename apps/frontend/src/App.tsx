@@ -4,6 +4,7 @@ import { HealthBanner } from './components/HealthBanner'
 import { CoursePage } from './pages/CoursePage'
 import { NotebookPage } from './pages/NotebookPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { TermDetailPage } from './pages/TermDetailPage'
 import { TermsPage } from './pages/TermsPage'
 
 export default function App() {
@@ -34,6 +35,7 @@ export default function App() {
       <main className="mx-auto max-w-5xl px-6 py-8">
         <Routes>
           <Route path="/" element={<TermsPage />} />
+          <Route path="/donemler/:termId" element={<TermDetailPage />} />
           <Route path="/dersler/:courseId" element={<CoursePage />} />
           <Route path="/dersler/:courseId/defter/:chapterId" element={<NotebookPage />} />
           <Route path="/ayarlar" element={<SettingsPage />} />

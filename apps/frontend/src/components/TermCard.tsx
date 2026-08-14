@@ -1,5 +1,7 @@
-import { formatDate } from '../lib/utils'
+import { Link } from 'react-router-dom'
+
 import type { Term } from '../api/terms'
+import { formatDate } from '../lib/utils'
 
 interface TermCardProps {
   term: Term
@@ -15,12 +17,10 @@ export function TermCard({ term, onDelete }: TermCardProps) {
 
   return (
     <article className="flex items-center justify-between rounded-md border border-stuhub-border bg-stuhub-surface p-6 transition-colors duration-150 hover:bg-stuhub-surface-hover">
-      <div>
+      <Link to={`/donemler/${term.id}`} className="min-w-0">
         <h2 className="text-lg font-semibold">{term.name}</h2>
-        {range && (
-          <p className="mt-1 text-sm text-stuhub-text-secondary">{range}</p>
-        )}
-      </div>
+        {range && <p className="mt-1 text-sm text-stuhub-text-secondary">{range}</p>}
+      </Link>
       <button
         type="button"
         onClick={() => onDelete(term.id)}

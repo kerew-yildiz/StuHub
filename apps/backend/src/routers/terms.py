@@ -62,6 +62,19 @@ async def create_term(item: TermIn) -> TermOut:
     return TermOut(**term)
 
 
+@router.get("/{term_id}", response_model=TermOut)
+async def get_term(term_id: int) -> TermOut:
+    """Tek dönem detayı."""
+    db = await get_db()
+    try:
+        row = await _fetch(db, term_id)
+    finally:
+        await db.close()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Dönem bulunamadı")
+    return TermOut(**row)
+
+
 @router.put("/{term_id}", response_model=TermOut)
 async def update_term(term_id: int, item: TermIn) -> TermOut:
     """Dönemi günceller."""

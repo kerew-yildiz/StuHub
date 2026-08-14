@@ -17,6 +17,7 @@ export interface TermInput {
 
 export const termsApi = {
   list: () => apiFetch<Term[]>('/terms'),
+  get: (id: number) => apiFetch<Term>(`/terms/${id}`),
   create: (input: TermInput) =>
     apiFetch<Term>('/terms', { method: 'POST', body: JSON.stringify(input) }),
   update: (id: number, input: TermInput) =>
