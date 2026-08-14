@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from ..config import settings
 from ..db import get_db
+from ..services import vector_store
 
 router = APIRouter(prefix="/api", tags=["materials"])
 
@@ -120,10 +121,13 @@ async def list_materials(course_id: int) -> list[MaterialOut]:
 
 @router.delete("/materials/{material_id}", status_code=204)
 async def delete_material(material_id: int) -> None:
-    """Materyali siler (dosyayı da kaldırır)."""
+    """Materyali siler (dosyayı ve vektör chunk'larını da kaldırır)."""
     db = await get_db()
     try:
-        cursor = await db.execute("SELECT filepath FROM materials WHERE id = ?", (material_id,))
+        cursor = await db.execute(
+            "SELECT course_id, filepath, vector_ns FROM materials WHERE id = ?",
+            (material_id,),
+        )
         row = await cursor.fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="Materyal bulunamadı")
@@ -131,5 +135,10 @@ async def delete_material(material_id: int) -> None:
         await db.commit()
     finally:
         await db.close()
+
+    if row["vector_ns"]:
+        # indekslenmişse LanceDB'den chunk'ları temizle (kabul kriteri: dup yok)
+        with suppress(Exception):
+            vector_store.delete_material_chunks(row["course_id"], material_id)
     with suppress(OSError):
         Path(row["filepath"]).unlink(missing_ok=True)

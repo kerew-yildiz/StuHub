@@ -1,22 +1,31 @@
-"""StuHub DS — FastAPI giriş noktası (Faz 0.3)."""
+"""StuHub DS — FastAPI giriş noktası (Faz 0.3 + Faz 2.2 worker)."""
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
 from .db import init_db
 from .routers import api_router
+from .workers.indexer import recover_stale_jobs, worker_loop
 
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.2.0"
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    """Uygulama açılışında veri dizini + şemayı hazırlar."""
+    """Açılışta veri dizini + şema hazırlar; arka plan indeksleyiciyi başlatır."""
     await init_db()
-    yield
+    await recover_stale_jobs()
+    stop_event = asyncio.Event()
+    worker = asyncio.create_task(worker_loop(stop_event))
+    try:
+        yield
+    finally:
+        stop_event.set()
+        worker.cancel()
 
 
 app = FastAPI(

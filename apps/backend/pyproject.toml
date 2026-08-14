@@ -9,6 +9,10 @@ dependencies = [
     "aiosqlite>=0.20",
     "pydantic-settings>=2.4",
     "python-multipart>=0.0.9",
+    "pymupdf>=1.28.2",
+    "python-pptx>=1.0.2",
+    "lancedb>=0.37.1",
+    "sentence-transformers>=5.7.0",
 ]
 
 [dependency-groups]

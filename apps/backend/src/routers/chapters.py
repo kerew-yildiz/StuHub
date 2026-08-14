@@ -77,6 +77,19 @@ async def create_chapter(course_id: int, item: ChapterIn) -> ChapterOut:
     return ChapterOut(**dict(_require(row)))
 
 
+@router.get("/chapters/{chapter_id}", response_model=ChapterOut)
+async def get_chapter(chapter_id: int) -> ChapterOut:
+    """Tek chapter detayı."""
+    db = await get_db()
+    try:
+        row = await _fetch(db, chapter_id)
+    finally:
+        await db.close()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Chapter bulunamadı")
+    return ChapterOut(**dict(_require(row)))
+
+
 @router.delete("/chapters/{chapter_id}", status_code=204)
 async def delete_chapter(chapter_id: int) -> None:
     """Chapter'ı siler."""

@@ -9,6 +9,7 @@ export interface Chapter {
 }
 
 export const chaptersApi = {
+  get: (id: number) => apiFetch<Chapter>(`/chapters/${id}`),
   listByCourse: (courseId: number) => apiFetch<Chapter[]>(`/courses/${courseId}/chapters`),
   create: (courseId: number, title: string) =>
     apiFetch<Chapter>(`/courses/${courseId}/chapters`, {

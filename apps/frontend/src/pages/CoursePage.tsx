@@ -3,13 +3,14 @@ import { Link, useParams } from 'react-router-dom'
 
 import { chaptersApi, type Chapter } from '../api/chapters'
 import { coursesApi, type Course } from '../api/courses'
+import { indexingApi, type IndexingJob } from '../api/indexing'
 import { materialsApi, type Material } from '../api/materials'
 import { ChapterForm } from '../components/ChapterForm'
 import { MaterialUploadForm } from '../components/MaterialUploadForm'
 
 type LoadState = 'loading' | 'ready' | 'error'
 
-/** Ders defteri (notebook) landing sayfası — chapter + materyaller (Faz 1.3). */
+/** Ders defteri (notebook) landing sayfası — chapter + materyaller (Faz 1.3/2.2). */
 export function CoursePage() {
   const { courseId } = useParams<{ courseId: string }>()
   const numericId = Number(courseId)
@@ -17,22 +18,35 @@ export function CoursePage() {
   const [course, setCourse] = useState<Course | null>(null)
   const [chapters, setChapters] = useState<Chapter[]>([])
   const [materials, setMaterials] = useState<Material[]>([])
+  const [jobs, setJobs] = useState<IndexingJob[]>([])
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState('')
   const [showChapterForm, setShowChapterForm] = useState(false)
+
+  const refreshJobs = useCallback(async () => {
+    if (!numericId) return
+    try {
+      const jobList = await indexingApi.listByCourse(numericId)
+      setJobs(jobList)
+    } catch {
+      // iş durumu alınamadıysa sessizce geç (materyal listesi etkilenmesin)
+    }
+  }, [numericId])
 
   const load = useCallback(async () => {
     if (!numericId) return
     setState('loading')
     try {
-      const [courseData, chapterList, materialList] = await Promise.all([
+      const [courseData, chapterList, materialList, jobList] = await Promise.all([
         coursesApi.get(numericId),
         chaptersApi.listByCourse(numericId),
         materialsApi.listByCourse(numericId),
+        indexingApi.listByCourse(numericId),
       ])
       setCourse(courseData)
       setChapters(chapterList)
       setMaterials(materialList)
+      setJobs(jobList)
       setState('ready')
     } catch {
       setState('error')
@@ -43,6 +57,14 @@ export function CoursePage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  // İşlenen iş varsa 2 saniyede bir durumu tazele
+  const hasActiveJobs = jobs.some((j) => j.status === 'pending' || j.status === 'processing')
+  useEffect(() => {
+    if (!hasActiveJobs) return
+    const id = setInterval(() => void refreshJobs(), 2000)
+    return () => clearInterval(id)
+  }, [hasActiveJobs, refreshJobs])
 
   const handleCreateChapter = async (title: string) => {
     await chaptersApi.create(numericId, title)
@@ -74,6 +96,18 @@ export function CoursePage() {
       setError('Materyal silinemedi. Lütfen tekrar deneyin.')
     }
   }
+
+  const handleIndex = async (materialId: number) => {
+    try {
+      await indexingApi.enqueue(materialId)
+      await refreshJobs()
+    } catch {
+      setError('İndeksleme başlatılamadı. Lütfen tekrar deneyin.')
+    }
+  }
+
+  const jobFor = (materialId: number): IndexingJob | undefined =>
+    [...jobs].reverse().find((j) => j.material_id === materialId)
 
   return (
     <section>
@@ -163,27 +197,71 @@ export function CoursePage() {
             {materials.length === 0 && (
               <p className="text-sm text-stuhub-text-secondary">Henüz materyal yok.</p>
             )}
-            {materials.map((material) => (
-              <div
-                key={material.id}
-                className="flex items-center justify-between rounded-sm bg-stuhub-bg px-4 py-2 text-sm"
-              >
-                <span>
-                  <span className="font-medium">{material.filepath.split(/[\\/]/).pop()}</span>
-                  <span className="ml-2 text-stuhub-text-secondary">
-                    {material.type === 'textbook' ? 'Kitap' : 'Sunum'}
-                  </span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleDeleteMaterial(material.id)}
-                  className="rounded-sm px-2 py-1 text-stuhub-error transition-colors duration-150 hover:bg-stuhub-surface-hover"
-                  aria-label="Materyali sil"
+            {materials.map((material) => {
+              const job = jobFor(material.id)
+              const active = job && (job.status === 'pending' || job.status === 'processing')
+              return (
+                <div
+                  key={material.id}
+                  className="flex items-center justify-between gap-4 rounded-sm bg-stuhub-bg px-4 py-2 text-sm"
                 >
-                  Sil
-                </button>
-              </div>
-            ))}
+                  <span className="min-w-0">
+                    <span className="font-medium">{material.filepath.split(/[\\/]/).pop()}</span>
+                    <span className="ml-2 text-stuhub-text-secondary">
+                      {material.type === 'textbook' ? 'Kitap' : 'Sunum'}
+                      {material.page_count ? ` · ${material.page_count} sayfa` : ''}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-3">
+                    {job?.status === 'done' && (
+                      <span className="text-stuhub-success">İndekslendi</span>
+                    )}
+                    {job?.status === 'failed' && (
+                      <span className="text-stuhub-error" title={job.error ?? undefined}>
+                        Hata
+                      </span>
+                    )}
+                    {active && (
+                      <span className="flex items-center gap-2">
+                        <span className="h-1.5 w-24 overflow-hidden rounded-full bg-stuhub-border">
+                          <span
+                            className="block h-full bg-stuhub-accent transition-all duration-500"
+                            style={{ width: `${Math.round(job.progress)}%` }}
+                          />
+                        </span>
+                        <span className="text-stuhub-text-secondary">{Math.round(job.progress)}%</span>
+                      </span>
+                    )}
+                    {!job && (
+                      <button
+                        type="button"
+                        onClick={() => void handleIndex(material.id)}
+                        className="rounded-sm bg-stuhub-accent px-3 py-1 text-xs font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
+                      >
+                        İndeksle
+                      </button>
+                    )}
+                    {job?.status === 'failed' && (
+                      <button
+                        type="button"
+                        onClick={() => void handleIndex(material.id)}
+                        className="rounded-sm px-3 py-1 text-xs font-medium text-stuhub-error transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                      >
+                        Tekrar dene
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteMaterial(material.id)}
+                      className="rounded-sm px-2 py-1 text-stuhub-error transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                      aria-label="Materyali sil"
+                    >
+                      Sil
+                    </button>
+                  </span>
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>

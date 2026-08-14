@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
     model: str = Field(default="deepseek-chat", alias="STUHUB_MODEL")
+    embed_model: str = Field(default="", alias="STUHUB_EMBED_MODEL")
 
     @property
     def db_path(self) -> Path:
