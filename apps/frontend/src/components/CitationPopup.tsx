@@ -5,6 +5,10 @@ import { resolveCitation, type Citation, type ResolvedChunk } from '../api/notes
 interface CitationPopupProps {
   citation: Citation
   onClose: () => void
+  /** Önceden bilinen kaynak metni (ör. chat atıfı); verilirse resolveCitation atlanır. */
+  preloadedText?: string
+  /** Kaynak etiketi (ör. "Kitap s.41"); verilirse alt satırda gösterilir. */
+  sourceLabel?: string
 }
 
 const SOURCE_LABELS: Record<Citation['source_type'], string> = {
@@ -14,11 +18,12 @@ const SOURCE_LABELS: Record<Citation['source_type'], string> = {
 }
 
 /** Atıf pop-up'ı — kaynak parçayı gösterir (Yetenek 06 §3; metin fallback). */
-export function CitationPopup({ citation, onClose }: CitationPopupProps) {
+export function CitationPopup({ citation, onClose, preloadedText, sourceLabel }: CitationPopupProps) {
   const [chunk, setChunk] = useState<ResolvedChunk | null>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
+    if (preloadedText) return undefined
     if (citation.chunk_id) {
       let cancelled = false
       void resolveCitation(citation.chunk_id).then((resolved) => {
@@ -29,7 +34,7 @@ export function CitationPopup({ citation, onClose }: CitationPopupProps) {
       }
     }
     return undefined
-  }, [citation.chunk_id])
+  }, [citation.chunk_id, preloadedText])
 
   useEffect(() => {
     closeRef.current?.focus()
@@ -65,9 +70,8 @@ export function CitationPopup({ citation, onClose }: CitationPopupProps) {
               Kaynak {location ? `· ${location}` : ''}
             </h2>
             <p className="mt-1 text-sm text-stuhub-text-secondary">
-              {SOURCE_LABELS[citation.source_type]}
-              {citation.page != null ? ` · sayfa ${citation.page}` : ''}
-              {citation.slide != null ? ` · slide ${citation.slide}` : ''}
+              {sourceLabel ??
+                `${SOURCE_LABELS[citation.source_type]}${citation.page != null ? ` · sayfa ${citation.page}` : ''}${citation.slide != null ? ` · slide ${citation.slide}` : ''}`}
             </p>
           </div>
           <button
@@ -92,7 +96,9 @@ export function CitationPopup({ citation, onClose }: CitationPopupProps) {
           )}
           <div>
             <p className="font-medium text-stuhub-text-secondary">Kaynak parça</p>
-            {chunk ? (
+            {preloadedText ? (
+              <p className="mt-1">{preloadedText}</p>
+            ) : chunk ? (
               <p className="mt-1">{chunk.text}</p>
             ) : citation.quote ? (
               <p className="mt-1">{citation.quote}</p>

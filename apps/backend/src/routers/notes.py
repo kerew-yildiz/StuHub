@@ -87,18 +87,35 @@ async def resolve_citation(chunk_id: str) -> dict:
 
 
 @router.get("/notes/{note_id}/export")
-async def export_note(note_id: int) -> Response:
-    """Notu PDF olarak indirir (Türkçe karakter destekli)."""
+async def export_note(note_id: int, format: str = "pdf") -> Response:
+    """Notu PDF (varsayılan) ya da Markdown olarak indirir (Türkçe karakter destekli)."""
+    if format not in ("pdf", "md"):
+        raise HTTPException(status_code=422, detail="format 'pdf' veya 'md' olmalı")
     db = await get_db()
     try:
         cursor = await db.execute(
-            "SELECT content_md FROM notes WHERE id = ?", (note_id,)
+            "SELECT n.content_md, c.title FROM notes n "
+            "JOIN chapters c ON c.id = n.chapter_id WHERE n.id = ?",
+            (note_id,),
         )
         row = await cursor.fetchone()
     finally:
         await db.close()
     if row is None:
         raise HTTPException(status_code=404, detail="Not bulunamadı")
+
+    if format == "md":
+        from ..services.export_service import note_markdown_to_md
+
+        content = note_markdown_to_md(row["title"], row["content_md"])
+        return Response(
+            content.encode("utf-8"),
+            media_type="text/markdown; charset=utf-8",
+            headers={
+                "Content-Disposition": f'attachment; filename="stuhub-not-{note_id}.md"'
+            },
+        )
+
     pdf_bytes = note_markdown_to_pdf(row["content_md"])
     return Response(
         pdf_bytes,

@@ -7,6 +7,7 @@ import { indexingApi, type IndexingJob } from '../api/indexing'
 import { materialsApi, type Material } from '../api/materials'
 import { listOverallQuizzes, removeOverallQuiz, type OverallQuiz } from '../api/overall'
 import { ChapterForm } from '../components/ChapterForm'
+import { ChatPanel } from '../components/ChatPanel'
 import { FilePreviewModal } from '../components/FilePreviewModal'
 import { MaterialUploadForm } from '../components/MaterialUploadForm'
 import { OverallQuizPlayer } from '../components/OverallQuizPlayer'
@@ -396,6 +397,17 @@ export function CoursePage() {
               </div>
             </details>
           ))}
+        </div>
+      </div>
+
+      {/* Materyale Sor */}
+      <div className="mt-12">
+        <h2 className="text-xl font-semibold">Materyale Sor</h2>
+        <p className="mt-1 text-sm text-stuhub-text-secondary">
+          Ders materyaline soru sorun; yanıtlar kaynak atıflı gelir.
+        </p>
+        <div className="mt-4">
+          <ChatPanel courseId={numericId} />
         </div>
       </div>
     </section>

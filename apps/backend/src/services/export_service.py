@@ -143,3 +143,22 @@ def note_markdown_to_pdf(content_md: str) -> bytes:
     pdf_bytes = doc.tobytes()
     doc.close()
     return pdf_bytes
+
+
+def note_markdown_to_md(title: str, content_md: str) -> str:
+    """Notu Markdown olarak döner: başlık + content_md birebir (Yetenek 12 Format 1)."""
+    return f"# {title}\n\n{content_md}\n"
+
+
+def flashcards_to_md(cards: list[dict]) -> str:
+    """Kartları basit MD listelemesine çevirir (Yetenek 12 Format 1)."""
+    lines: list[str] = []
+    current_topic: str | None = None
+    for card in cards:
+        topic = str(card.get("topic", "") or "Genel")
+        if topic != current_topic:
+            lines.append(f"\n## {topic}\n")
+            current_topic = topic
+        lines.append(f"- **Soru:** {card.get('front', '')}")
+        lines.append(f"- **Cevap:** {card.get('back', '')}")
+    return "\n".join(lines).strip() + "\n"
