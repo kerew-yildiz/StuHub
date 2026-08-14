@@ -234,7 +234,7 @@ LanceDB chunk satırı: `{ chunk_id, course_id, material_id, page, slide, text, 
 
 > **Rol ayrımı:** Üretim ajanlarının (04–08) md dosyaları hem DSH üzerindeki geliştirme rolünü hem de uygulamanın çalışma anı (runtime) pipeline sözleşmesini tanımlar. DSH ajanları ürünü **geliştirir**; ürün çalışırken aynı sözleşmeyi `apps/backend/src/agents/` altındaki FastAPI servisleri yürütür (Bölüm 14). İki katman birbirinin yerine geçmez.
 
-### 4.1 Ajan Kataloğu (20 ajan)
+### 4.1 Ajan Kataloğu (21 ajan)
 
 | # | Ajan | Dosya | Rol | Tetik | Effort |
 |---|------|-------|-----|-------|--------|
@@ -258,6 +258,7 @@ LanceDB chunk satırı: `{ chunk_id, course_id, material_id, page, slide, text, 
 | 17 | **Medya Alım Ajan** | `AJANLAR/17-medya-alim-ajani.md` | leaf | Medya yükleme (YouTube/ses/doküman), V2.6 işleri | Flash (yükseltilebilir) |
 | 18 | **İhracat Ajan** | `AJANLAR/18-ihracat-ajani.md` | leaf | Export/import aksiyonları, V2.3 işleri | Flash (yükseltilebilir) |
 | 19 | **Çalışma Rehberi Ajan** | `AJANLAR/19-calisma-rehberi-ajani.md` | leaf | "Rehber" sekmesi, V2.7 işleri | Flash (yükseltilebilir) |
+| 20 | **Web Araştırma Ajan** | `AJANLAR/20-web-arastirma-ajani.md` | leaf | Not üretiminde retrieval boş kaldığında (web yedeği) | Flash (yükseltilebilir) |
 
 ### 4.2 Effort Kuralı (Kullanıcı Kararı)
 
@@ -382,6 +383,7 @@ Session Sonu (state persist)
 | Medya Alım | `YETENEKLER/11-medya-alimi.md`, `01-pdf-pptx-isleme.md` |
 | İhracat | `YETENEKLER/12-ihracat-formatlari.md` |
 | Çalışma Rehberi | `YETENEKLER/13-calisma-rehberi.md`, `06-atif-sistemi.md` |
+| Web Araştırma | `YETENEKLER/16-web-arastirma-yedegi.md`, `02-rag-not-uretimi.md`, `06-atif-sistemi.md` |
 | Değerlendirme | Tüm üretim yetenekleri (01–15) + test altyapısı; eval kümesi oluşturma |
 | Backend Geliştirici | `PROJE_YOL_HARITASI.md` Bölüm 3, 8, 11, 17; `YETENEKLER/01–15` (runtime sözleşmeler); pwsh (uv, pytest) |
 | Frontend Geliştirici | `YETENEKLER/07-stil-rehberi.md`; `AJANLAR/02-stil-ajani.md` denetimi; pnpm/vitest/playwright |
@@ -679,6 +681,7 @@ StuHub DS/
 | V2.7 | Rehber + Çok Dilli | ✅ TAMAM | (bu oturum) | `guide_service` (özet + DAG kavram haritası) + `/guide(s)` uçları + NotebookPage/CoursePage "Rehber" sekmeleri (GuidePanel + bağımlılıksız SVG harita); `not_dili` (tr/en/auto) tüm üretim promptlarında |
 | V2.8 | PWA + LAN | ✅ TAMAM | (bu oturum) | vite-plugin-pwa (generateSW, manifest, icon.svg) + `dist/sw.js`/`manifest.webmanifest` doğrulandı; FastAPI `/sw.js` + `/manifest.webmanifest` rotaları; `--host 0.0.0.0` dokümantasyonu |
 | V2.9 | Teslim v2.0.0 | ✅ TAMAM | (bu oturum) | Kalite kapıları tam turu (183 pytest + 23 vitest + tüm lint/tip/güvenlik 0), README/KULLANIM v2, APP_VERSION 2.0.0, gerçek veri kopyasıyla boot+migration+endpoint smoke E2E (health 2.0.0, arşiv 14.8KB üretildi), sürüm geçmişi |
+| FB1 | Geri Bildirim Turu v2 (5 madde) | 🚧 SÜRÜYOR | (bu oturum) | 1) Not üretimi üç kademeli kaynak zinciri (kitap → web arama yedeği → slayt temelli tam not; "eksik not" kaldırıldı) + Web Araştırma Ajanı (20) + Yetenek 16; 2) flashcard atıf yumuşatması (atıfsız konu da kart üretir) — kart/rehber zinciri düzeltmesi; 3) progress göstergeleri açılır-kapanır slider; 4) chapter'a çoklu sunum (slide_no sürekliliği + UI); 5) dönem/ders/chapter düzenleme (chapter PUT + düzenleme UI'ları) |
 
 ---
 
@@ -719,6 +722,7 @@ Paylaşımlı içerik kütüphanesi/sosyal katman, leaderboard/çok oyunculu oyu
 
 - **Şema:** Bölüm 3'ün v2 blokları; `init_db` → `schema.sql` → migration runner (`schema_migrations`). Yeni migration: `sql/migrations/NNN_aciklama.sql` (idempotent zorunlu).
 - **Yeni LLM çağrıları:** `generation_logs` kind'ları: `flashcards`, `chat`, `guide`, `essay_grade` (mevcut: note/quiz/overall/essay_grade). Maliyet bekçiliği + Türkçe hatalar tümünde geçerli.
+- **Web arama yedeği (Yetenek 16):** Kitapta kaynak yoksa `"{ders adı} {konu}"` sorgusuyla DuckDuckGo araması (anahtarsız, ücretsiz; materyal içeriği asla gönderilmez); kapalıysa/boşsa slayt temelli tam not üretilir — "eksik not" davranışı yasaktır. Ayarlar: `web_search_enabled` (varsayılan açık).
 - **Yerel araçlar:** yt-dlp (Unlicense), faster-whisper (MIT), rapidocr-onnxruntime (Apache-2.0), python-docx (MIT), vite-plugin-pwa (MIT) — Ücretsizlik Ajanı kaydı `YETENEKLER/08`'dedir. Tüm çıkarım yerel; model indirmeleri (whisper/OCR) ilk kullanımda, ayarlarla kapatılabilir.
 - **Gizlilik değişmez:** hesap/telemetri yok; yeni medya verileri de `data/` içinde; `answer_key` ön yüze asla çıkmaz.
 - **Ajan/yetenek eşlemesi:** Bölüm 4.1 (20 ajan) + Bölüm 5. Yeni runtime sözleşmeleri: Yetenekler 09–15.
