@@ -18,9 +18,18 @@ vi.mock('./api/terms', () => ({
   },
 }))
 
+vi.mock('./api/streaks', () => ({
+  getStreakSummary: vi.fn(async () => ({
+    streak_days: 3,
+    today_counts: { note: 0, quiz: 2, flashcard: 5, chat: 1 },
+    daily_goal: 3,
+    progress_percent: 66,
+  })),
+}))
+
 vi.mock('./api/settings', () => ({
   settingsApi: {
-    list: vi.fn(async () => ({ model: 'deepseek-chat' })),
+    list: vi.fn(async () => ({ model: 'deepseek-chat', onboarding_done: '1' })),
     set: vi.fn(async () => ({ ok: true })),
   },
 }))

@@ -13,6 +13,8 @@ from pydantic import BaseModel
 from ..config import settings
 from ..db import get_db
 from ..services import vector_store
+from ..services.indexer import MEDIA_TYPES, create_indexing_job
+from ..workers.indexer import process_pending_jobs
 
 router = APIRouter(prefix="/api", tags=["materials"])
 
@@ -36,9 +38,16 @@ def _display_name(filepath: str) -> str:
         return name[33:]
     return name
 
-ALLOWED_TYPES = {"textbook", "slides"}
-# textbook: PDF; slides: PDF ya da PPTX (Faz 2.1'de çıkarılır)
-ALLOWED_EXTENSIONS = {"textbook": {".pdf"}, "slides": {".pdf", ".pptx", ".ppt"}}
+ALLOWED_TYPES = {"textbook", "slides", "audio", "docx", "epub", "image"}
+# textbook: PDF; slides: PDF/PPTX; v2 medya türleri kendi uzantı kümeleriyle (Yetenek 11)
+ALLOWED_EXTENSIONS = {
+    "textbook": {".pdf"},
+    "slides": {".pdf", ".pptx", ".ppt"},
+    "audio": {".mp3", ".m4a", ".wav", ".ogg", ".webm", ".mp4"},
+    "docx": {".docx"},
+    "epub": {".epub"},
+    "image": {".png", ".jpg", ".jpeg", ".webp", ".bmp"},
+}
 
 
 class MaterialOut(BaseModel):
@@ -132,6 +141,14 @@ async def upload_material(
         await db.close()
     if row is None:
         raise RuntimeError("beklenen materyal satırı bulunamadı")
+
+    # v2: medya türleri yükleme anında otomatik işe alınır (Yetenek 11)
+    # ses → önce transkripsiyon; docx/epub/görsel → doğrudan indeksleme
+    if type in MEDIA_TYPES:
+        kind = "transcribe" if type == "audio" else "index"
+        await create_indexing_job(course_id, row_id, kind=kind)
+        await process_pending_jobs()
+
     return _to_out(dict(row))
 
 

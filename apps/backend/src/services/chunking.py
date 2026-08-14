@@ -84,3 +84,38 @@ def chunk_slides(course_id: int, material_id: int, slides: list[dict]) -> list[d
                 }
             )
     return chunks
+
+
+def _format_timestamp(seconds: float) -> str:
+    """Saniyeyi "mm:ss" biçimine çevirir (transkript öneki)."""
+    minutes, secs = divmod(int(seconds), 60)
+    return f"{minutes:02d}:{secs:02d}"
+
+
+def chunk_segments(course_id: int, material_id: int, segments: list[dict]) -> list[dict]:
+    """Medya/transkript segmentlerini chunk'a çevirir (v2 — Yetenek 11).
+
+    `page`/`slide` boş bırakılır (kaynak etiketi "Kaynak N"); zaman damgalı
+    metinler "[mm:ss] " önekiyle saklanır. chunk_id: chk_<mat>_t<segment>_<seq>.
+    """
+    chunks: list[dict] = []
+    for seg in segments:
+        index = seg["segment"]
+        text = str(seg.get("text", "")).strip()
+        if not text:
+            continue
+        start = seg.get("start")
+        prefix = f"[{_format_timestamp(float(start))}] " if start is not None else ""
+        parts = _split_long_text(text, TARGET_CHARS, OVERLAP_CHARS)
+        for seq, part in enumerate(parts, start=1):
+            chunks.append(
+                {
+                    "chunk_id": f"chk_{material_id}_t{index}_{seq}",
+                    "course_id": course_id,
+                    "material_id": material_id,
+                    "page": None,
+                    "slide": None,
+                    "text": f"{prefix}{part}",
+                }
+            )
+    return chunks

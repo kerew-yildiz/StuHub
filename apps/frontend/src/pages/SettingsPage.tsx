@@ -17,6 +17,7 @@ export function SettingsPage() {
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [error, setError] = useState('')
   const [loaded, setLoaded] = useState(false)
+  const [dailyGoal, setDailyGoal] = useState('3')
 
   useEffect(() => {
     let cancelled = false
@@ -25,6 +26,7 @@ export function SettingsPage() {
       .then((settings) => {
         if (cancelled) return
         if (settings.model) setModel(settings.model)
+        if (settings.daily_goal) setDailyGoal(settings.daily_goal)
         if (settings.deepseek_api_key) {
           setCurrentKeyHint(`${settings.deepseek_api_key} (güncel anahtar)`)
         }
@@ -47,6 +49,8 @@ export function SettingsPage() {
         await settingsApi.set('deepseek_api_key', apiKey.trim())
       }
       await settingsApi.set('model', model)
+      const goal = Number.parseInt(dailyGoal, 10)
+      await settingsApi.set('daily_goal', String(Number.isNaN(goal) || goal <= 0 ? 3 : goal))
       setSaveState('saved')
       setApiKey('')
       setCurrentKeyHint('Yeni anahtar kaydedildi.')
@@ -107,6 +111,26 @@ export function SettingsPage() {
                 </option>
               ))}
             </select>
+          </div>
+        </div>
+
+        <div className="rounded-md border border-stuhub-border bg-stuhub-surface p-6">
+          <h2 className="text-lg font-semibold">Çalışma alışkanlıkları</h2>
+          <p className="mt-1 text-sm text-stuhub-text-secondary">
+            Günlük hedef, streak halkasının doluluk ölçüsüdür. Varsayılan 3 etkinlik.
+          </p>
+          <div className="mt-5">
+            <label htmlFor="daily-goal" className="mb-1 block text-sm font-medium">
+              Günlük hedef (etkinlik sayısı)
+            </label>
+            <input
+              id="daily-goal"
+              type="number"
+              min={1}
+              value={dailyGoal}
+              onChange={(e) => setDailyGoal(e.target.value)}
+              className="w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-stuhub-accent"
+            />
           </div>
         </div>
 

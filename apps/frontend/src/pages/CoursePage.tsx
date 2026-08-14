@@ -3,18 +3,30 @@ import { Link, useParams } from 'react-router-dom'
 
 import { chaptersApi, type Chapter } from '../api/chapters'
 import { coursesApi, type Course } from '../api/courses'
+import { fetchDueCards, type DueCard } from '../api/flashcards'
 import { indexingApi, type IndexingJob } from '../api/indexing'
 import { materialsApi, type Material } from '../api/materials'
 import { listOverallQuizzes, removeOverallQuiz, type OverallQuiz } from '../api/overall'
 import { ChapterForm } from '../components/ChapterForm'
 import { ChatPanel } from '../components/ChatPanel'
 import { FilePreviewModal } from '../components/FilePreviewModal'
+import { FlashcardPlayer } from '../components/FlashcardPlayer'
 import { MaterialUploadForm } from '../components/MaterialUploadForm'
 import { OverallQuizPlayer } from '../components/OverallQuizPlayer'
+import { TabBar } from '../components/TabBar'
 import { useAnimatedProgress } from '../lib/useAnimatedProgress'
 import { useGenerationStore } from '../stores/generationStore'
 
 type LoadState = 'loading' | 'ready' | 'error'
+
+const COURSE_TABS = [
+  { id: 'overview', label: 'Genel Bakış' },
+  { id: 'quiz', label: 'Genel Quiz' },
+  { id: 'ask', label: 'Materyale Sor' },
+  { id: 'cards', label: "Bugünün Kartları" },
+] as const
+
+type CourseTab = (typeof COURSE_TABS)[number]['id']
 
 /** İndeksleme ilerleme çubuğu — hedefe 1'er birim animasyonla yaklaşır. */
 function JobProgressBar({ target }: { target: number }) {
@@ -45,9 +57,13 @@ export function CoursePage() {
   const [error, setError] = useState('')
   const [showChapterForm, setShowChapterForm] = useState(false)
   const [previewMaterial, setPreviewMaterial] = useState<Material | null>(null)
+  const [tab, setTab] = useState<CourseTab>('overview')
 
   // genel quiz durumu — küresel üretim deposu (madde 2)
   const [overallQuizzes, setOverallQuizzes] = useState<OverallQuiz[]>([])
+  // bugünün due kartları + oynatıcı (Faz V2.2)
+  const [dueCards, setDueCards] = useState<DueCard[]>([])
+  const [playingDue, setPlayingDue] = useState<DueCard[] | null>(null)
   const overallJob = useGenerationStore((s) =>
     s.jobs.find((j) => j.kind === 'overall' && j.targetId === numericId),
   )
@@ -68,18 +84,21 @@ export function CoursePage() {
     if (!numericId) return
     setState('loading')
     try {
-      const [courseData, chapterList, materialList, jobList, quizList] = await Promise.all([
-        coursesApi.get(numericId),
-        chaptersApi.listByCourse(numericId),
-        materialsApi.listByCourse(numericId),
-        indexingApi.listByCourse(numericId),
-        listOverallQuizzes(numericId),
-      ])
+      const [courseData, chapterList, materialList, jobList, quizList, dueCardList] =
+        await Promise.all([
+          coursesApi.get(numericId),
+          chaptersApi.listByCourse(numericId),
+          materialsApi.listByCourse(numericId),
+          indexingApi.listByCourse(numericId),
+          listOverallQuizzes(numericId),
+          fetchDueCards(numericId, 20),
+        ])
       setCourse(courseData)
       setChapters(chapterList)
       setMaterials(materialList)
       setJobs(jobList)
       setOverallQuizzes(quizList)
+      setDueCards(dueCardList)
       setState('ready')
     } catch {
       setState('error')
@@ -104,6 +123,16 @@ export function CoursePage() {
     } catch {
       setError('Genel quiz silinemedi. Lütfen tekrar deneyin.')
     }
+  }
+
+  const refreshDueCards = async () => {
+    if (!numericId) return
+    setDueCards(await fetchDueCards(numericId, 20))
+  }
+
+  const closeDuePlayer = () => {
+    setPlayingDue(null)
+    void refreshDueCards()
   }
 
   useEffect(() => {
@@ -186,8 +215,19 @@ export function CoursePage() {
         <p className="mt-8 text-sm text-stuhub-text-secondary">Yükleniyor…</p>
       )}
 
-      {/* Chapter'lar */}
-      <div className="mt-10">
+      <div className="mt-8">
+        <TabBar
+          tabs={COURSE_TABS}
+          activeId={tab}
+          onSelect={(id) => setTab(id as CourseTab)}
+          ariaLabel="Ders modu"
+        />
+      </div>
+
+      {tab === 'overview' && (
+        <>
+          {/* Chapter'lar */}
+          <div className="mt-10">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold">Chapter'lar</h2>
           {!showChapterForm && (
@@ -316,6 +356,8 @@ export function CoursePage() {
           </div>
         </div>
       </div>
+        </>
+      )}
 
       {previewMaterial && (
         <FilePreviewModal
@@ -325,8 +367,10 @@ export function CoursePage() {
         />
       )}
 
-      {/* Genel quiz */}
-      <div className="mt-12">
+      {tab === 'quiz' && (
+        <>
+          {/* Genel quiz */}
+          <div className="mt-12">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-semibold">Genel Quiz</h2>
@@ -399,9 +443,46 @@ export function CoursePage() {
           ))}
         </div>
       </div>
+        </>
+      )}
 
-      {/* Materyale Sor */}
-      <div className="mt-12">
+      {tab === 'cards' && (
+        <>
+          {/* Bugünün kartları — due tekrar kuyruğu (Faz V2.2) */}
+          <div className="mt-12">
+        <h2 className="text-xl font-semibold">Bugünün Kartları</h2>
+        {playingDue ? (
+          <div className="mt-4">
+            <FlashcardPlayer
+              dueCards={playingDue}
+              onFinished={closeDuePlayer}
+              onExit={closeDuePlayer}
+            />
+          </div>
+        ) : dueCards.length > 0 ? (
+          <div className="mt-4 flex items-center justify-between rounded-md border border-stuhub-border bg-stuhub-surface px-5 py-4">
+            <p className="text-sm text-stuhub-text-secondary">
+              {dueCards.length} kart tekrar bekliyor
+            </p>
+            <button
+              type="button"
+              onClick={() => setPlayingDue(dueCards)}
+              className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
+            >
+              Çalış
+            </button>
+          </div>
+        ) : (
+          <p className="mt-1 text-sm text-stuhub-text-secondary">Tekrar bekleyen kart yok.</p>
+        )}
+      </div>
+        </>
+      )}
+
+      {tab === 'ask' && (
+        <>
+          {/* Materyale Sor */}
+          <div className="mt-12">
         <h2 className="text-xl font-semibold">Materyale Sor</h2>
         <p className="mt-1 text-sm text-stuhub-text-secondary">
           Ders materyaline soru sorun; yanıtlar kaynak atıflı gelir.
@@ -410,6 +491,8 @@ export function CoursePage() {
           <ChatPanel courseId={numericId} />
         </div>
       </div>
+        </>
+      )}
     </section>
   )
 }

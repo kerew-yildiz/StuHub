@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useState } from 'react'
 
+import { settingsApi } from '../api/settings'
 import { termsApi, type Term, type TermInput } from '../api/terms'
+import { OnboardingWizard } from '../components/OnboardingWizard'
+import { StreakRing } from '../components/StreakRing'
 import { TermCard } from '../components/TermCard'
 import { TermForm } from '../components/TermForm'
 
 type LoadState = 'loading' | 'ready' | 'error'
 
-/** Dönemler ana sayfası (Faz 1.1). */
+/** Dönemler ana sayfası (Faz 1.1) + streak halkası + 3 adımlı onboarding (Faz V2.4). */
 export function TermsPage() {
   const [terms, setTerms] = useState<Term[]>([])
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null)
 
   const load = useCallback(async () => {
     setState('loading')
@@ -27,6 +31,22 @@ export function TermsPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  // Onboarding bayrağını oku — dönem listesi boşken sihirbazı açıp açmamaya karar verir.
+  useEffect(() => {
+    let cancelled = false
+    settingsApi
+      .list()
+      .then((settings) => {
+        if (!cancelled) setOnboardingDone(settings.onboarding_done === '1')
+      })
+      .catch(() => {
+        if (!cancelled) setOnboardingDone(true) // bayrak okunamazsa sihirbazı zorla açma
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const handleCreate = async (input: TermInput) => {
     await termsApi.create(input)
@@ -48,9 +68,18 @@ export function TermsPage() {
     }
   }
 
+  const handleOnboardingComplete = () => {
+    setOnboardingDone(true)
+    void load()
+  }
+
+  const showOnboarding = state === 'ready' && terms.length === 0 && onboardingDone === false
+
   return (
     <section>
-      <div className="flex items-center justify-between">
+      <StreakRing />
+
+      <div className="mt-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-semibold">Dönemler</h1>
           <p className="mt-2 text-stuhub-text-secondary">
@@ -80,11 +109,17 @@ export function TermsPage() {
         </div>
       )}
 
+      {showOnboarding && (
+        <div className="mt-8">
+          <OnboardingWizard onComplete={handleOnboardingComplete} />
+        </div>
+      )}
+
       <div className="mt-8 space-y-4">
         {state === 'loading' && (
           <p className="text-sm text-stuhub-text-secondary">Dönemler yükleniyor…</p>
         )}
-        {state === 'ready' && terms.length === 0 && (
+        {state === 'ready' && terms.length === 0 && !showOnboarding && (
           <div className="rounded-md border border-dashed border-stuhub-border bg-stuhub-surface p-12 text-center">
             <p className="font-medium">Henüz dönem yok</p>
             <p className="mt-1 text-sm text-stuhub-text-secondary">

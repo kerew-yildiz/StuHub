@@ -1,10 +1,11 @@
 import { create } from 'zustand'
 
+import { streamFlashcardGeneration, type FlashcardSet } from '../api/flashcards'
 import { streamNoteGeneration, type SavedNote } from '../api/notes'
 import { streamOverallQuizGeneration, type OverallQuiz } from '../api/overall'
 import { streamQuizGeneration, type Quiz } from '../api/quizzes'
 
-export type GenerationKind = 'note' | 'quiz' | 'overall'
+export type GenerationKind = 'note' | 'quiz' | 'overall' | 'flashcards'
 
 export interface GenerationJob {
   kind: GenerationKind
@@ -22,6 +23,7 @@ interface GenerationState {
   generateNote: (chapterId: number, chapterTitle: string) => Promise<SavedNote | null>
   generateQuiz: (chapterId: number, chapterTitle: string) => Promise<Quiz | null>
   generateOverallQuiz: (courseId: number, courseName: string) => Promise<OverallQuiz | null>
+  generateFlashcards: (chapterId: number, chapterTitle: string) => Promise<FlashcardSet | null>
   clearJob: (kind: GenerationKind, targetId: number) => void
 }
 
@@ -113,6 +115,22 @@ export const useGenerationStore = create<GenerationState>((set, get) => {
           finishJob('overall', courseId, 'done')
         },
         onError: (message) => finishJob('overall', courseId, 'error', message),
+      })
+      return result
+    },
+
+    generateFlashcards: async (chapterId, chapterTitle) => {
+      const job = startJob('flashcards', chapterId, `Kartlar: ${chapterTitle}`)
+      if (!job) return null
+      let result: FlashcardSet | null = null
+      await streamFlashcardGeneration(chapterId, {
+        onStatus: (percent, message) => update('flashcards', chapterId, { percent, message }),
+        onDone: (set) => {
+          result = set
+          update('flashcards', chapterId, { percent: 100, message: 'Kartlar hazır.' })
+          finishJob('flashcards', chapterId, 'done')
+        },
+        onError: (message) => finishJob('flashcards', chapterId, 'error', message),
       })
       return result
     },

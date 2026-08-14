@@ -1,26 +1,36 @@
-"""İndeksleme orkestrasyonu — extract → chunk → embed → LanceDB (Faz 2.2 + v2 extractor registry).
+"""İndeksleme orkestrasyonu — extract → chunk → embed → LanceDB (Faz 2.2 + v2).
 
-v2 (Niş Analizi Entegrasyonu): materyal çıkarımı bir registry üzerinden dağıtılır.
-Yeni medya türleri (youtube, audio, docx, epub, image, text) Faz V2.6'da
-`register_extractor` ile kaydolur (sözleşme: YETENEKLER/11-medya-alimi.md).
+v2 (Niş Analizi Entegrasyonu): medya türleri (youtube/audio/docx/epub/image/text)
+`media_extractors` paketi üzerinden çıkarılır (Yetenek 11). `kind='transcribe'`
+işleri ses/YouTube için önce transkript üretir, ardından `kind='index'` işini
+zincirler; `kind='index'` transkripti dosyadan okur (yeniden çevrim yok).
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from collections.abc import Callable
 from pathlib import Path
 
+from ..config import settings
 from ..db import get_db
-from . import chunking, embed_service, pdf_service, slides_service, vector_store
+from . import chunking, embed_service, media_extractors, pdf_service, slides_service, vector_store
 
 logger = logging.getLogger(__name__)
 
 EMBED_BATCH_SIZE = 32
 
-# Extractor imzası: (dosya yolu) -> (parça listesi, 'pages' | 'slides' | 'segments')
+# Extractor imzası: (kaynak) -> (parça listesi, 'pages' | 'slides' | 'segments')
 ExtractorFn = Callable[[str], tuple[list[dict], str]]
+
+MEDIA_TYPES = ("youtube", "audio", "docx", "epub", "image", "text")
+
+
+def transcript_path(material_id: int) -> Path:
+    """Transkript JSON yolu: data/transcripts/{material_id}.json (Yetenek 11)."""
+    return settings.data_dir / "transcripts" / f"{material_id}.json"
 
 
 def _extract_textbook(path: str) -> tuple[list[dict], str]:
@@ -47,14 +57,32 @@ def register_extractor(mtype: str, fn: ExtractorFn) -> None:
 
 
 def _extract_material(material: dict) -> tuple[list[dict], str]:
-    """Materyal türüne göre sayfa/slide/segment listesi çıkarır (to_thread ile çağrılır).
+    """Materyal türüne göre sayfa/slide/segment listesi çıkarır. (bloklayıcı — to_thread ile)
 
+    Medya türleri `media_extractors.extract_for` üzerinden dağıtılır; ses
+    materyali için önceki transkripsiyon dosyadan okunur (yeniden çevrim yok).
     Dönüş: (parça listesi, 'pages' | 'slides' | 'segments')
     """
-    extractor = EXTRACTORS.get(material["type"])
+    mtype = material["type"]
+    path = material["filepath"]
+    if mtype in MEDIA_TYPES:
+        if mtype == "audio":
+            transcript = transcript_path(material["id"])
+            if transcript.exists():
+                segments = json.loads(transcript.read_text(encoding="utf-8"))
+                return segments, "segments"
+            raise RuntimeError(
+                "Bu ses kaydının transkripsiyonu henüz hazır değil — "
+                "iş kuyruğundaki transkripsiyonun bitmesini bekleyin."
+            )
+        if mtype == "text":
+            content = Path(path).read_text(encoding="utf-8")
+            return media_extractors.extract_for("text", content), "segments"
+        return media_extractors.extract_for(mtype, path), "segments"
+    extractor = EXTRACTORS.get(mtype)
     if extractor is None:
-        raise RuntimeError(f"'{material['type']}' türü için çıkarıcı bulunamadı")
-    return extractor(material["filepath"])
+        raise RuntimeError(f"'{mtype}' türü için çıkarıcı bulunamadı")
+    return extractor(path)
 
 
 def _embed_batch(texts: list[str]) -> list[list[float]]:
@@ -63,14 +91,16 @@ def _embed_batch(texts: list[str]) -> list[list[float]]:
 
 
 async def run_indexing_job(job_id: int) -> None:
-    """Tek indeksleme işini çalıştırır; durum: pending → processing → done|failed.
+    """Tek indeksleme/transkripsiyon işini çalıştırır.
 
+    kind='transcribe' → transkript üret (ses/youtube) + otomatik 'index' işi zincirle.
+    kind='index' → extract → chunk → embed → LanceDB (v2: 'segments' chunk'lanır).
     Hata durumunda kullanıcıya Türkçe mesaj `indexing_jobs.error`'a yazılır.
     """
     db = await get_db()
     try:
         cursor = await db.execute(
-            "SELECT id, course_id, material_id, status FROM indexing_jobs WHERE id = ?",
+            "SELECT id, course_id, material_id, status, kind FROM indexing_jobs WHERE id = ?",
             (job_id,),
         )
         job = await cursor.fetchone()
@@ -97,10 +127,17 @@ async def run_indexing_job(job_id: int) -> None:
         material_dict = dict(material)
         course_id = material_dict["course_id"]
 
+        if job["kind"] == "transcribe":
+            await _run_transcribe_job(job_id, material_dict)
+            return
+
         extracted, kind = await asyncio.to_thread(_extract_material, material_dict)
 
         if kind == "pages":
             chunks = chunking.chunk_pdf_pages(course_id, material_id, extracted)
+            page_count = len(extracted)
+        elif kind == "segments":
+            chunks = chunking.chunk_segments(course_id, material_id, extracted)
             page_count = len(extracted)
         else:
             chunks = chunking.chunk_slides(course_id, material_id, extracted)
@@ -114,8 +151,7 @@ async def run_indexing_job(job_id: int) -> None:
 
         if not chunks:
             raise RuntimeError(
-                "Materyalden metin çıkarılamadı (dosya boş ya da tüm sayfalar "
-                "taranmış olabilir). OCR desteği Faz 2.2 sonrasında geliyor."
+                "Materyalden metin çıkarılamadı (dosya boş ya da taranmış olabilir)."
             )
 
         # embed — batch'ler arası ilerleme raporlanır
@@ -157,3 +193,62 @@ async def run_indexing_job(job_id: int) -> None:
         await db.commit()
     finally:
         await db.close()
+
+
+async def create_indexing_job(
+    course_id: int, material_id: int, *, kind: str = "index"
+) -> int:
+    """Yeni indeksleme/transkripsiyon işi oluşturur (worker tarafından işlenir)."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "INSERT INTO indexing_jobs (course_id, material_id, status, progress, kind) "
+            "VALUES (?, ?, 'pending', 0, ?)",
+            (course_id, material_id, kind),
+        )
+        await db.commit()
+        row_id = cursor.lastrowid
+        if row_id is None:
+            raise RuntimeError("iş kimliği alınamadı")
+    finally:
+        await db.close()
+    return row_id
+
+
+async def _run_transcribe_job(job_id: int, material: dict) -> None:
+    """kind='transcribe': çıkarım + transkript JSON kaydı + otomatik 'index' zinciri.
+
+    Çıktı: `data/transcripts/{material_id}.json` + `materials.extracted_text`;
+    ardından aynı materyal için kind='index' işi oluşturulur (Yetenek 11).
+    """
+    material_id = material["id"]
+    segments = await asyncio.to_thread(
+        media_extractors.extract_for, material["type"], material["filepath"]
+    )
+    if not segments:
+        raise RuntimeError("Transkripsiyon boş çıktı — kayıtta konuşma bulunamadı.")
+
+    text = media_extractors.transcript_to_text(segments)
+    transcript = transcript_path(material_id)
+    transcript.parent.mkdir(parents=True, exist_ok=True)
+    transcript.write_text(json.dumps(segments, ensure_ascii=False), encoding="utf-8")
+
+    db = await get_db()
+    try:
+        await db.execute(
+            "UPDATE materials SET extracted_text = ? WHERE id = ?", (text, material_id)
+        )
+        await db.execute(
+            "UPDATE indexing_jobs SET status='done', progress=100, error=NULL, "
+            "updated_at=CURRENT_TIMESTAMP WHERE id=?",
+            (job_id,),
+        )
+        await db.commit()
+    finally:
+        await db.close()
+    await create_indexing_job(material["course_id"], material_id, kind="index")
+    # Zincirli işi hemen işle (mevcut /index endpoint'i kalıbı; geç import döngüyü önler)
+    from ..workers.indexer import process_pending_jobs
+
+    await process_pending_jobs()
+    logger.info("transcription done: job=%s material=%s", job_id, material_id)

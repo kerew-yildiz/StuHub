@@ -2,19 +2,30 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { chaptersApi, type Chapter } from '../api/chapters'
+import { deleteFlashcardSet, listFlashcardSets, type DueCard, type FlashcardSet } from '../api/flashcards'
 import { materialsApi } from '../api/materials'
 import { exportNotePdf, getNote, type SavedNote } from '../api/notes'
 import { listQuizzes, removeQuiz, type Quiz } from '../api/quizzes'
 import { slidesApi, type Slide } from '../api/slides'
 import { FilePreviewModal } from '../components/FilePreviewModal'
+import { FlashcardPlayer } from '../components/FlashcardPlayer'
 import { GuideSlidesForm } from '../components/GuideSlidesForm'
 import { NoteViewer } from '../components/NoteViewer'
 import { QuizPlayer } from '../components/QuizPlayer'
 import { SlidePreview } from '../components/SlidePreview'
+import { TabBar } from '../components/TabBar'
 import { useAnimatedProgress } from '../lib/useAnimatedProgress'
 import { useGenerationStore } from '../stores/generationStore'
 
 type LoadState = 'loading' | 'ready' | 'error'
+
+const NOTEBOOK_TABS = [
+  { id: 'notes', label: 'Notlar' },
+  { id: 'cards', label: 'Kartlar' },
+  { id: 'quiz', label: 'Quiz' },
+] as const
+
+type NotebookTab = (typeof NOTEBOOK_TABS)[number]['id']
 
 /** Chapter detay sayfası — guide slides + not + quiz geçmişi (Faz 2/3/4 + iyileştirmeler). */
 export function NotebookPage() {
@@ -26,9 +37,12 @@ export function NotebookPage() {
   const [slidesPdfUrl, setSlidesPdfUrl] = useState<string | null>(null)
   const [note, setNote] = useState<SavedNote | null>(null)
   const [quizzes, setQuizzes] = useState<Quiz[]>([])
+  const [flashcardSets, setFlashcardSets] = useState<FlashcardSet[]>([])
+  const [playingCards, setPlayingCards] = useState<DueCard[] | null>(null)
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState('')
   const [pdfPreview, setPdfPreview] = useState<string | null>(null)
+  const [tab, setTab] = useState<NotebookTab>('notes')
 
   // Küresel üretim deposu — sayfa değişse bile üretim sürer (madde 2)
   const noteJob = useGenerationStore((s) =>
@@ -37,23 +51,29 @@ export function NotebookPage() {
   const quizJob = useGenerationStore((s) =>
     s.jobs.find((j) => j.kind === 'quiz' && j.targetId === numericChapterId),
   )
+  const flashcardJob = useGenerationStore((s) =>
+    s.jobs.find((j) => j.kind === 'flashcards' && j.targetId === numericChapterId),
+  )
   const noteProgress = useAnimatedProgress(noteJob?.percent ?? 0)
   const quizProgress = useAnimatedProgress(quizJob?.percent ?? 0)
+  const flashcardProgress = useAnimatedProgress(flashcardJob?.percent ?? 0)
 
   const load = useCallback(async () => {
     if (!numericChapterId) return
     setState('loading')
     try {
-      const [chapterData, slideList, existingNote, quizList] = await Promise.all([
+      const [chapterData, slideList, existingNote, quizList, flashcardSetList] = await Promise.all([
         chaptersApi.get(numericChapterId),
         slidesApi.listByChapter(numericChapterId),
         getNote(numericChapterId),
         listQuizzes(numericChapterId),
+        listFlashcardSets(numericChapterId),
       ])
       setChapter(chapterData)
       setSlides(slideList)
       setNote(existingNote)
       setQuizzes(quizList)
+      setFlashcardSets(flashcardSetList)
       // Slayt materyalinin PDF'i varsa önizleme URL'si hazırla (madde 1)
       const withMaterial = slideList.find((s) => s.material_id != null)
       if (withMaterial?.material_id != null) {
@@ -122,6 +142,43 @@ export function NotebookPage() {
     }
   }
 
+  const refreshFlashcardSets = async () => {
+    if (!numericChapterId) return
+    setFlashcardSets(await listFlashcardSets(numericChapterId))
+  }
+
+  const handleGenerateFlashcards = async () => {
+    const set = await useGenerationStore
+      .getState()
+      .generateFlashcards(numericChapterId, chapter?.title ?? 'Chapter')
+    if (set) {
+      setError('')
+      await refreshFlashcardSets()
+    }
+  }
+
+  const handleStudySet = (set: FlashcardSet) => {
+    setPlayingCards(
+      set.cards_json.map((card, cardIndex) => ({
+        set_id: set.id,
+        card_index: cardIndex,
+        card,
+        review: null,
+        due: true,
+      })),
+    )
+  }
+
+  const handleDeleteFlashcardSet = async (setId: number) => {
+    if (!window.confirm('Bu kart seti silinecek. Emin misin?')) return
+    try {
+      await deleteFlashcardSet(setId)
+      setFlashcardSets((prev) => prev.filter((s) => s.id !== setId))
+    } catch {
+      setError('Kart seti silinemedi. Lütfen tekrar deneyin.')
+    }
+  }
+
   const handleExportPdf = async () => {
     if (!note) return
     try {
@@ -134,6 +191,7 @@ export function NotebookPage() {
   const canGenerate = slides.length > 0
   const generatingNote = noteJob?.status === 'running'
   const generatingQuiz = quizJob?.status === 'running'
+  const generatingFlashcards = flashcardJob?.status === 'running'
 
   return (
     <section>
@@ -157,8 +215,19 @@ export function NotebookPage() {
         <p className="mt-8 text-sm text-stuhub-text-secondary">Yükleniyor…</p>
       )}
 
-      {/* Guide slides — orijinal dosya önizlemesi (PDF) ya da metin kartı */}
       <div className="mt-8">
+        <TabBar
+          tabs={NOTEBOOK_TABS}
+          activeId={tab}
+          onSelect={(id) => setTab(id as NotebookTab)}
+          ariaLabel="Çalışma modu"
+        />
+      </div>
+
+      {tab === 'notes' && (
+        <>
+          {/* Guide slides — orijinal dosya önizlemesi (PDF) ya da metin kartı */}
+          <div className="mt-8">
         <h2 className="text-xl font-semibold">Guide Slides</h2>
         <p className="mt-1 text-sm text-stuhub-text-secondary">
           Hocanın sunumu — not üretiminin rehberi. PDF ya da PPTX yükleyebilirsin.
@@ -253,10 +322,107 @@ export function NotebookPage() {
             Henüz not yok. Guide slides yükleyip “Not Oluştur” ile başla.
           </p>
         )}
-      </div>
+          </div>
+        </>
+      )}
 
-      {/* Bölüm quizleri — geçmiş korunur, hepsi listelenir (madde 3) */}
-      <div className="mt-8">
+      {tab === 'cards' && (
+        <>
+          {/* Flashcard'lar — üretim + çalışma oynatıcısı (Faz V2.2) */}
+          <div className="mt-8">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">Kartlar</h2>
+          <button
+            type="button"
+            onClick={() => void handleGenerateFlashcards()}
+            disabled={generatingFlashcards || generatingNote || !note}
+            className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-50"
+            title={note ? '' : 'Önce not oluştur'}
+          >
+            {generatingFlashcards ? 'Üretiliyor…' : 'Kart Oluştur'}
+          </button>
+        </div>
+
+        {playingCards ? (
+          <div className="mt-4">
+            <FlashcardPlayer
+              dueCards={playingCards}
+              onFinished={() => {
+                setPlayingCards(null)
+                void refreshFlashcardSets()
+              }}
+              onExit={() => setPlayingCards(null)}
+            />
+          </div>
+        ) : (
+          <>
+            {generatingFlashcards && (
+              <div className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface p-5">
+                <p className="text-sm font-medium">{flashcardJob?.message}</p>
+                <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-stuhub-border">
+                  <div
+                    className="h-full rounded-full bg-stuhub-accent transition-[width] duration-150 ease-out"
+                    style={{ width: `${Math.max(flashcardProgress, 2)}%` }}
+                  />
+                </div>
+                <p className="mt-2 text-xs text-stuhub-text-secondary">
+                  %{Math.round(flashcardProgress)} tamamlandı
+                </p>
+              </div>
+            )}
+
+            <div className="mt-5 space-y-4">
+              {flashcardSets.length === 0 && !generatingFlashcards && (
+                <p className="text-sm text-stuhub-text-secondary">
+                  Henüz kart seti yok. Not oluşturup “Kart Oluştur” ile başla.
+                </p>
+              )}
+              {flashcardSets.map((set, setIndex) => (
+                <div
+                  key={set.id}
+                  className="flex items-center justify-between rounded-md border border-stuhub-border bg-stuhub-surface px-5 py-4"
+                >
+                  <span className="text-sm">
+                    <span className="font-medium">
+                      Kart Seti {flashcardSets.length - setIndex}
+                    </span>
+                    <span className="ml-2 text-stuhub-text-secondary">
+                      {set.card_count} kart ·{' '}
+                      {set.created_at
+                        ? new Date(set.created_at).toLocaleDateString('tr-TR')
+                        : ''}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleStudySet(set)}
+                      className="rounded-sm bg-stuhub-accent px-3 py-1 text-xs font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
+                    >
+                      Çalış
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteFlashcardSet(set.id)}
+                      className="rounded-sm px-2 py-1 text-sm text-stuhub-error transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                      aria-label="Kart setini sil"
+                    >
+                      Sil
+                    </button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+          </div>
+        </>
+      )}
+
+      {tab === 'quiz' && (
+        <>
+          {/* Bölüm quizleri — geçmiş korunur, hepsi listelenir (madde 3) */}
+          <div className="mt-8">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold">Quizler</h2>
           <button
@@ -324,6 +490,8 @@ export function NotebookPage() {
           ))}
         </div>
       </div>
+        </>
+      )}
 
       {pdfPreview && (
         <FilePreviewModal
