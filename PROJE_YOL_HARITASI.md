@@ -1,0 +1,598 @@
+# PROJE YOL HARİTASI — StuHub DS (v4.2)
+
+> **BELKEMİK BELGESİ** — Bu dosya projenin tek kaynak doğrusudur. Her session başlangıcında bu belge context'e alınır ve ancak ondan sonra işe devam edilir. Tüm ajanlar ve session'lar bu belgeyi referans alır. Belgeyi yalnızca Ana Ajan koordinasyonunda ve Ücretsizlik Ajanı (Teknoloji Envanteri + Değişiklik Günlüğü) düzenleyebilir; her değişiklik Sürüm Geçmişi'ne işlenir.
+>
+> **Kaynak:** Bu belge `C:\Users\kerew\.hermes\plans\PROJE_YOL_HARITASI.md` (v1.0) temel alınarak StuHub DS workspace'ine taşınmıştır. v2.0'da platform ve LLM kararları, v3.0'da mimari denetim raporundaki 17 düzeltme, v4.0'da DeepSeek Harness kazısı (DSH_ARASTIRMA_RAPORU.md + SİSTEM_YETENEKLERİ.md), v4.1'de DSH kataloğu ince ayarı, v4.2'de LLM çıkarımı istisnasının genişletilmesi uygulanmıştır (bkz. Bölüm 15).
+
+---
+
+## 0. Proje Özeti
+
+**Amaç:** Üniversite öğrencileri için yerel web uygulaması (localhost). Öğrenci ders dönemlerini klasörler, her dönemde dersler açar, her ders için notebook oluşturur (metadata + PDF kitaplar), dersin sunumlarını "guide slides" olarak yükler ve chapter'lar oluşturur. Her chapter'da AI destekli **not oluşturma**, **bölüm quizi** ve dersin tamamını kapsayan **genel quiz** mevcuttur. Tüm AI çıktısı materyallere **atıflıdır** ve interaktif atıf pop-up'ları ile kaynaklandırılır.
+
+**Yaklaşım:** Local-first web uygulaması. Veriler, kitaplar, sunumlar ve vektör indeksleri tamamen yerel diskte saklanır (SQLite + LanceDB + dosya deposu). Yapay zeka çıkarımı **kullanıcının kendi DeepSeek API anahtarı** ile yapılır — kullanıcı kararıyla **yerel LLM çalıştırılmaz** ve LLM gerektiren görevlerde ücretli API kullanımına izin verilir (tek istisna ailesi; bkz. Bölüm 7). Bunun dışındaki tüm araçlar ücretsiz ve açık kaynaktır; embedding modeli LLM değildir ve tamamen yerel çalışır. Uygulamada hesap, telemetri veya analitik yoktur.
+
+**Ürün dili:** Türkçe (UI, prompt'lar, dokümantasyon).
+
+**Geliştirme katmanı:** Proje, DeepSeek Harness (DSH, MIT — ücretsiz) üzerinde geliştirilir. DSH yalnızca geliştirme/orkestrasyon katmanıdır; ürün kodu (FastAPI/React) DSH plugin'i değildir (sınır: `SİSTEM_YETENEKLERİ.md` Bölüm 7). Her session başında `PROJE_YOL_HARITASI.md`'den sonra ikinci zorunlu okuma `SİSTEM_YETENEKLERİ.md`'dir; DSH davranışında şüphede `C:\Users\kerew\deepseek-harness\docs\` canlı otoritedir.
+
+---
+
+## 1. Ürün Akışı (User Flow)
+
+```
+1) Ana ekran → Dönem klasörleri (örn: "2026 Bahar", "2026 Yaz")
+2) Dönem seç → Ders listesi
+3) Ders oluştur penceresi → Ad, hocası, metadata + PDF kitap yükle
+4) Ders notebook sayfası açılır → "Yeni Chapter Ekle" butonu
+5) Chapter oluştur: ad + guide slides (PPTX/PDF, hocanın sunumları)
+6) Chapter aç → [Not Oluştur] [Quiz] [Genel Quiz] butonları
+```
+
+### 1.1 Chapter İçi Özellikler
+
+#### 1.1.1 Not Oluştur
+- Sistem, chapter'ın **guide slides** içeriğini **rehber** olarak alır
+- Dersin PDF kitaplarını **tarar** (RAG: chunk + embed + hibrit retrieve)
+- Guide slides'taki **tüm konuları eksiksiz** içerecek şekilde öğrenci için not hazırlar (kapsama doğrulamalı, map-reduce)
+- Her bilgi parçası **inline atıflıdır** (örn: [1], [2]) ve atıf kaynağı (PDF sayfa / PPTX slide) kayıtlıdır
+- Üretim süreci **stream edilir**, kullanıcı ilerlemeyi görür
+- Ajan zinciri: [Ana Ajan → Indexer Ajan (RAG hazır) → Not Üretici Ajan → Kalite Kontrol Ajan]
+
+#### 1.1.2 Bölüm Quizi
+- Oluşturulan notları tarar, konuları saptar (başlıklar)
+- Her konu için **5 çoktan seçmeli soru** üretir
+- Cevap interaksiyonunda **anında geri bildirim**: doğru/yanlış
+- Yanlışsa: doğru cevabı **materyallere atıfta bulunarak** açıklar (örn: "[1] slide 3")
+- Atıflar **interaktif**: atıfa tıklandığında pop-up'ta o kaynağın ilgili kısmı gösterilir (PDF sayfası veya PPTX slide içeriği)
+- Ajan zinciri: [Not Üretici çıktısı → Chapter Quiz Ajan → Kalite Kontrol Ajan]
+
+#### 1.1.3 Genel Quiz
+- **50 soru**, ders seviyesinde, **bütün chapter'lar karışık sırayla**
+- Dağılım: **15 çoktan seçmeli + 15 doğru-yanlış + 15 boşluk doldurma + 5 açık uçlu**
+- İlk 3 kategori (MCQ/TF/FIB): bölüm quizzesi ile aynı interaktif feedback sistemi
+- Açık uçlu sorularda:
+  - Sistem kullanıcı cevabını analiz eder
+  - **10 üzerinden objektif puanlama**
+  - **Doğru, eksik, yanlış, gereksiz** cevap bölümlerini kullanıcıya bildirir ve açıklar
+  - Açıklamanın ardından **ideal cevap** örneği hazırlar (atıflı)
+- Ajan zinciri: [Tüm notlar → Overall Quiz Ajan → (açık uçlu cevap gönderimi → Essay Grader Ajan) → Kalite Kontrol Ajan]
+
+---
+
+## 2. Mimari Genel Bakış
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│               Tarayıcı (localhost Web Uygulaması)               │
+│  ┌─────────────┐  ┌─────────────┐  ┌──────────────────────┐    │
+│  │  React UI   │  │  State Yntm │  │  API + SSE Client    │    │
+│  │ (TypeScript)│  │  (Zustand)  │  │ (fetch, EventSource) │    │
+│  └──────┬──────┘  └──────┬──────┘  └──────────┬───────────┘    │
+└─────────┼────────────────┼─────────────────────┼───────────────┘
+          │  (Vite dev proxy veya aynı kök sunucu)  │
+          ▼                ▼                     ▼
+┌────────────────────────────────────────────────────────────────┐
+│                    FastAPI Backend (Python)                     │
+│  ┌────────────┐ ┌────────────┐ ┌───────────────────────────┐   │
+│  │ Dosya Sist │ │  SQLite    │ │  AI Pipeline Servisleri   │   │
+│  │(PDF, PPTX) │ │ (metadata) │ │  (not, quiz, puanlama)    │   │
+│  └────────────┘ └────────────┘ └───────────────────────────┘   │
+└────────────────────────────────────────────────────────────────┘
+                   │                        │
+        ┌──────────┼──────────┐             ▼
+        ▼          ▼          ▼      DeepSeek API (chat, stream)
+ ┌──────────┐ ┌──────────┐ ┌──────────────┐        ▲
+ │ LanceDB  │ │ sentence-│ │  File Store  │        │ (OpenAI uyumlu,
+ │(vektörler)│ │transformer│ │(materyal+    │        │  kullanıcı anahtarı)
+ └──────────┘ │(embedding)│ │ PDF render) │        │
+              └──────────┘ └──────────────┘        │
+```
+
+### 2.1 Teknoloji Kararları
+
+| Katman | Seçim | Lisans | Gerekçe |
+|--------|-------|--------|---------|
+| Platform | Localhost web (tarayıcı) | — | Kullanıcı kararı; kurulum yok, her ortamda çalışır |
+| Geliştirme/Orkestrasyon | DeepSeek Harness (dsh) | MIT | Ücretsiz; 15 ajan ve orkestrasyon bu çalışma zamanında koşar (`SİSTEM_YETENEKLERİ.md`) |
+| Frontend | React 18 + TypeScript + Vite | MIT | Standart, tip-güvenli, iyi dev deneyimi |
+| Stil | Tailwind CSS + CSS Variables | MIT | Design tokens, dark-mode, minimal CSS (bkz. `YETENEKLER/07-stil-rehberi.md`) |
+| State | Zustand | MIT | Sade, TypeScript dostu |
+| Backend API | FastAPI (Python) | MIT | Async, OpenAPI, AI/ML ekosistemi güçlü |
+| Veritabanı | SQLite + aiosqlite | Public Domain | Yerel, zero-config, güvenilir |
+| Vektör DB | LanceDB (embedded) | Apache-2.0 | Server yok, hızlı, yerel |
+| LLM | DeepSeek chat API (`deepseek-chat`) | Ücretli (kullanıcı onaylı istisna) | OpenAI uyumlu, Türkçe güçlü, stream destekli, düşük maliyet |
+| LLM SDK | openai (Python) | Apache-2.0 | DeepSeek'in resmi uyumluluk yolu |
+| Embedding | sentence-transformers + bge-m3 (öncelik) / multilingual-e5-small | MIT/Apache-2.0 | Yerel, ücretsiz, Türkçe/çok dilli; DeepSeek embedding sunmaz ([issue #806](https://github.com/deepseek-ai/DeepSeek-V3/issues/806)) |
+| PDF Metin | pymupdf + marker-pdf (OCR yedek) | AGPL-3.0 / GPL-3.0 | Hızlı + taranmış fallback; copyleft uyarısı: kişisel yerel kullanımda kabul; dağıtım hedeflenirse pdfplumber (MIT) / Tesseract (Apache-2.0) ile değiştir (Ücretsizlik Ajanı denetimi) |
+| PPTX | python-pptx | MIT | Standart, güvenilir |
+| Slide render | LibreOffice headless (PPTX→PDF) + pdfjs | MPL-2.0 / Apache-2.0 | Pop-up'ta slide gösterimi; LibreOffice yoksa metin alıntısı fallback |
+| Atıflama | citations_ledger + doğrulama adımı | — | Her üretimde kanıt tabanlı doğrulama (bkz. `YETENEKLER/06-atif-sistemi.md`) |
+| CI/CD | GitHub Actions | Ücretsiz tier | Entegre, ücretsiz |
+| Paket Yönetimi | npm + uv (Python) | MIT/PSF | Hızlı, modern |
+| Kod QA (backend) | ruff + pyright + pytest | MIT | Lint + tip + test |
+| Kod QA (frontend) | eslint + tsc + vitest + playwright | MIT | Lint + tip + test + E2E |
+| Güvenlik SAST | bandit, pip-audit, npm audit, semgrep | MIT/Apache | Çok-katmanlı tarama |
+| Sırlar tarama | trufflehog / gitleaks | MIT | API anahtarı sızıntısı engeli |
+
+### 2.2 Frontend ↔ Backend İletişimi
+
+1. **Geliştirme:** Vite dev server (`http://localhost:5173`) API isteklerini `http://127.0.0.1:8000`'e proxy'ler.
+2. **Üretim/tek komut:** FastAPI, inşa edilmiş frontend'i (`apps/frontend/dist`) kendisi servis eder; tek adreste çalışır (DevOps Ajan sorumluluğu).
+3. **Tüm API çağrıları:** `fetch(http://localhost:<port>/api/...)`; dosya erişimi `/api/materials/{id}/file` üzerinden Range destekli olur (pdfjs sayfa render'ı için zorunlu).
+4. **Health check:** `GET /health` — frontend 5 saniyede bir yoklar; backend kapalıysa banner gösterir.
+5. **Streaming:** Not üretimi `POST /api/chapters/{id}/notes` SSE ile akar (DeepSeek stream modu); frontend ilerleme göstergesi çizer.
+6. **Graceful shutdown:** Backend, kullanıcı tarafından kapatılınca aktif üretim işini `indexing_jobs`/`generation_logs` üzerinden işaretler, devam edilebilir bırakır.
+
+#### Hata Yönetimi
+- **LLM kesintisi/429:** Üstel backoff (1s, 2s, 4s, ...), 5 hata sonrası 30s circuit breaker; kullanıcıya net Türkçe mesaj + iş durumu kaydı; tamamlanan kısımlar kaybolmaz.
+- **İstek timeout:** Varsayılan 30s, LLM üretimi için 300s (batch başına).
+- **İdempotent GET'ler:** Retry güvenli; üretim POST'ları job tabanlıdır (tekrar tetiklenebilir, çift iş çalışmaz).
+
+### 2.3 Veri Akışı: Not Oluşturma
+
+```
+1) Kullanıcı "Not Oluştur" tıklar
+       │ ▼
+2) Frontend → POST /api/chapters/{id}/notes  (SSE stream başlar)
+       │ ▼
+3) FastAPI: slides tablosundan guide slide içeriğini yükle
+       │ ▼
+4) LLM: slide'lardan konu listesi çıkar (konu + anahtar terimler)
+       │ ▼
+5) Her konu için hibrit retrieval: LanceDB vektör top-k + konu terimi keyword boost
+       │ ▼
+6) Konu başına (map-reduce): context + not üretim prompt'u → DeepSeek (stream)
+       │ ▼
+7) Kapsama doğrulama: konu kontrol listesi ↔ üretilen not (eksikte max 3 iterasyon)
+       │ ▼
+8) Atıf doğrulama: her [n] → chunk metni fuzzy eşleşme (sınırda LLM onayı)
+       │ ▼
+9) notes tablosuna kaydet (content_md + citations_json + topics_json), generation_logs yaz
+       │ ▼
+10) Frontend: NoteViewer + CitationPopup bileşenleriyle render
+```
+
+### 2.4 Veri Akışı: Quiz Üretimi
+
+```
+Bölüm Quizi:
+1) "Quiz" tıkla → POST /api/chapters/{id}/quiz
+2) Notlar + atıfları yükle → konuları saptar (başlıklar + topics_json)
+3) Her konu için 5 MCQ üret (LLM, json_schema enforced, atıf zorunlu)
+4) Tüm atıflar resolve + doğrulanır → kaydet → dön
+5) Frontend: QuizPlayer, her cevap interaksiyonunda anında feedback
+
+Genel Quiz:
+1) "Genel Quiz" tıkla → POST /api/courses/{id}/overall-quiz
+2) TÜM chapter notları + atıfları yükle; konuları chapter'lar boyunca stratize et
+3) Batch üretim: kategori bazlı 5–10 soru/batch → 15 MCQ + 15 TF + 15 FIB + 5 açık uçlu
+4) Her batch JSON şema doğrulaması → seed'li karıştırma ile birleştir
+5) Dağılım + atıfları doğrula → kaydet → dön
+6) Frontend: QuizPlayer, tip-bazlı render (FIB: normalize edilmiş eşleştirme; kabul listesi üretim anında genişletilir — interaksiyonda LLM çağrısı yok)
+7) Açık uçlu gönderim → Essay Grader Ajanı → 0-10 + breakdown + ideal cevap (güven kontrolü dahil)
+```
+
+### 2.5 API Yapılandırması
+
+- Anahtar: kullanıcı **Ayarlar sayfasından** girer → `settings` tablosunda yerelde saklanır; geliştirme sırasında `.env` (`DEEPSEEK_API_KEY`, `DEEPSEEK_BASE_URL`) kullanılır. **Anahtar asla commit edilmez, kodda asla görünmez.**
+- Model: yapılandırılabilir (`deepseek-chat` varsayılan); Ayarlar'dan değiştirilebilir.
+- Maliyet gözetimi: her LLM çağrısı `generation_logs`'a yazılır (kind, model, prompt/completion token). Ücretsizlik Ajanı bu log'u denetler; israf tespitinde prompt optimizasyonu başlatır.
+- Yerel model (Ollama/GGUF) desteği: yok (kullanıcı kararı — yerel LLM çalıştırılmaz); alternatif OpenAI uyumlu sağlayıcıya geçiş Bölüm 13'tedir.
+
+---
+
+## 3. Veri Şeması (SQLite)
+
+```sql
+terms (id, name, start_date, end_date, created_at)
+courses (id, term_id, name, instructor, metadata_json, created_at)
+materials (
+  id, course_id, type,             -- 'textbook' | 'slides'
+  filepath, extracted_text,
+  page_count,                      -- render + chunk offset için
+  vector_ns,                       -- LanceDB namespace (course_{id}_chunks)
+  created_at
+)
+chapters (id, course_id, title, created_at)
+slides (                            -- slide bazlı atıf için granülarite
+  id, chapter_id, material_id, slide_no, content_text
+)
+notes (id, chapter_id, content_md, citations_json, topics_json, generated_at, model_used)
+quizzes (id, chapter_id, questions_json, created_at)
+quiz_attempts (id, quiz_id, user_answers_json, score, feedback_json, created_at)
+overall_quizzes (id, course_id, questions_json, created_at)
+overall_attempts (id, overall_quiz_id, answers_json, score_json, created_at)
+indexing_jobs (id, course_id, material_id, status, progress, error, created_at, updated_at)
+citations_ledger (id, chunk_id, text, source_type, source_id, page, slide)
+generation_logs (id, kind, course_id, chapter_id, model, prompt_tokens, completion_tokens, created_at)
+settings (key, value)               -- API anahtarı, model adı vb. (yerel, commit dışı)
+```
+
+LanceDB chunk satırı: `{ chunk_id, course_id, material_id, page, slide, text, vector }` — `page/slide` offset'leri atıf pop-up'ının doğru bölümü açmasını sağlar.
+
+**Not:** Sorular `questions_json` içinde kasıtlı denormalize tutulur (kişisel uygulama ölçeği). Atıf doğrulama bu blob'u ayrıştırıp `citations_ledger` ile eşleştirir. `models` tablosu (v1.0'dan) kaldırılmıştır; yerel LLM kullanıcı kararıyla kapsam dışıdır, alternatif sağlayıcı geçişi Bölüm 13'tedir.
+
+---
+
+## 4. Ajan Mimarisi
+
+> **Rol ayrımı:** Üretim ajanlarının (04–08) md dosyaları hem DSH üzerindeki geliştirme rolünü hem de uygulamanın çalışma anı (runtime) pipeline sözleşmesini tanımlar. DSH ajanları ürünü **geliştirir**; ürün çalışırken aynı sözleşmeyi `apps/backend/src/agents/` altındaki FastAPI servisleri yürütür (Bölüm 14). İki katman birbirinin yerine geçmez.
+
+### 4.1 Ajan Kataloğu (15 ajan)
+
+| # | Ajan | Dosya | Rol | Tetik | Effort |
+|---|------|-------|-----|-------|--------|
+| 0 | **Ana Ajan (Main Orchestrator)** | `AJANLAR/00-ana-ajan.md` | orchestrator | Session başı, faz geçişi, "Başla" | **V4 Pro — SABİT** |
+| 1 | **Kalite Kontrol Ajanı** | `AJANLAR/01-kalite-kontrol-ajani.md` | leaf | Her deliverable sonrası, pre-merge | Flash (yükseltilebilir) |
+| 2 | **Stil Ajanı** | `AJANLAR/02-stil-ajani.md` | leaf | UI değişikliği, yeni bileşen | Flash (yükseltilebilir) |
+| 3 | **Ücretsizlik Ajanı** | `AJANLAR/03-ucretsizlik-ajani.md` | leaf | Yeni bağımlılık, periyodik denetim, maliyet log'u | Flash (yükseltilebilir) |
+| 4 | **Indexer Ajan** | `AJANLAR/04-indexer-ajani.md` | leaf | Yükleme sonrası, arka plan job | Flash (yükseltilebilir) |
+| 5 | **Not Üretici Ajan** | `AJANLAR/05-not-uretici-ajani.md` | leaf | "Not Oluştur" butonu | Flash (yükseltilebilir) |
+| 6 | **Chapter Quiz Ajan** | `AJANLAR/06-chapter-quiz-ajani.md` | leaf | "Quiz" butonu | Flash (yükseltilebilir) |
+| 7 | **Overall Quiz Ajan** | `AJANLAR/07-overall-quiz-ajani.md` | leaf | "Genel Quiz" butonu | Flash; Ana Ajan genellikle **V4 Pro'ya yükseltir** (en karmaşık üretim) |
+| 8 | **Essay Grader Ajan** | `AJANLAR/08-essay-grader-ajani.md` | leaf | Açık uçlu cevap gönderimi | Flash (yükseltilebilir) |
+| 9 | **Değerlendirme Ajanı** | `AJANLAR/09-degerlendirme-ajani.md` | leaf | Faz sonu, kalite kapısı öncesi | Flash (yükseltilebilir) |
+| 10 | **Test Mühendisi Ajan** | `AJANLAR/10-test-muhendisi-ajani.md` | leaf | Yeni özellik, coverage eksiği | Flash (yükseltilebilir) |
+| 11 | **DevOps Ajan** | `AJANLAR/11-devops-ajani.md` | leaf | CI/CD, build, dokümantasyon | Flash (yükseltilebilir) |
+| 12 | **Güvenlik Denetim Ajanı** | `AJANLAR/12-guvenlik-denetim-ajani.md` | leaf | Pre-release, gizlilik değişikliği | Flash; pre-release denetimlerde **V4 Pro'ya yükseltilir** |
+| 13 | **Frontend Geliştirici Ajan** | `AJANLAR/13-frontend-gelistirici-ajani.md` | leaf | Faz 0–6 UI işleri, yeni sayfa/bileşen | Flash (yükseltilebilir) |
+| 14 | **Backend Geliştirici Ajan** | `AJANLAR/14-backend-gelistirici-ajani.md` | leaf | Faz 0–6 API/servis/şema işleri | Flash (yükseltilebilir) |
+
+### 4.2 Effort Kuralı (Kullanıcı Kararı)
+
+- **Ana Ajan: her zaman V4 Pro (max).** Bu seviye hiçbir koşulda düşürülmez.
+- **Diğer tüm ajanlar: varsayılan V4 Flash.** Ana Ajan, görevin zorluk seviyesine göre (belirsiz gereksinim, mimari/tasarım kararı, karmaşık prompt mühendisliği, güvenlik kritik iş) ilgili ajanı **V4 Pro'ya yükseltir**.
+- Uygulama: model seviyesi workflow faz bazında `provider`/`model` override'ı ile belirlenir (`phases[].provider/model` ve `agent()` opts). Tekil subagent delegasyonlarında varsayılan seviye (V4 Flash) geçerlidir; yükseltme gerektiren görevler workflow üzerinden veya Settings → Models kalıcı rotalarıyla çalıştırılır. Prompt metnine seviye yazmak çalışma modelini değiştirmez.
+
+### 4.3 Yürütme Akışı
+
+```
+Kullanıcı Aksiyonu
+    │ ▼
+Ana Ajan (V4 Pro: analiz eder, parçalar, effort atar, delegate eder)
+    │
+    ├─► Indexer Ajan (arka plan, indexing job'ları)
+    │
+    ├─► Not Üretici Ajan
+    │       │ ▼
+    │   Kalite Kontrol → Stil Ajanı (UI ise)
+    │
+    ├─► Chapter Quiz Ajan [chapter başına paralel]
+    │       │ ▼
+    │   Kalite Kontrol
+    │
+    ├─► Overall Quiz Ajan (V4 Pro'ya yükseltilir)
+    │       │ ▼
+    │   Kalite Kontrol
+    │       │ ▼
+    │   Essay Grader Ajan [açık uçlu soru başına paralel]
+    │       │ ▼
+    │   Kalite Kontrol
+    │
+    ├─► Değerlendirme Ajan (faz sonu ölçüm → Kalite Kontrol'e kanıt)
+    ├─► Backend Geliştirici Ajan [API/servis/şema — modül başına]
+    ├─► Frontend Geliştirici Ajan [UI — Stil Ajanı denetiminde]
+    ├─► Test Mühendisi Ajan [TDD tüm yeni kod]
+    ├─► DevOps Ajan [CI/CD, build, dokümantasyon]
+    ├─► Güvenlik Denetim Ajanı [pre-release]
+    └─► Ücretsizlik Ajan (sürekli denetim + maliyet bekçisi; blokaj yapabilir)
+```
+
+### 4.4 Paralellik Kuralları
+
+- **Indexer:** Her zaman arka planda (bekleyen `indexing_jobs` işlenir)
+- **Not Üretimi → Chapter Quiz:** Sıralı (quiz notlara ihtiyaç duyar)
+- **Tüm Chapter Quizleri:** Chapter başına paralel
+- **Overall Quiz:** Tüm chapter notları bittikten sonra; kategori batch'leri paralel üretilebilir
+- **Essay Grader:** Açık uçlu soru başına paralel
+- **Kalite Kontrol / Değerlendirme:** Her deliverable/faz için paralel çalışabilir
+- **Stil Ajanı:** UI bileşeni başına paralel
+- **Test Mühendisi:** Modül başına paralel (TDD)
+- **Backend/Frontend Geliştirici:** API sözleşmesi sabitlendikten sonra modül başına paralel; iki uç sözleşme üzerinden eş zamanlı ilerleyebilir
+- **DevOps:** Pipeline aşaması başına sıralı
+- **Güvenlik:** On-demand (pre-release, major change)
+- **Ücretsizlik Ajanı:** Sürekli; ücretli araç veya kontrolsüz maliyet tespitinde bloklar
+
+### 4.5 Session Yaşam Döngüsü
+
+```
+Session Başlangıcı
+    │ ▼
+PROJE_YOL_HARITASI.md context'e yüklenir (bu belge)
+    │ ▼
+SİSTEM_YETENEKLERİ.md context'e yüklenir (DSH yetenek kataloğu; derin kazı: DSH_ARASTIRMA_RAPORU.md)
+    │ ▼
+Ana Ajan (V4 Pro): mevcut durumu okur, sonraki görev batch'ini tanımlar, effort atar
+    │ ▼
+Ajanlara delegate eder (mümkün olduğunca paralel). Delegasyon prompt'u kendi kendine yeterlidir:
+    hedef ajanın AJANLAR/ + ilgili YETENEKLER/ dosya YOLLARI + SİSTEM_YETENEKLERİ.md'nin ilgili
+    bölümü + görev + bitirme kriteri verilir; alt ajan dosya içeriklerini read aracıyla kendisi açar
+    (Ana Ajan context tasarrufu — içerikleri prompt'a gömme zorunluluğu yoktur)
+    │ ▼
+Bitiş bildirimlerini bekle (busy-poll yasak); final cevaptan önce ilgili tüm işleri job_output ile topla
+    │ ▼
+Kalite kapıları (o faz için uygulanabilir kapılar geçmeli; Bölüm 12)
+    │ ▼
+Yol haritası durumunu güncelle → checkpoint commit
+    │ ▼
+Session Sonu (state persist)
+```
+
+#### Başlatma (Kickoff) Protokolü — kullanıcı "Başla" dediğinde
+
+1. Ana Ajan `PROJE_YOL_HARITASI.md` → `SİSTEM_YETENEKLERİ.md` sırasıyla okur; uzun soluklu teslimat hedefi oluşturur (`create_goal` — yalnızca doğrudan insan isteğiyle) ve hedefi teslimata kadar sürdürür. Session resume/fork sonrası goal disarm edilmişse `update_goal` action: resume ile yeniden silahlanır; `complete` yalnızca hedef gerçekten bittiğinde verilir.
+2. Mevcut durumu denetler; Faz 0.0 ön koşullarını tek tek doğrular: git init + `.gitignore` (`data/`, `.env`) + gitleaks pre-commit; Python ≥ 3.11 + uv ve Node ≥ 20 + npm sürümleri; DSH çalışır durumda. DeepSeek API anahtarı Faz 3'ten önce temin edilecek şekilde planlanır (anahtar eksikse Faz 0–2 bloklanmaz). Eksik araç/kurulum varsa kullanıcıya bildirir (`ask_user_question`).
+3. Faz 0'dan başlayarak faz faz ilerler: her faz için görevleri parçalar → paralel/sıralı plan → delegasyon → kalite kapıları → faz raporu.
+4. Gerektiğinde yeni session'lar ve alt ajanlar açar; durumu her checkpoint'te yol haritasına ve git geçmişine işler.
+5. Ürün, Bölüm 12 kalite kapılarının tamamından geçtiğinde teslim raporu sunar.
+6. Kullanıcıya soru sorma hakkı yalnız Ana Ajan'dadır (`ask_user_question` canlı kök ajanda çalışır); alt ajanlar eksik bilgi/karar ihtiyacını rapor eder. `ralph` yalnızca kullanıcı açıkça Ralph/fresh-agent döngüsü isterse kullanılır.
+
+---
+
+## 5. Ajan-Yetenek Eşlemesi
+
+| Ajan | Yetenek Dosyaları + DSH Araçları |
+|------|----------------------------------|
+| Ana Ajan | `PROJE_YOL_HARITASI.md`, `SİSTEM_YETENEKLERİ.md`, tüm `AJANLAR/` + `YETENEKLER/` (dağıtımda); subagent, workflow, goal, todo_write, ask_user_question, job_* |
+| Kalite Kontrol | Bölüm 12 kalite kapıları; `09-degerlendirme-ajani.md` kanıtları; pwsh (test/lint komutları) |
+| Stil | `YETENEKLER/07-stil-rehberi.md`; read/write/edit; ekran görüntüsü incelemesi |
+| Ücretsizlik | `YETENEKLER/08-ucretsiz-arac-envanteri.md`; `PROJE_YOL_HARITASI.md` (Bölüm 2.1, 7, 15 düzenleme yetkisi); web_search |
+| Indexer | `YETENEKLER/01-pdf-pptx-isleme.md`; pwsh (uv, python) |
+| Not Üretici | `YETENEKLER/02-rag-not-uretimi.md`, `06-atif-sistemi.md` |
+| Chapter Quiz | `YETENEKLER/03-chapter-quiz-uretimi.md`, `06-atif-sistemi.md` |
+| Overall Quiz | `YETENEKLER/04-overall-quiz-uretimi.md`, `06-atif-sistemi.md` |
+| Essay Grader | `YETENEKLER/05-acik-uclu-puanlama.md`, `06-atif-sistemi.md` |
+| Değerlendirme | Tüm üretim yetenekleri (01–06) + test altyapısı; eval kümesi oluşturma |
+| Backend Geliştirici | `PROJE_YOL_HARITASI.md` Bölüm 3, 8, 11; `YETENEKLER/01–06` (runtime sözleşmeler); pwsh (uv, pytest) |
+| Frontend Geliştirici | `YETENEKLER/07-stil-rehberi.md`; `AJANLAR/02-stil-ajani.md` denetimi; npm/vitest/playwright |
+| Test Mühendisi | pytest/vitest/Playwright; pwsh |
+| DevOps | GitHub Actions; pwsh (build, audit); README + kullanıcı dokümantasyonu |
+| Güvenlik Denetim | Bölüm 8; bandit/pip-audit/npm audit/gitleaks; pwsh |
+
+> **Ortak referans:** Tüm ajanların DSH davranışına dair yetki dosyası `SİSTEM_YETENEKLERİ.md`'dir (araç kataloğu, sandbox/onay kuralları, orkestrasyon rehberi); tam kazı ve kaynak dokümantasyon `DSH_ARASTIRMA_RAPORU.md`'dedir. DSH'in somut davranışında şüphede canlı referans: `C:\Users\kerew\deepseek-harness\docs\`.
+
+---
+
+## 6. Faz Planı (8 Hafta)
+
+### Faz 0 — Temeller (Hafta 1)
+- 0.0 **Ön Koşullar (Ana Ajan Faz 0 başında doğrular):** git; Python ≥ 3.11 + uv; Node ≥ 20 + pnpm; DeepSeek API anahtarı (kullanıcı sağlar, Ayarlar sayfasına girilir); isteğe bağlı LibreOffice (PPTX render; yoksa metin fallback); gitleaks
+- 0.1 Repo & Tooling (monorepo, CI, lint, type-check, gitleaks pre-commit)
+- 0.2 SQLite Şema & Migration (Bölüm 3)
+- 0.3 Backend İskeleti & Health Check
+- 0.4 Frontend Scaffold (Vite dev server + proxy)
+
+### Faz 1 — Dönem & Ders Yönetimi (Hafta 2)
+- 1.1 Dönem CRUD API + UI
+- 1.2 Ders CRUD + Metadata + PDF Yükleme
+- 1.3 Ders Notebook Landing Page ("Chapter Ekle" butonu)
+- 1.4 **Ayarlar sayfası: API anahtarı + model seçimi** (settings tablosu)
+
+### Faz 2 — Chapter & Guide Slides (Hafta 3)
+- 2.1 Chapter CRUD + Guide Slide Çıkarımı (PDF/PPTX; PPTX→PDF dönüşümü)
+- 2.2 Vektör İndekleme Pipeline (chunk + embed + LanceDB; indexing_jobs)
+
+### Faz 3 — Not Oluşturma (Hafta 4)
+- 3.1 Not üretimi prompt & pipeline (map-reduce, hibrit retrieval, kapsama doğrulama)
+- 3.2 SSE streaming + ilerleme göstergesi
+- 3.3 Not Viewer + interaktif atıflar (CitationPopup)
+
+### Faz 4 — Bölüm Quiz (Hafta 5)
+- 4.1 Quiz üretimi pipeline (5 MCQ/konu, atıf zorunlu)
+- 4.2 Quiz state & persistence + anında feedback
+
+### Faz 5 — Genel Quiz (Hafta 6)
+- 5.1 Batch quiz üretimi (50 soru, karışık tip + sıra)
+- 5.2 FIB eşleştirme (normalizasyon + üretim anında genişletilmiş kabul listesi)
+- 5.3 Açık uçlu otomatik puanlayıcı (rubrik + güven kontrolü)
+
+### Faz 6 — Polish, Kalite & Teslim (Hafta 7-8)
+- 6.1 Stil cilası (stil rehberi uyumu, tema, mikro-metinler)
+- 6.2 Değerlendirme Ajanı ölçümleri + Kalite kapıları (Bölüm 12)
+- 6.3 Kullanıcı kabul testleri (uçtan uca akış)
+- 6.4 Kullanıcı dokümantasyonu (kurulum, kullanım kılavuzu) + README
+- 6.5 Pre-release güvenlik denetimi
+
+---
+
+## 7. Ücretsizlik Sözleşmesi (Ücretsizlik Ajanı tarafından zorunlu)
+
+**Kural: Tüm araçlar ücretsiz ve açık kaynak olmalıdır. Tek istisna ailesi: LLM çıkarımı — kullanıcı kararıyla yerel LLM çalıştırılmaz; LLM gerektiren görevlerde ücretli API kullanımına izin verilir (birincil sağlayıcı: kullanıcının DeepSeek API anahtarı). LLM dışındaki her araç ücretsiz/açık kaynak kalır.**
+
+### Kayıtlı İstisna (LLM Çıkarımı)
+| İstisna | Koşul | Yönetim |
+|---------|-------|---------|
+| DeepSeek chat API (birincil) | Kullanıcı kendi anahtarını sağlar; ürün çıkarımı (not/quiz/puanlama) + geliştirme sırasındaki LLM ihtiyaçları | `generation_logs` ile maliyet gözetimi; Ücretsizlik Ajanı prompt verimliliğini denetler |
+| Alternatif OpenAI uyumlu LLM sağlayıcı | Yalnızca kullanıcı onayıyla; DeepSeek'in karşılamadığı somut bir ihtiyaçta | Aynı maliyet gözetimi; istisna kaydına onay işlenir |
+
+> **Not:** Yerel embedding modeli (sentence-transformers + bge-m3) **LLM değildir**; hafif CPU yüküyle yerelde çalışır, ücretsizdir ve bu istisnanın dışındadır. Yerel LLM (Ollama/GGUF) kullanıcı kararıyla kapsam dışıdır.
+
+### Yasak (Tespitte Bloklar)
+- LLM dışı ücretli SaaS/API'ler: vektör DB bulutları (Pinecone, Weaviate Cloud, Qdrant Cloud), auth SaaS (Clerk, Auth0, Firebase Auth, Supabase Auth), hosting (Vercel Pro, Netlify Pro, Railway, Render), monitoring (Sentry paid, DataDog, New Relic)
+- Onay kaydı olmayan ücretli LLM sağlayıcı kullanımı (yalnızca kayıtlı LLM çıkarımı istisnası geçerlidir)
+- Kullanım-bazlı ücretlendirme (LLM çıkarımı hariç)
+
+### Zorunlu Yerel/Ücretsiz Stack
+| Katman | Araç | Lisans |
+|--------|------|--------|
+| LLM | DeepSeek API (onaylı istisna — yerel LLM yok) | — |
+| Embedding | sentence-transformers + bge-m3 | MIT |
+| Vektör DB | LanceDB (embedded) | Apache-2.0 |
+| Veritabanı | SQLite | Public Domain |
+| PDF | pymupdf (kişisel yerel kullanım; dağıtımda pdfplumber) | AGPL-3.0 (pdfplumber MIT) |
+| PPTX→PDF | LibreOffice headless | MPL-2.0 |
+| Hosting | Localhost (yerel) / GitHub Pages (statik, opsiyonel) | — |
+
+### Denetim Prosedürü
+1. Tüm config dosyalarını tara (`package.json`, `pyproject.toml`, `requirements.txt`, `uv.lock`)
+2. Her servis için fiyatlandırma/lisans sayfasını kontrol et
+3. Ücretsiz tier limiti production'ı blokluyorsa → alternatif bul
+4. Yol haritasını (bu dosya, Bölüm 2.1/7) migration notlarıyla güncelle → Bölüm 15'e işle
+5. Alternatifin spike task ile çalıştığını doğrula
+6. **Maliyet gözetimi:** `generation_logs`'u periyodik denetle; token israfı tespit ederse prompt optimizasyonu başlat ve Ana Ajan'a raporla
+
+---
+
+## 8. Güvenlik & Gizlilik
+
+- **Hesap yok, telemetri yok, analytics yok.**
+- **Tüm veri yerel:** SQLite + file store + LanceDB (uygulama veri dizininde: `data/`).
+- **API'ye giden veri:** Not/quiz üretimi ve puanlama sırasında ilgili materyal chunk metinleri DeepSeek API'ye gönderilir. Bu, kullanıcının "kendi API anahtarı" kararının doğal sonucudur; kullanıcı Ayarlar'da bilgilendirilir. Gönderilen veri yalnızca çıkarım için gerekli chunk'larla sınırlı tutulur (gereksiz içerik gönderilmez).
+- **API anahtarı:** `settings` tablosunda (yerel) veya geliştirmede `.env`'de tutulur; **asla commit edilmez**, log'a yazılmaz, hata mesajlarında görünmez. Gitleaks pre-commit hook + Güvenlik Denetim Ajanı kontrolü.
+- **Ağ:** Uygulama çalışırken yalnızca DeepSeek API'ye gider; embedding **kesinlikle yereldir** — uzak embedding API'sine (Hugging Face Inference dahil) düşülmez; model kurulamazsa iş başarısız işaretlenir ve kullanıcıya kurulum talimatı gösterilir.
+- **Yedekleme:** `data/` dizini taşınabilir; tüm kullanıcı verisi bu dizindedir.
+
+---
+
+## 9. Riskler & Azaltımlar
+
+| Risk | Olasılık | Etki | Azaltım |
+|------|----------|------|---------|
+| API kesintisi / 429 / kota aşımı | Orta | Yüksek | Backoff + circuit breaker; iş durumu kaydı; kullanıcıya net mesaj; tamamlanan kısımlar korunur |
+| API'ye veri gönderimi (gizlilik) | Kesin | Orta | Bölüm 8 politikası; yalnızca gerekli chunk'lar; kullanıcı bilgilendirmesi; yerel LLM yolu kullanıcı kararıyla kapalı |
+| Output token limiti (50 soru / uzun not) | Kesin (önlenmezse) | Yüksek | Batch üretim (5–10 soru) + konu bazlı map-reduce; batch başına JSON şema doğrulama |
+| PDF çıkarımı taranmış kitaplarda başarısız | Orta | Orta | pymupdf `likely_scanned_pages` tespiti → marker-pdf OCR; kullanıcıya ilerleme |
+| LibreOffice yok → PPTX render edilemez | Orta | Düşük | Pop-up metin alıntısı fallback; kurulum kılavuzunda isteğe bağlı adım olarak yazılır |
+| Vektör arama ilgili chunk'ı kaçırır | Orta | Yüksek | Hibrit arama (vektör + konu terimi keyword boost); chunk boyutu/overlap tuning; Değerlendirme Ajanı precision/recall ölçümü |
+| Atıf eşlemesi bozulur (chunk → page/slide) | Düşük | Yüksek | Chunk başına kesin metadata; her üretimde atıf doğrulama adımı; %80+ coverage kapısı |
+| Quiz üretimi halüsinasyon | Orta | Yüksek | Sıkı prompt: "SADECE sağlanan context kullan"; atıfsız soru yasağı; doğrulama; sıcaklık 0.1 |
+| Açık uçlu puanlama tutarsız | Orta | Orta | Rubrik-enforced JSON; few-shot örnekler; güven kontrolü + yeniden değerlendirme; Değerlendirme Ajanı tutarlılık ölçümü (hedef ±1 puan) |
+| Maliyet kontrolsüz artar | Düşük | Orta | `generation_logs` + Ücretsizlik Ajanı maliyet bekçiliği; prompt verimliliği denetimi |
+
+---
+
+## 10. Açık Sorular
+
+1. ~~Desktop vs Web-first?~~ **ÇÖZÜLDÜ:** Localhost web uygulaması (kullanıcı kararı, bu oturum).
+2. ~~Türkçe dil desteği?~~ **ÇÖZÜLDÜ:** Tüm UI ve prompt'lar Türkçe.
+3. ~~LLM çalışma zamanı?~~ **ÇÖZÜLDÜ:** Yerel LLM çalıştırılmayacak (kullanıcı kararı); LLM gerektiren görevlerde ücretli API kullanımına izin — birincil sağlayıcı: DeepSeek API. Alternatif OpenAI uyumlu sağlayıcılar yalnızca kullanıcı onayıyla (Ücretsizlik Ajanı kaydıyla).
+4. **Kullanıcı auth / çoklu cihaz?** Başlangıç: local-only (tek kullanıcı, auth yok). Sonra opsiyonel sync.
+5. **Anki/PDF/Markdown export formatı?** Genişletilebilirlik Noktası (Bölüm 13); başlangıç kapsamı dışı.
+6. **Mobil companion?** İleri tarihli. Ertele.
+
+---
+
+## 11. Geliştirme Komutları
+
+```bash
+# Backend
+cd apps/backend && uv run uvicorn src.main:app --reload --port 8000
+
+# Frontend (geliştirme)
+cd apps/frontend && npm run dev        # http://localhost:5173 → proxy:8000
+
+# Testler
+cd apps/backend && uv run pytest -v
+cd apps/frontend && npm test
+
+# Lint & Tip
+cd apps/backend && uv run ruff check . && uv run pyright
+cd apps/frontend && npm run lint && npm run typecheck
+
+# Güvenlik
+cd apps/backend && uv run bandit -r src && uv run pip-audit
+cd apps/frontend && npm audit
+gitleaks detect --source .             # her commit öncesi
+
+# Embedding modeli (bir kez, ücretsiz)
+# sentence-transformers ilk kullanımda modeli otomatik indirir (HF Hub)
+```
+
+**DSH pratiği (Windows):** Uzun süreçler (uvicorn, vite, test koşuları) `pwsh`/`bash` + `run_in_background` ile başlatılır; loglar `job_output` ile okunur, `job_kill` ile durdurulur (force-kill `exit code 1` olarak raporlanır — interruption sayılır). Alt süreç çıktısı named-pipe üzerinden yakalanamaz (EPERM) — `stdio: inherit/ignore` kullanılır. Sandbox reddi (`[sandbox: file access denied ...]`) politika reddidir: komut başka yoldan tekrarlanmaz; yalnızca gerçek reddin ardından aynı komut bir kez, en dar geniş modla (`sandbox_permissions`) + gerekçeyle talep edilebilir. Ayrıntı: `SİSTEM_YETENEKLERİ.md` Bölüm 3–4.
+
+---
+
+## 12. Kalite Kapıları (Kalite Kontrol Ajanı tarafından)
+
+| Kontrol | Araç | Geçme Kriteri |
+|---------|------|---------------|
+| Unit testler | pytest / vitest | %100 geçiş, flaky yok |
+| Lint temiz | ruff / eslint | 0 hata, 0 uyarı |
+| Tipler temiz | pyright / tsc | 0 hata |
+| Güvenlik tarama | bandit / pip-audit / npm audit | 0 high/critical |
+| Sırlar tarama | gitleaks / trufflehog | 0 sızıntı (anahtar asla commit'te) |
+| Atıflar geçerli | atıf doğrulama adımı (`06-atif-sistemi.md`) | 0 çözümsüz atıf, %80+ coverage |
+| Quiz halüsinasyonu | atıf denetimi | Her soru geçerli chunk'a atıflı; atıfsız soru = fail |
+| Şema geçerli | JSON Schema | Tüm AI çıktısı validate |
+| Maliyet log'u | generation_logs | Her LLM çağrısı log'lu; anormal artış raporlanır |
+| Regresyon | Diff vs baseline | Sadece beklenen değişiklikler |
+| Coverage | pytest-cov / vitest coverage | Backend %90, Frontend %85 |
+| RAG kalitesi | Değerlendirme Ajanı | Precision/recall hedefleri faz başında belirlenir ve raporlanır |
+| Erişilebilirlik | axe-core | WCAG 2.1 AA |
+| Tasarım token | stil denetimi | Hardcoded renk/spacing yok (`07-stil-rehberi.md`) |
+
+> **Faz uygulanabilirliği:** Unit/lint/tip/güvenlik/sır/coverage kapıları her fazda geçerlidir. Atıf, quiz halüsinasyonu, şema ve RAG kalitesi kapıları Faz 3'ten itibaren (üretim hatları mevcutken) uygulanır; erken fazlarda ölçülecek çıktısı olmayan kapı "uygulanamaz" işaretlenir ve blokaj oluşturmaz.
+>
+> **Kapı sahipliği:** Güvenlik ve sır tarama kapılarını Güvenlik Denetim Ajanı yürütür; atıf/quiz/RAG kapılarının ölçümlerini Değerlendirme Ajanı üretir; Kalite Kontrol Ajanı tüm kapıların kanıt tüketicisidir ve GEÇTİ/KALDI kararını verir.
+
+---
+
+## 13. Genişletilebilirlik Noktaları
+
+1. **Yeni Quiz Tipleri:** `04-overall-quiz-uretimi.md` prompt + şemaya ekle
+2. **Yeni Export Formatları:** export_service.py (Anki, PDF, MD) — Faz 6 sonrası
+3. **Arama & Komut Paleti (Cmd+K):** Faz 6 sonrası
+4. **Yeni Diller:** Prompt dili ve embedding modeli değiştirilir (bge-m3 çok dilli)
+5. **Yeni Dosya Tipleri:** Indexer'a extractor ekle (DOCX, EPUB)
+6. **Alternatif LLM Sağlayıcı:** LLM sağlayıcı arayüzü arkasında DeepSeek ↔ OpenAI uyumlu başka bir sağlayıcıya geçiş (Ayarlar'dan; kullanıcı onayı + istisna kaydı şart). Yerel LLM (Ollama/GGUF) kullanıcı kararıyla kapsam dışıdır.
+7. **Opsiyonel Bulut Sync:** Feature flag arkasında sync engine (çok cihaz)
+
+---
+
+## 14. Dosya Yapısı
+
+```
+StuHub DS/
+├── PROJE_YOL_HARITASI.md     ← BU BELGE (belkemiği)
+├── SİSTEM_YETENEKLERİ.md     ← DSH yetenek kataloğu + ajan kullanım rehberi (prompt)
+├── DSH_ARASTIRMA_RAPORU.md   ← DSH checkout'unun tam kazı raporu (kaynak dokümantasyon)
+├── AJANLAR/                  ← Ajan prompt dosyaları (15 adet, Bölüm 4.1)
+├── YETENEKLER/               ← Yetenek/capability dokümanları (8 adet, Bölüm 5)
+├── apps/
+│   ├── frontend/              # React + TS + Vite
+│   │   ├── src/
+│   │   │   ├── pages/         (TermsPage, CoursePage, NotebookPage, SettingsPage)
+│   │   │   ├── components/    (TermCard, CourseForm, ChapterList, NoteViewer,
+│   │   │   │                   CitationPopup, QuizPlayer, OverallQuizPlayer, ...)
+│   │   │   ├── api/           (client.ts, sse.ts)
+│   │   │   └── lib/           (utils.ts)
+│   │   └── package.json
+│   └── backend/               # FastAPI + Python
+│       ├── src/
+│       │   ├── main.py
+│       │   ├── config.py
+│       │   ├── db.py
+│       │   ├── routers/       (terms, courses, chapters, notes, quizzes, materials, settings)
+│       │   ├── services/      (pdf_service, slides_service, embed_service, rag_service,
+│       │   │                   llm_service, export_service)
+│       │   ├── agents/        (note_generator, quiz_generator, overall_quiz_generator, essay_grader)
+│       │   ├── prompts/       (Faz 3+'ta oluşturulur; şablonlar YETENEKLER/02-06'dan taşınır)
+│       │   └── workers/       (indexer.py)
+│       ├── sql/               (schema.sql, migrations/)
+│       ├── tests/               (birim testler + eval/ altın veri kümeleri)
+│       └── pyproject.toml
+├── data/                      # Uygulama verisi (SQLite, LanceDB, materials/) — git'e GİRMEZ
+├── .tools/                    # Proje-yerel araçlar (uv-python, gitleaks) — git'e GİRMEZ
+├── .github/workflows/         (ci.yml)
+├── .gitignore                 # data/, .env dahil
+└── README.md
+```
+
+---
+
+## 15. Sürüm Geçmişi
+
+| Tarih | Sürüm | Değişiklik |
+|-------|-------|------------|
+| 2026-08-12 | 1.0 | İlk resmi belkemiği belgesi (`C:\Users\kerew\.hermes\plans\PROJE_YOL_HARITASI.md`): Tauri masaüstü, yerel llama.cpp, 12 ajan, 8 haftalık faz planı |
+| (bu oturum) | 2.0 | StuHub DS workspace'ine taşındı. **Karar deltaları:** platform → localhost web (Tauri kaldırıldı); LLM → kullanıcının DeepSeek API anahtarı (llama.cpp kaldırıldı, Model Yönetimi → API Yapılandırması); embedding → sentence-transformers çok dilli; güvenlik bölümü revize edildi; Açık Sorular #1-#3 çözüldü |
+| (bu oturum) | 3.0 | **Mimari denetim raporu (17 düzeltme) uygulandı:** PPTX→PDF render pipeline; çok dilli embedding; batch quiz üretimi; map-reduce not üretimi; `slides` tablosu; Ayarlar sayfası + `generation_logs` + maliyet bekçisi; Faz 6 kapsamı (fazlalıklar genişletilebilirliğe taşındı); puanlama güven kontrolü; FIB normalizasyonu; Değerlendirme Ajanı (13. ajan); hibrit retrieval somutlaştırıldı; SSE streaming; `models` tablosu kaldırıldı; atıf doğrulama somutlaştırıldı; Effort kuralı (Ana Ajan V4 Pro sabit, diğerleri V4 Flash + yükseltme); Başlatma Protokolü eklendi |
+| (bu oturum) | 4.0 | **DeepSeek Harness (DSH) tam kazısı entegre edildi.** `C:\Users\kerew\deepseek-harness` checkout'u (developer preview, 0.1.0-rc.5) derinlemesine araştırıldı: Cordis mimarisi, profil/bundle katmanları, 44 araçlık katalog, config/persistence katalogları, 50+ alt sistem, 47 paket grubu, CLI/Web/Python SDK/native/örnekler. Çıktılar: (1) `DSH_ARASTIRMA_RAPORU.md` — tam kazı raporu; (2) `SİSTEM_YETENEKLERİ.md` — araştırmanın ajan promptuna dönüştürülmüş hali (araç kataloğu, sandbox/onay kuralları, orkestrasyon rehberi, StuHub DS eşlemesi). Session başlangıç akışına (Bölüm 4.5) ve Bölüm 5/14'e referanslar işlendi |
+| (bu oturum) | 4.1 | **DSH kataloğuna göre ince ayar:** Bölüm 0'a geliştirme katmanı sınırı (ürün kodu DSH plugin'i değildir) + ikinci zorunlu okuma notu; Bölüm 2.1'e DSH satırı; 4.2'ye Settings→Models notu; 4.5'e delegasyonda dosya yolu + `read` stratejisi (context optimizasyonu) ve `job_output` toplama kuralı; Başlatma Protokolü'ne goal semantiği (create/resume/complete) + `ask_user_question` yalnız-kök-ajan kuralı + `ralph` sınırı; Bölüm 11'e Windows süreç/sandbox pratikleri |
+| (bu oturum) | 4.2 | **Ücretsizlik istisnası genişletildi (kullanıcı kararı):** yerel LLM çalıştırılmayacak; LLM gerektiren tüm görevlerde ücretli API kullanımına izin verilir (birincil: DeepSeek API; alternatif OpenAI uyumlu sağlayıcı yalnızca kullanıcı onayıyla). Yerel embedding modeli LLM sayılmaz, yerelde kalır; Bölüm 13'teki yerel model uzantısı kaldırıldı, alternatif sağlayıcı geçişine çevrildi |
+| (bu oturum) | 4.3 | **Başlangıç öncesi denetim düzeltmeleri:** uzak embedding fallback'i (HF Inference) kaldırıldı — embedding kesinlikle yerel (gizlilik sözleşmesi); FIB feedback şeması tamamlandı + LLM hakem yedeği kaldırıldı (üretim anında genişletilmiş kabul listesi, interaksiyonda LLM çağrısı yok); batch/üst zarf JSON şemaları tanımlandı (03/04); marker-pdf lisansı GPL-3.0 olarak düzeltildi; `quizzes.type` kaldırıldı; puanlama riskindeki tanımsız "flag/override" çıkarıldı; Faz 0–2 sahipliği için **Frontend Geliştirici + Backend Geliştirici ajanları eklendi (toplam 15 ajan)** |
+
+---
+
+*Bu belge Ana Ajan ve tüm alt ajanlar tarafından referans alınır. Değişiklikler Ana Ajan koordinasyonunda yapılır ve Sürüm Geçmişi'ne işlenir.*

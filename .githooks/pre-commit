@@ -1,0 +1,24 @@
+#!/bin/sh
+# StuHub DS pre-commit hook — gitleaks sır taraması
+# Çalışma: git config core.hooksPath .githooks
+# gitleaks ikilisi: .tools/gitleaks/gitleaks.exe (workspace-relative, Faz 0.0)
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+GITLEAKS="$REPO_ROOT/.tools/gitleaks/gitleaks.exe"
+
+if [ ! -f "$GITLEAKS" ]; then
+  echo "UYARI: gitleaks bulunamadi (.tools/gitleaks/gitleaks.exe) — tarama atlandi."
+  echo "       Kurulum: PROJE_YOL_HARITASI.md Faz 0.0 (bkz. .tools/)."
+  exit 0
+fi
+
+"$GITLEAKS" protect --staged --source "$REPO_ROOT" -v
+STATUS=$?
+if [ $STATUS -ne 0 ]; then
+  echo ""
+  echo "❌ Sır taraması başarısız — commit reddedildi (gitleaks)."
+  exit 1
+fi
+
+echo "✅ gitleaks: sır bulunamadı."
+exit 0

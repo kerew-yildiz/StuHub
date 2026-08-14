@@ -1,0 +1,69 @@
+# StuHub DS — CI/CD
+# Faz 0.1: her push/PR'de lint + tip + test + build + sır taraması.
+# Ücretsiz tier (GitHub Actions); tüm adımlar ücretsiz açık kaynak araçlarla.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  secrets-scan:
+    name: Sır taraması (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  backend:
+    name: Backend (ruff + pyright + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/backend
+    steps:
+      - uses: actions/checkout@v4
+      - name: uv kurulumu
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - name: Bağımlılıklar
+        run: uv sync --frozen
+      - name: Lint (ruff)
+        run: uv run ruff check .
+      - name: Tipler (pyright)
+        run: uv run pyright
+      - name: Testler (pytest)
+        run: uv run pytest -v
+
+  frontend:
+    name: Frontend (lint + typecheck + test + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - name: Node kurulumu
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/frontend/package-lock.json
+      - name: Bağımlılıklar
+        run: npm ci
+      - name: Lint (eslint)
+        run: npm run lint
+      - name: Tipler (tsc)
+        run: npm run typecheck
+      - name: Testler (vitest)
+        run: npm test
+      - name: Build
+        run: npm run build

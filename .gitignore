@@ -1,0 +1,40 @@
+# ── Uygulama verisi (asla commit edilmez) ─────────────────────────────
+data/
+
+# ── Sırlar ────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ── Araçlar (workspace'te tutulan indirilmiş ikililer) ────────────────
+.tools/
+
+# ── Python ────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+dist/
+build/
+
+# ── Node ──────────────────────────────────────────────────────────────
+node_modules/
+dist/
+*.tsbuildinfo
+.vite/
+
+# ── Editör / OS ───────────────────────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
