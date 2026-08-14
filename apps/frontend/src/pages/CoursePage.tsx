@@ -5,12 +5,14 @@ import { chaptersApi, type Chapter } from '../api/chapters'
 import { coursesApi, type Course } from '../api/courses'
 import { indexingApi, type IndexingJob } from '../api/indexing'
 import { materialsApi, type Material } from '../api/materials'
+import { getOverallQuiz, streamOverallQuizGeneration, type OverallQuiz } from '../api/overall'
 import { ChapterForm } from '../components/ChapterForm'
 import { MaterialUploadForm } from '../components/MaterialUploadForm'
+import { OverallQuizPlayer } from '../components/OverallQuizPlayer'
 
 type LoadState = 'loading' | 'ready' | 'error'
 
-/** Ders defteri (notebook) landing sayfası — chapter + materyaller (Faz 1.3/2.2). */
+/** Ders defteri (notebook) landing sayfası — chapter + materyaller + genel quiz (Faz 1.3/2.2/5). */
 export function CoursePage() {
   const { courseId } = useParams<{ courseId: string }>()
   const numericId = Number(courseId)
@@ -22,6 +24,13 @@ export function CoursePage() {
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState('')
   const [showChapterForm, setShowChapterForm] = useState(false)
+
+  // genel quiz durumu
+  const [overallQuiz, setOverallQuiz] = useState<OverallQuiz | null>(null)
+  const [quizGenerating, setQuizGenerating] = useState(false)
+  const [quizProgress, setQuizProgress] = useState(0)
+  const [quizMessage, setQuizMessage] = useState('')
+  const [quizKey, setQuizKey] = useState(0)
 
   const refreshJobs = useCallback(async () => {
     if (!numericId) return
@@ -37,22 +46,47 @@ export function CoursePage() {
     if (!numericId) return
     setState('loading')
     try {
-      const [courseData, chapterList, materialList, jobList] = await Promise.all([
+      const [courseData, chapterList, materialList, jobList, existingQuiz] = await Promise.all([
         coursesApi.get(numericId),
         chaptersApi.listByCourse(numericId),
         materialsApi.listByCourse(numericId),
         indexingApi.listByCourse(numericId),
+        getOverallQuiz(numericId),
       ])
       setCourse(courseData)
       setChapters(chapterList)
       setMaterials(materialList)
       setJobs(jobList)
+      setOverallQuiz(existingQuiz)
       setState('ready')
     } catch {
       setState('error')
       setError('Ders yüklenemedi. Lütfen tekrar deneyin.')
     }
   }, [numericId])
+
+  const handleGenerateOverallQuiz = async () => {
+    setQuizGenerating(true)
+    setQuizProgress(0)
+    setQuizMessage('Hazırlanıyor…')
+    setError('')
+    await streamOverallQuizGeneration(numericId, {
+      onStatus: (percent, message) => {
+        setQuizProgress(percent)
+        setQuizMessage(message)
+      },
+      onDone: (quiz) => {
+        setOverallQuiz(quiz)
+        setQuizKey((k) => k + 1)
+        setQuizGenerating(false)
+        setQuizMessage('')
+      },
+      onError: (message) => {
+        setError(message)
+        setQuizGenerating(false)
+      },
+    })
+  }
 
   useEffect(() => {
     void load()
@@ -264,6 +298,48 @@ export function CoursePage() {
             })}
           </div>
         </div>
+      </div>
+
+      {/* Genel quiz */}
+      <div className="mt-12">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold">Genel Quiz</h2>
+            <p className="mt-1 text-sm text-stuhub-text-secondary">
+              Dersin tüm chapter notlarından 50 soru: çoktan seçmeli, doğru-yanlış, boşluk
+              doldurma ve açık uçlu (otomatik puanlama).
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleGenerateOverallQuiz()}
+            disabled={quizGenerating}
+            className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-50"
+          >
+            {quizGenerating ? 'Üretiliyor…' : overallQuiz ? 'Genel Quiz\'i Yenile' : 'Genel Quiz Oluştur'}
+          </button>
+        </div>
+
+        {quizGenerating && (
+          <div className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface p-5">
+            <p className="text-sm font-medium">{quizMessage}</p>
+            <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-stuhub-border">
+              <div
+                className="h-full bg-stuhub-accent transition-all duration-300"
+                style={{ width: `${Math.max(quizProgress, 2)}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {!quizGenerating && overallQuiz && (
+          <OverallQuizPlayer key={quizKey} quiz={overallQuiz} />
+        )}
+        {!quizGenerating && !overallQuiz && !error && (
+          <p className="mt-4 text-sm text-stuhub-text-secondary">
+            Henüz genel quiz yok. Önce chapter'lar için not oluşturup buradan başlat.
+          </p>
+        )}
       </div>
     </section>
   )
