@@ -63,11 +63,59 @@ Tarayıcıda **http://localhost:5173** açılır. Backend kapalıysa üstte uyar
    - Açık uçlu cevaplar gönderildiğinde **0-10 arası otomatik puanlanır**; doğru/eksik/yanlış/gereksiz
      bölümleri ve **ideal cevap** gösterilir.
 
+## 3b. v2 Özellikleri (Niş Analizi Entegrasyonu)
+
+**Flashcard + uzamsal tekrar:**
+- Chapter sayfası **Kartlar** sekmesi → **Kart Oluştur** (not + quizden atıflı kart üretir).
+- Kartı çevirmek için tıklayın; arka yüzde **Again / Hard / Good / Easy** — yerel SM-2 algoritması
+  her kartın bir sonraki tekrar gününü hesaplar (veri yalnız cihazınızda).
+- Ders sayfası **Bugünün Kartları** — günün tekrar kuyruğu (vadesi geçenler önce).
+
+**Materyale Sor (atıflı sohbet):**
+- Ders sayfası **Materyale Sor** sekmesi → soru sorun; yanıtlar **zorunlu kaynak atıflı** gelir
+  (tıklayınca kaynak parça açılır). Modlar: **Doğrudan** / **Sokratik** (cevap yerine ipucu) /
+  **Sınav Modu** (soruyu AI sorar, cevabınızı atıflı değerlendirir).
+
+**Medya alımı (yeni girdiler):**
+- Ders sayfası materyal yükleme artık şunları kabul eder: **DOCX, EPUB, görsel (OCR),
+  ses kaydı (mp3/m4a/wav/ogg)** — ses otomatik transkribe edilir (yerel faster-whisper;
+  ilk kullanımda model indirilir, ücretsiz) ve ardından otomatik indekslenir.
+- **YouTube** ve **metin yapıştırma** ders sayfasındaki medya bölümünden eklenir; YouTube
+  önce altyazı (tr→en) dener, yoksa sesi yerel olarak çevirir.
+
+**Çalışma rehberi:**
+- Chapter/ders **Rehber** sekmesi → **Özet Üret** (özet + anahtar terimler + sınav odakları)
+  ve **Kavram Haritası** (nottaki kavramların yönlü haritası).
+
+**Ödev değerlendirici:**
+- Ders sayfası **Ödev Değerlendir** sekmesi → talimat + (opsiyonel) ölçütler + ödev metni →
+  **0–100 rubrikli puan**, ölçüt kırılımı, güçlü/zayıf yönler ve alıntılı yorumlar.
+
+**Export & arşiv:**
+- Not: **PDF İndir** + **MD İndir**. Kartlar: set başına **Anki (.apkg)** + **CSV**;
+  ders sayfasından tüm kartları tek Anki paketinde indirin (deck adı `StuHub::{Ders}`).
+- Dönem sayfası → **Dönem Arşivi İndir** (zip; "materyal dosyalarıyla" seçeneği).
+  Dönemler sayfası → **Arşiv İçe Aktar** (zip seçin) — yeni dönem olarak eklenir
+  (mevcut veri asla silinmez; çakışan isme "(içe aktarıldı)" eklenir). Çok cihaz
+  taşımanın yerel yolu budur.
+
+**Alışkanlıklar ve mobil:**
+- Dönemler sayfasında **streak halkası** (günlük hedef: Ayarlar'dan değiştirilebilir).
+- İlk açılışta **3 adımlı onboarding** dönem + derslerinizi kurar.
+- Üretim modunda uygulama **PWA** olarak kurulabilir; telefonda aynı ağdan
+  `http://<bilgisayar-ip>:8000` ile erişin (veri yine bilgisayarda kalır).
+
+**Çok dilli üretim:** `.env`'e `STUHUB_NOT_DILI=en` (veya `auto`) ekleyin — not/quiz/
+flashcard/rehber üretim dili değişir (varsayılan: Türkçe).
+
 ## 4. Maliyet
 
 Not/quiz üretimi DeepSeek API'sini kullanır (kendi anahtarınız). Tüm çağrılar
 `generation_logs` tablosunda izlenir (tür, model, token sayısı). Örnek: tek chapter notu +
 bölüm quizi ≈ **10-30 bin token** (kuruş mertebesinde). Açık uçlu puanlama quiz başına 5 küçük çağrı ekler.
+v2 ekleri: flashcard seti (konu başına çağrı), chat yanıtı (soru başına), rehber ve ödev
+değerlendirme çağrıları aynı kuruş-mertebesi ölçektedir. **Embedding, transkripsiyon ve OCR
+ücretsiz ve yereldir — API kotası harcamaz.**
 
 ## 5. Güvenlik & Gizlilik
 

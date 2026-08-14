@@ -14,7 +14,7 @@ from .db import init_db
 from .routers import api_router
 from .workers.indexer import recover_stale_jobs, worker_loop
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "2.0.0"
 
 # Üretim: inşa edilmiş frontend (apps/frontend/dist) — varsa servis edilir (yol haritası 2.2.2)
 FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
