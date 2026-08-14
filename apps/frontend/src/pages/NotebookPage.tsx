@@ -157,7 +157,7 @@ export function NotebookPage() {
         <p className="mt-8 text-sm text-stuhub-text-secondary">Yükleniyor…</p>
       )}
 
-      {/* Guide slides — önizleyici + PDF açma */}
+      {/* Guide slides — orijinal dosya önizlemesi (PDF) ya da metin kartı */}
       <div className="mt-8">
         <h2 className="text-xl font-semibold">Guide Slides</h2>
         <p className="mt-1 text-sm text-stuhub-text-secondary">
@@ -167,13 +167,31 @@ export function NotebookPage() {
           <GuideSlidesForm onUpload={handleUpload} />
         </div>
 
-        <div className="mt-5">
-          <SlidePreview
-            slides={slides}
-            onDelete={handleDeleteSlide}
-            onOpenPdf={slidesPdfUrl ? () => setPdfPreview(slidesPdfUrl) : undefined}
-          />
-        </div>
+        {slidesPdfUrl ? (
+          <div className="mt-5 overflow-hidden rounded-md border border-stuhub-border bg-stuhub-surface">
+            <div className="flex items-center justify-between border-b border-stuhub-border bg-stuhub-bg px-4 py-2">
+              <span className="text-sm font-medium">
+                Orijinal sunum · {slides.length} slayt
+              </span>
+              <button
+                type="button"
+                onClick={() => setPdfPreview(slidesPdfUrl)}
+                className="rounded-sm bg-stuhub-accent px-3 py-1 text-xs font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
+              >
+                Tam ekran aç
+              </button>
+            </div>
+            <iframe
+              src={slidesPdfUrl}
+              title="Sunum önizleme"
+              className="h-[65vh] w-full bg-white"
+            />
+          </div>
+        ) : (
+          <div className="mt-5">
+            <SlidePreview slides={slides} onDelete={handleDeleteSlide} />
+          </div>
+        )}
       </div>
 
       {/* Not — açılır kapanır pencere + PDF indir */}

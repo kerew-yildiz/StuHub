@@ -5,11 +5,10 @@ import type { Slide } from '../api/slides'
 interface SlidePreviewProps {
   slides: Slide[]
   onDelete: (slideId: number) => void
-  onOpenPdf?: () => void
 }
 
-/** Slide önizleyici — slaytları teker teker kart olarak gösterir; PDF'i tam ekran açar. */
-export function SlidePreview({ slides, onDelete, onOpenPdf }: SlidePreviewProps) {
+/** Slide önizleyici (metin yedeği) — PDF yoksa slaytları teker teker kart olarak gösterir. */
+export function SlidePreview({ slides, onDelete }: SlidePreviewProps) {
   const [index, setIndex] = useState(0)
 
   if (slides.length === 0) {
@@ -39,15 +38,6 @@ export function SlidePreview({ slides, onDelete, onOpenPdf }: SlidePreviewProps)
           Slide {current + 1} / {slides.length}
         </span>
         <div className="flex items-center gap-1">
-          {onOpenPdf && (
-            <button
-              type="button"
-              onClick={onOpenPdf}
-              className="mr-2 rounded-sm bg-stuhub-accent px-3 py-1 text-xs font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
-            >
-              Sunumu aç
-            </button>
-          )}
           <button
             type="button"
             onClick={() => setIndex((i) => Math.min(slides.length - 1, i + 1))}
