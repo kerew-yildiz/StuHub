@@ -75,8 +75,11 @@
 ┌────────────────────────────────────────────────────────────────┐
 │                    FastAPI Backend (Python)                     │
 │  ┌────────────┐ ┌────────────┐ ┌───────────────────────────┐   │
-│  │ Dosya Sist │ │  SQLite    │ │  AI Pipeline Servisleri   │   │
-│  │(PDF, PPTX) │ │ (metadata) │ │  (not, quiz, puanlama)    │   │
+│  │ Medya Gir. │ │  SQLite    │ │  AI Pipeline Servisleri   │   │
+│  │(PDF/PPTX/  │ │ (metadata) │ │  (not, quiz, puanlama,    │   │
+│  │ YouTube/ses│ │            │ │   chat, kart, rehber,     │   │
+│  │ DOCX/EPUB/ │ │            │ │   essay, arşiv)           │   │
+│  │ OCR)       │ │            │ │                           │   │
 │  └────────────┘ └────────────┘ └───────────────────────────┘   │
 └────────────────────────────────────────────────────────────────┘
                    │                        │
@@ -87,6 +90,7 @@
  │(vektörler)│ │transformer│ │(materyal+    │        │  kullanıcı anahtarı)
  └──────────┘ │(embedding)│ │ PDF render) │        │
               └──────────┘ └──────────────┘        │
+ Yerel STT (faster-whisper) · Yerel OCR (rapidocr) · yt-dlp (altyazı)
 ```
 
 ### 2.1 Teknoloji Kararları
@@ -666,7 +670,7 @@ StuHub DS/
 | 6 | Polish, Kalite & Teslim | ✅ TAMAM | 2026-08-14 | 6.1 Stil denetimi (bileşenlerde hardcoded renk yok, tokenlar); 6.2 Kalite kapıları tam geçiş (75 pytest + 8 vitest + tüm lint/type/audit 0); 6.3 Canlı uçtan uca kabul akışı doğrulandı (kullanıcı son testini yapar); 6.4 KULLANIM.md + README; 6.5 Güvenlik denetimi (gitleaks 0, anahtar sızıntısı yok, answer_key gizliliği testli). **Üretim modu: FastAPI inşa edilmiş SPA'yi tek adreste sunar (v1.0.0)** |
 | V2.0 | v2 Mimari İskelet | ✅ TAMAM | (bu oturum) | Migration runner (schema_migrations) + 0001/0002 + yeni tablolar + extractor registry + config v2 + 5 yeni ajan (15–19) + 7 yeni yetenek (09–15) + bağımlılıklar (yt-dlp, faster-whisper, rapidocr, python-docx, vite-plugin-pwa). Kapılar: ruff/pyright 0, pytest 82/82, bandit 0, pip-audit 0, eslint/tsc 0, vitest 8/8, build ✓, npm audit 0, gitleaks temiz. v1 davranışı birebir korundu |
 | V2.1 | Materyale Sor | ✅ TAMAM | (bu oturum) | `chat_service` (retrieval → numaralı kaynaklar → SSE; atıf doğrulama + retry olayı; direct/socratic/quiz; `chat_messages` + `activity_log` UPSERT) + `routers/chat.py` (POST SSE/GET/DELETE) + ChatPanel (atıf çipli, CitationPopup preloaded) + CoursePage bölümü. Kapılar: pytest 12 yeni test, vitest 3 yeni test |
-| V2.2 | Flashcard + SM-2 | ⬜ PLANLI | — | Not+quiz'den atıflı kart üretimi, yerel SM-2 (Again/Hard/Good/Easy), FlashcardPlayer, kurs due kuyruğu |
+| V2.2 | Flashcard + SM-2 | ✅ TAMAM (backend+frontend; commit sıradaki turda) | (bu oturum) | `flashcard_generator` (not+quiz'den konu başına map-reduce kart üretimi, atıf zorunlu + dedup + asla başarısız olma) + `routers/flashcards.py` (SSE üretim, set listesi, due kuyruğu [vadesi geçen önce], SM-2 review UPSERT + activity_log) + `srs.py` (deterministik çekirdek) + FlashcardPlayer (flip + Again/Hard/Good/Easy + atıf çipleri) + NotebookPage "Kartlar" + CoursePage "Bugünün Kartları". Kapılar: pytest 157, vitest 15 |
 | V2.3 | Export + Arşiv | 🚧 SÜRÜYOR (backend) | — | Not MD/PDF, Anki `.apkg` (stdlib), CSV, dönem arşivi export/import (manifest v1) — backend servisleri + router hazır; frontend butonları V2.4 paketiyle |
 | V2.4 | UI Paketi | ⬜ PLANLI | — | Notebook/kurs mod sekmeleri, Dönem→Ders→Chapter sidebar ağacı, streak + günlük hedef halkası, 3 adımlı onboarding |
 | V2.5 | Essay Değerlendirici | ⬜ PLANLI | — | Genel "ödev yükle → değerlendir" akışı (rubrikli 0–100 + alıntılı yorumlar), essay_submissions |
