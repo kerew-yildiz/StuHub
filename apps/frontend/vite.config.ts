@@ -14,6 +14,10 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    watch: {
+      // Editör geçici dosyaları (…tmpdir/*.tmp) Vite izleyicisini EBUSY ile çökertiyor — yoksay
+      ignored: ['**/*.tmp*', '**/.tmpdir/**', '**/.*.tmpdir/**'],
+    },
     proxy: {
       // Geliştirmede backend'e ulaşım (yol haritası 2.2)
       '/api': {
