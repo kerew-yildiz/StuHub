@@ -1,8 +1,12 @@
 # StuHub DS
 
-Üniversite öğrencileri için **yerel** (localhost) çalışan AI ders çalışma asistanı. Ders dönemlerini klasörler, her ders için notebook oluşturur; dersin PDF kitapları, hoca sunumları ve v2 ile **YouTube videoları, ses kayıtları, DOCX/EPUB belgeleri, görseller ve yapıştırılan metinler** üzerinden **atıflı AI notları**, **bölüm ve genel quizler**, **flashcard'lar (SM-2 uzamsal tekrar)**, **atıflı "Materyale Sor" sohbeti**, **çalışma rehberi + kavram haritası** ve **ödev değerlendirmesi** üretir. Tüm veri cihazınızda kalır.
+Üniversite öğrencileri için AI ders çalışma asistanı. Ders dönemlerini klasörler, her ders için notebook oluşturur; dersin PDF kitapları, hoca sunumları ve v2 ile **YouTube videoları, ses kayıtları, DOCX/EPUB belgeleri, görseller ve yapıştırılan metinler** üzerinden **atıflı AI notları**, **bölüm ve genel quizler**, **flashcard'lar (SM-2 uzamsal tekrar)**, **atıflı "Materyale Sor" sohbeti**, **çalışma rehberi + kavram haritası** ve **ödev değerlendirmesi** üretir.
 
-> ✅ **1.0 sürümü teslim edildi** (Faz 0–6). **2.0 sürümü geliştirildi** (V2.0–V2.9 — Niş Analizi Entegrasyonu; kaynak: [`NİŞ_ANALİZİ_RAPORU.md`](./NİŞ_ANALİZİ_RAPORU.md)). Tek kaynak doğrusu: [`PROJE_YOL_HARITASI.md`](./PROJE_YOL_HARITASI.md) (Bölüm 17: v2 sözleşmesi). Kullanım için: **[`KULLANIM.md`](./KULLANIM.md)**.
+> ✅ **1.0 sürümü teslim edildi** (Faz 0–6). **2.0 sürümü geliştirildi** (V2.0–V2.9 — Niş Analizi Entegrasyonu). Kullanım için: **[`KULLANIM.md`](./KULLANIM.md)**.
+>
+> 🎯 **Dağıtım hedefi: SaaS.** Bu repodaki sürüm **localhost'ta** çalışır (auth yok, veri `data/` altında, LLM için kendi DeepSeek anahtarınız) — bu bugünkü durumdur, nihai mimari değildir. Ürün SaaS olarak yayınlanacak; açık kararlar vault'taki `KARAR-SAAS-GECISI.md`'de. Aşağıdaki "tüm veri cihazınızda / hesap yok" ifadeleri yerel sürümü tarif eder.
+>
+> 📓 **Geliştirme belgeleri bu repoda değil.** Yol haritası, sistem yetenekleri, araştırma raporları, `AJANLAR/` ve `YETENEKLER/` sözleşmeleri KerewOS vault'unda tutulur: `KerewOS/🏰 300-Projects/StuHub/`. Belgelerin birbirine verdiği göreli yollar (`PROJE_YOL_HARITASI.md`, `AJANLAR/…`, `YETENEKLER/…`) o klasörde aynen geçerlidir. Tek kaynak doğrusu hâlâ `PROJE_YOL_HARITASI.md`; bu repo yalnızca çalışan uygulamayı barındırır.
 
 ## Özellikler
 

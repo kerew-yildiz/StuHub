@@ -8,7 +8,7 @@ GITLEAKS="$REPO_ROOT/.tools/gitleaks/gitleaks.exe"
 
 if [ ! -f "$GITLEAKS" ]; then
   echo "UYARI: gitleaks bulunamadi (.tools/gitleaks/gitleaks.exe) — tarama atlandi."
-  echo "       Kurulum: PROJE_YOL_HARITASI.md Faz 0.0 (bkz. .tools/)."
+  echo "       Kurulum: vault PROJE_YOL_HARITASI.md Faz 0.0 (bkz. .tools/)."
   exit 0
 fi
 
