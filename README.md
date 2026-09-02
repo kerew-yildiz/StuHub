@@ -1,4 +1,4 @@
-# StuHub DS
+# StuHub
 
 Üniversite öğrencileri için AI ders çalışma asistanı. Ders dönemlerini klasörler, her ders için notebook oluşturur; dersin PDF kitapları, hoca sunumları ve v2 ile **YouTube videoları, ses kayıtları, DOCX/EPUB belgeleri, görseller ve yapıştırılan metinler** üzerinden **atıflı AI notları**, **bölüm ve genel quizler**, **flashcard'lar (SM-2 uzamsal tekrar)**, **atıflı "Materyale Sor" sohbeti**, **çalışma rehberi + kavram haritası** ve **ödev değerlendirmesi** üretir.
 
