@@ -1,3 +1,4 @@
+import { X } from '@phosphor-icons/react'
 import { useState } from 'react'
 
 import type { Slide } from '../api/slides'
@@ -78,10 +79,11 @@ export function SlidePreview({ slides, onDelete }: SlidePreviewProps) {
         <button
           type="button"
           onClick={() => onDelete(slide.id)}
-          className="rounded-control px-2 py-1 text-sm text-stuhub-error transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10"
+          className="rounded-control p-1.5 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10 hover:text-stuhub-error"
+          title="Sil"
           aria-label={`Slide ${current + 1} sil`}
         >
-          Sil
+          <X className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
     </div>

@@ -1,3 +1,4 @@
+import { PencilSimple } from '@phosphor-icons/react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
@@ -234,10 +235,11 @@ export function TermDetailPage() {
                   e.stopPropagation()
                   setEditingCourse(course)
                 }}
-                className="shrink-0 rounded-control px-3 py-1.5 text-sm font-medium text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-glass-2-hover"
+                className="shrink-0 rounded-control p-2 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-glass-2-hover"
+                title="Düzenle"
                 aria-label={`${course.name} dersini düzenle`}
               >
-                Düzenle
+                <PencilSimple className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
             {editingCourse?.id === course.id && (

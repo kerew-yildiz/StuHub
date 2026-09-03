@@ -1,3 +1,4 @@
+import { X } from '@phosphor-icons/react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
@@ -447,10 +448,11 @@ export function NotebookPage() {
                     <button
                       type="button"
                       onClick={() => void handleDeleteFlashcardSet(set.id)}
-                      className="rounded-control px-2 py-1 text-sm text-stuhub-error transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10"
+                      className="rounded-control p-1.5 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10 hover:text-stuhub-error"
+                      title="Sil"
                       aria-label="Kart setini sil"
                     >
-                      Sil
+                      <X className="h-4 w-4" aria-hidden="true" />
                     </button>
                   </span>
                 </div>
@@ -518,10 +520,11 @@ export function NotebookPage() {
                     e.preventDefault()
                     void handleDeleteQuiz(quiz.id)
                   }}
-                  className="rounded-control px-2 py-1 text-sm text-stuhub-error transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10"
+                  className="rounded-control p-1.5 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10 hover:text-stuhub-error"
+                  title="Sil"
                   aria-label="Quiz'i sil"
                 >
-                  Sil
+                  <X className="h-4 w-4" aria-hidden="true" />
                 </button>
               </summary>
               <div className="mt-3">

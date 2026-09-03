@@ -1,3 +1,4 @@
+import { PencilSimple, X } from '@phosphor-icons/react'
 import { useNavigate } from 'react-router-dom'
 
 import type { Term } from '../api/terms'
@@ -38,18 +39,20 @@ export function TermCard({ term, onDelete, onEdit }: TermCardProps) {
         <button
           type="button"
           onClick={() => onEdit(term)}
-          className="rounded-control px-3 py-1.5 text-sm font-medium text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-glass-2-hover"
+          className="rounded-control p-2 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-glass-2-hover"
+          title="Düzenle"
           aria-label={`${term.name} dönemini düzenle`}
         >
-          Düzenle
+          <PencilSimple className="h-4 w-4" aria-hidden="true" />
         </button>
         <button
           type="button"
           onClick={() => onDelete(term.id)}
-          className="rounded-control px-3 py-1.5 text-sm font-medium text-stuhub-error transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10"
+          className="rounded-control p-2 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10 hover:text-stuhub-error"
+          title="Sil"
           aria-label={`${term.name} dönemini sil`}
         >
-          Sil
+          <X className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
     </article>

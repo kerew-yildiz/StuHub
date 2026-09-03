@@ -1,3 +1,4 @@
+import { PencilSimple, X } from '@phosphor-icons/react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
@@ -361,18 +362,20 @@ export function CoursePage() {
                   <button
                     type="button"
                     onClick={() => setEditingChapter(chapter)}
-                    className="rounded-control px-3 py-1 text-sm font-medium text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-glass-2-hover"
+                    className="rounded-control p-2 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-glass-2-hover"
+                    title="Düzenle"
                     aria-label={`${chapter.title} chapter'ını düzenle`}
                   >
-                    Düzenle
+                    <PencilSimple className="h-4 w-4" aria-hidden="true" />
                   </button>
                   <button
                     type="button"
                     onClick={() => handleDeleteChapter(chapter.id)}
-                    className="rounded-control px-2 py-1 text-sm text-stuhub-error transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10"
+                    className="rounded-control p-2 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10 hover:text-stuhub-error"
+                    title="Sil"
                     aria-label={`${chapter.title} chapter'ını sil`}
                   >
-                    Sil
+                    <X className="h-4 w-4" aria-hidden="true" />
                   </button>
                 </span>
               </div>
@@ -455,10 +458,11 @@ export function CoursePage() {
                     <button
                       type="button"
                       onClick={() => handleDeleteMaterial(material.id)}
-                      className="rounded-control px-2 py-1 text-stuhub-error transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10"
+                      className="rounded-control p-1.5 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10 hover:text-stuhub-error"
+                      title="Sil"
                       aria-label="Materyali sil"
                     >
-                      Sil
+                      <X className="h-4 w-4" aria-hidden="true" />
                     </button>
                   </span>
                 </div>
@@ -537,10 +541,11 @@ export function CoursePage() {
                     e.preventDefault()
                     void handleDeleteOverallQuiz(overallQuiz.id)
                   }}
-                  className="rounded-control px-2 py-1 text-sm text-stuhub-error transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10"
+                  className="rounded-control p-1.5 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10 hover:text-stuhub-error"
+                  title="Sil"
                   aria-label="Genel quiz'i sil"
                 >
-                  Sil
+                  <X className="h-4 w-4" aria-hidden="true" />
                 </button>
               </summary>
               <div className="mt-3">
