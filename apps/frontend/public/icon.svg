@@ -1,13 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <circle cx="256" cy="256" r="256" fill="#2563eb" />
-  <text
-    x="256"
-    y="256"
-    fill="#ffffff"
-    font-family="Arial, 'Segoe UI', sans-serif"
-    font-size="320"
-    font-weight="700"
-    text-anchor="middle"
-    dominant-baseline="central"
-  >S</text>
+  <defs>
+    <clipPath id="tile"><rect x="6" y="6" width="500" height="500" rx="118"/></clipPath>
+    <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.12"/>
+      <stop offset="0.55" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect x="0" y="0" width="512" height="512" fill="#1c1c1e"/>
+    <rect x="0" y="0" width="512" height="512" fill="url(#sheen)"/>
+  </g>
+  <rect x="6" y="6" width="500" height="500" rx="118" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="6"/>
+  <path
+    d="M 330,178 C 330,142 296,116 256,116 C 207,116 178,144 178,176 C 178,212 209,226 256,239 C 306,252 340,268 340,307 C 340,344 309,373 256,373 C 209,373 173,352 166,317"
+    fill="none"
+    stroke="#ffffff"
+    stroke-width="48"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
 </svg>
