@@ -7,6 +7,10 @@ import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  // Backend de aynı köke tek bir `.env` okur (src/config.py REPO_ROOT/.env) — tek
+  // dosya, tek kaynak. Aksi halde VITE_SUPABASE_* değişkenleri burada tanımlansa da
+  // Vite varsayılan olarak yalnızca apps/frontend/.env'i okur, sessizce boş kalırdı.
+  envDir: '../../',
   plugins: [
     react(),
     tailwindcss(),

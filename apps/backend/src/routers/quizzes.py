@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from ..auth import get_tenant_id
 from ..db import get_db
+from ..quota import enforce_quota
 from ..services.quiz_generator import generate_quiz_stream
 
 router = APIRouter(prefix="/api", tags=["quizzes"])
@@ -38,24 +40,28 @@ def _flatten(questions_json: dict) -> list[tuple[str, dict]]:
 
 
 @router.post("/chapters/{chapter_id}/quiz")
-async def generate_chapter_quiz(chapter_id: int) -> StreamingResponse:
+async def generate_chapter_quiz(
+    chapter_id: int, tenant_id: str = Depends(enforce_quota)
+) -> StreamingResponse:
     """Bölüm quizi üretir; SSE akışı (status / done / error)."""
     async def event_stream():
-        async for event in generate_quiz_stream(chapter_id):
+        async for event in generate_quiz_stream(chapter_id, tenant_id):
             yield _sse(event)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @router.get("/chapters/{chapter_id}/quiz")
-async def get_latest_quiz(chapter_id: int) -> dict | None:
+async def get_latest_quiz(
+    chapter_id: int, tenant_id: str = Depends(get_tenant_id)
+) -> dict | None:
     """Chapter'ın en güncel quizini döner (yoksa null)."""
     db = await get_db()
     try:
         cursor = await db.execute(
             "SELECT id, questions_json, created_at FROM quizzes "
-            "WHERE chapter_id = ? ORDER BY id DESC LIMIT 1",
-            (chapter_id,),
+            "WHERE chapter_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1",
+            (chapter_id, tenant_id),
         )
         row = await cursor.fetchone()
     finally:
@@ -71,7 +77,9 @@ async def get_latest_quiz(chapter_id: int) -> dict | None:
 
 
 @router.post("/quizzes/{quiz_id}/attempts")
-async def submit_attempt(quiz_id: int, payload: AttemptIn) -> dict:
+async def submit_attempt(
+    quiz_id: int, payload: AttemptIn, tenant_id: str = Depends(get_tenant_id)
+) -> dict:
     """Cevapları değerlendirir; feedback üretim anında hazırlandığından LLM çağrısı YOK.
 
     Feedback: doğru → feedback_correct; yanlış → feedback_wrong + explanation + atıflar.
@@ -79,7 +87,8 @@ async def submit_attempt(quiz_id: int, payload: AttemptIn) -> dict:
     db = await get_db()
     try:
         cursor = await db.execute(
-            "SELECT questions_json FROM quizzes WHERE id = ?", (quiz_id,)
+            "SELECT questions_json FROM quizzes WHERE id = ? AND tenant_id = ?",
+            (quiz_id, tenant_id),
         )
         row = await cursor.fetchone()
     finally:
@@ -125,9 +134,10 @@ async def submit_attempt(quiz_id: int, payload: AttemptIn) -> dict:
     db = await get_db()
     try:
         cursor = await db.execute(
-            "INSERT INTO quiz_attempts (quiz_id, user_answers_json, score, feedback_json) "
-            "VALUES (?, ?, ?, ?)",
+            "INSERT INTO quiz_attempts (tenant_id, quiz_id, user_answers_json, score, feedback_json) "
+            "VALUES (?, ?, ?, ?, ?)",
             (
+                tenant_id,
                 quiz_id,
                 json.dumps([a.model_dump() for a in payload.answers], ensure_ascii=False),
                 score,
@@ -149,14 +159,16 @@ async def submit_attempt(quiz_id: int, payload: AttemptIn) -> dict:
 
 
 @router.get("/chapters/{chapter_id}/quizzes")
-async def list_chapter_quizzes(chapter_id: int) -> list[dict]:
+async def list_chapter_quizzes(
+    chapter_id: int, tenant_id: str = Depends(get_tenant_id)
+) -> list[dict]:
     """Chapter'ın TÜM quizlerini (yeniden eskiye) döner — geçmiş korunur."""
     db = await get_db()
     try:
         cursor = await db.execute(
             "SELECT id, questions_json, created_at FROM quizzes "
-            "WHERE chapter_id = ? ORDER BY id DESC",
-            (chapter_id,),
+            "WHERE chapter_id = ? AND tenant_id = ? ORDER BY id DESC",
+            (chapter_id, tenant_id),
         )
         rows = await cursor.fetchall()
     finally:
@@ -173,11 +185,13 @@ async def list_chapter_quizzes(chapter_id: int) -> list[dict]:
 
 
 @router.delete("/quizzes/{quiz_id}", status_code=204)
-async def delete_quiz(quiz_id: int) -> None:
+async def delete_quiz(quiz_id: int, tenant_id: str = Depends(get_tenant_id)) -> None:
     """Quiz'i siler (denemeleriyle birlikte)."""
     db = await get_db()
     try:
-        cursor = await db.execute("DELETE FROM quizzes WHERE id = ?", (quiz_id,))
+        cursor = await db.execute(
+            "DELETE FROM quizzes WHERE id = ? AND tenant_id = ?", (quiz_id, tenant_id)
+        )
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Quiz bulunamadı")
         await db.commit()
@@ -186,14 +200,16 @@ async def delete_quiz(quiz_id: int) -> None:
 
 
 @router.get("/quizzes/{quiz_id}/attempts")
-async def list_quiz_attempts(quiz_id: int) -> list[dict]:
+async def list_quiz_attempts(
+    quiz_id: int, tenant_id: str = Depends(get_tenant_id)
+) -> list[dict]:
     """Quiz'in kayıtlı denemeleri (yeniden eskiye) — cevaplar kalıcıdır."""
     db = await get_db()
     try:
         cursor = await db.execute(
             "SELECT id, score, feedback_json, created_at FROM quiz_attempts "
-            "WHERE quiz_id = ? ORDER BY id DESC",
-            (quiz_id,),
+            "WHERE quiz_id = ? AND tenant_id = ? ORDER BY id DESC",
+            (quiz_id, tenant_id),
         )
         rows = await cursor.fetchall()
     finally:
@@ -211,11 +227,16 @@ async def list_quiz_attempts(quiz_id: int) -> list[dict]:
 
 
 @router.delete("/quiz-attempts/{attempt_id}", status_code=204)
-async def delete_quiz_attempt(attempt_id: int) -> None:
+async def delete_quiz_attempt(
+    attempt_id: int, tenant_id: str = Depends(get_tenant_id)
+) -> None:
     """Bir denemeyi (cevapları) siler."""
     db = await get_db()
     try:
-        cursor = await db.execute("DELETE FROM quiz_attempts WHERE id = ?", (attempt_id,))
+        cursor = await db.execute(
+            "DELETE FROM quiz_attempts WHERE id = ? AND tenant_id = ?",
+            (attempt_id, tenant_id),
+        )
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Deneme bulunamadı")
         await db.commit()

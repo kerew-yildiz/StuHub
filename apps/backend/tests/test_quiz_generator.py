@@ -62,7 +62,7 @@ async def _make_chapter_with_note(client) -> int:
                 f"### {TOPIC}\n\nİçerik metni [1].",
                 citations_blob,
                 topics_blob,
-                "deepseek-chat",
+                "gemini-2.5-flash",
             ),
         )
         await conn.commit()
@@ -88,7 +88,7 @@ async def _collect(agen) -> list[dict]:
 
 async def test_quiz_generation_happy_path(client, monkeypatch):
     chapter_id = await _make_chapter_with_note(client)
-    monkeypatch.setattr(llm_service.settings, "deepseek_api_key", "sk-test")
+    monkeypatch.setattr(llm_service.settings, "google_api_key", "sk-test")
     _mock_chat_json(monkeypatch, [_envelope()])
 
     events = await _collect(quiz_generator.generate_quiz_stream(chapter_id))
@@ -126,7 +126,7 @@ async def test_quiz_requires_note(client, monkeypatch):
     course_id = resp.json()["id"]
     resp = await client.post(f"/api/courses/{course_id}/chapters", json={"title": TOPIC})
     chapter_id = resp.json()["id"]
-    monkeypatch.setattr(llm_service.settings, "deepseek_api_key", "sk-test")
+    monkeypatch.setattr(llm_service.settings, "google_api_key", "sk-test")
 
     events = await _collect(quiz_generator.generate_quiz_stream(chapter_id))
     assert events[-1]["type"] == "error"
@@ -136,7 +136,7 @@ async def test_quiz_requires_note(client, monkeypatch):
 async def test_quiz_invalid_batch_skipped_with_warning(client, monkeypatch):
     """Üretilemeyen konu asla hataya düşmez — uyarıyla atlanır, quiz teslim edilir."""
     chapter_id = await _make_chapter_with_note(client)
-    monkeypatch.setattr(llm_service.settings, "deepseek_api_key", "sk-test")
+    monkeypatch.setattr(llm_service.settings, "google_api_key", "sk-test")
     # her seferinde geçersiz (3 sorulu) zarf
     bad = _envelope()
     bad["questions"] = bad["questions"][:3]
@@ -154,7 +154,7 @@ async def test_quiz_invalid_batch_skipped_with_warning(client, monkeypatch):
 async def test_quiz_unattributed_question_self_heals(client, monkeypatch):
     """Atıfsız soru: katı denetim geçemezse atıf bölümün ilk kaynağıyla onarılır."""
     chapter_id = await _make_chapter_with_note(client)
-    monkeypatch.setattr(llm_service.settings, "deepseek_api_key", "sk-test")
+    monkeypatch.setattr(llm_service.settings, "google_api_key", "sk-test")
     bad = _envelope()
     bad["questions"][0]["citations"] = []
     _mock_chat_json(monkeypatch, [bad])
@@ -169,7 +169,7 @@ async def test_quiz_unattributed_question_self_heals(client, monkeypatch):
 
 async def test_quiz_unbalanced_is_rebalanced(client, monkeypatch):
     chapter_id = await _make_chapter_with_note(client)
-    monkeypatch.setattr(llm_service.settings, "deepseek_api_key", "sk-test")
+    monkeypatch.setattr(llm_service.settings, "google_api_key", "sk-test")
     # 5 soru da 0. şıkta doğru — yeniden dengeleme devreye girmeli
     bad = _envelope()
     for q in bad["questions"]:

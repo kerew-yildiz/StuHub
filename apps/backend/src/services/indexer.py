@@ -90,7 +90,7 @@ def _embed_batch(texts: list[str]) -> list[list[float]]:
     return embed_service.embed_texts(texts)
 
 
-async def run_indexing_job(job_id: int) -> None:
+async def run_indexing_job(job_id: int, tenant_id: str) -> None:
     """Tek indeksleme/transkripsiyon işini çalıştırır.
 
     kind='transcribe' → transkript üret (ses/youtube) + otomatik 'index' işi zincirle.
@@ -100,8 +100,9 @@ async def run_indexing_job(job_id: int) -> None:
     db = await get_db()
     try:
         cursor = await db.execute(
-            "SELECT id, course_id, material_id, status, kind FROM indexing_jobs WHERE id = ?",
-            (job_id,),
+            "SELECT id, course_id, material_id, status, kind FROM indexing_jobs "
+            "WHERE id = ? AND tenant_id = ?",
+            (job_id, tenant_id),
         )
         job = await cursor.fetchone()
         if job is None or job["status"] not in ("pending", "processing"):
@@ -109,8 +110,8 @@ async def run_indexing_job(job_id: int) -> None:
 
         await db.execute(
             "UPDATE indexing_jobs SET status='processing', progress=5, "
-            "updated_at=CURRENT_TIMESTAMP WHERE id=?",
-            (job_id,),
+            "updated_at=CURRENT_TIMESTAMP WHERE id=? AND tenant_id=?",
+            (job_id, tenant_id),
         )
         await db.commit()
 
@@ -118,8 +119,8 @@ async def run_indexing_job(job_id: int) -> None:
         if material_id is None:
             raise RuntimeError("materyal kimliği eksik")
         cursor = await db.execute(
-            "SELECT id, course_id, type, filepath FROM materials WHERE id = ?",
-            (material_id,),
+            "SELECT id, course_id, type, filepath FROM materials WHERE id = ? AND tenant_id = ?",
+            (material_id, tenant_id),
         )
         material = await cursor.fetchone()
         if material is None:
@@ -128,7 +129,7 @@ async def run_indexing_job(job_id: int) -> None:
         course_id = material_dict["course_id"]
 
         if job["kind"] == "transcribe":
-            await _run_transcribe_job(job_id, material_dict)
+            await _run_transcribe_job(job_id, material_dict, tenant_id)
             return
 
         extracted, kind = await asyncio.to_thread(_extract_material, material_dict)
@@ -144,8 +145,8 @@ async def run_indexing_job(job_id: int) -> None:
             page_count = len(extracted)
 
         await db.execute(
-            "UPDATE materials SET page_count = ? WHERE id = ?",
-            (page_count, material_id),
+            "UPDATE materials SET page_count = ? WHERE id = ? AND tenant_id = ?",
+            (page_count, material_id, tenant_id),
         )
         await db.commit()
 
@@ -163,8 +164,9 @@ async def run_indexing_job(job_id: int) -> None:
             vectors.extend(batch_vectors)
             progress = 5 + int(90 * min(i + EMBED_BATCH_SIZE, total) / total)
             await db.execute(
-                "UPDATE indexing_jobs SET progress=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-                (progress, job_id),
+                "UPDATE indexing_jobs SET progress=?, updated_at=CURRENT_TIMESTAMP "
+                "WHERE id=? AND tenant_id=?",
+                (progress, job_id, tenant_id),
             )
             await db.commit()
 
@@ -174,12 +176,13 @@ async def run_indexing_job(job_id: int) -> None:
         ns = vector_store.namespace(course_id)
         count = vector_store.upsert_chunks(course_id, chunks)
         await db.execute(
-            "UPDATE materials SET vector_ns = ? WHERE id = ?", (ns, material_id)
+            "UPDATE materials SET vector_ns = ? WHERE id = ? AND tenant_id = ?",
+            (ns, material_id, tenant_id),
         )
         await db.execute(
             "UPDATE indexing_jobs SET status='done', progress=100, error=NULL, "
-            "updated_at=CURRENT_TIMESTAMP WHERE id=?",
-            (job_id,),
+            "updated_at=CURRENT_TIMESTAMP WHERE id=? AND tenant_id=?",
+            (job_id, tenant_id),
         )
         await db.commit()
         logger.info("indexing done: job=%s chunks=%s", job_id, count)
@@ -187,8 +190,8 @@ async def run_indexing_job(job_id: int) -> None:
         logger.exception("indexing failed: job=%s", job_id)
         await db.execute(
             "UPDATE indexing_jobs SET status='failed', error=?, "
-            "updated_at=CURRENT_TIMESTAMP WHERE id=?",
-            (str(exc), job_id),
+            "updated_at=CURRENT_TIMESTAMP WHERE id=? AND tenant_id=?",
+            (str(exc), job_id, tenant_id),
         )
         await db.commit()
     finally:
@@ -196,15 +199,15 @@ async def run_indexing_job(job_id: int) -> None:
 
 
 async def create_indexing_job(
-    course_id: int, material_id: int, *, kind: str = "index"
+    course_id: int, material_id: int, tenant_id: str, *, kind: str = "index"
 ) -> int:
     """Yeni indeksleme/transkripsiyon işi oluşturur (worker tarafından işlenir)."""
     db = await get_db()
     try:
         cursor = await db.execute(
-            "INSERT INTO indexing_jobs (course_id, material_id, status, progress, kind) "
-            "VALUES (?, ?, 'pending', 0, ?)",
-            (course_id, material_id, kind),
+            "INSERT INTO indexing_jobs (tenant_id, course_id, material_id, status, progress, kind) "
+            "VALUES (?, ?, ?, 'pending', 0, ?)",
+            (tenant_id, course_id, material_id, kind),
         )
         await db.commit()
         row_id = cursor.lastrowid
@@ -215,7 +218,7 @@ async def create_indexing_job(
     return row_id
 
 
-async def _run_transcribe_job(job_id: int, material: dict) -> None:
+async def _run_transcribe_job(job_id: int, material: dict, tenant_id: str) -> None:
     """kind='transcribe': çıkarım + transkript JSON kaydı + otomatik 'index' zinciri.
 
     Çıktı: `data/transcripts/{material_id}.json` + `materials.extracted_text`;
@@ -236,17 +239,18 @@ async def _run_transcribe_job(job_id: int, material: dict) -> None:
     db = await get_db()
     try:
         await db.execute(
-            "UPDATE materials SET extracted_text = ? WHERE id = ?", (text, material_id)
+            "UPDATE materials SET extracted_text = ? WHERE id = ? AND tenant_id = ?",
+            (text, material_id, tenant_id),
         )
         await db.execute(
             "UPDATE indexing_jobs SET status='done', progress=100, error=NULL, "
-            "updated_at=CURRENT_TIMESTAMP WHERE id=?",
-            (job_id,),
+            "updated_at=CURRENT_TIMESTAMP WHERE id=? AND tenant_id=?",
+            (job_id, tenant_id),
         )
         await db.commit()
     finally:
         await db.close()
-    await create_indexing_job(material["course_id"], material_id, kind="index")
+    await create_indexing_job(material["course_id"], material_id, tenant_id, kind="index")
     # Zincirli işi hemen işle (mevcut /index endpoint'i kalıbı; geç import döngüyü önler)
     from ..workers.indexer import process_pending_jobs
 

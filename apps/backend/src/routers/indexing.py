@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from ..auth import get_tenant_id
 from ..db import get_db
 from ..workers.indexer import process_pending_jobs
 
@@ -13,11 +14,11 @@ router = APIRouter(prefix="/api", tags=["indexing"])
 # Sabit SQL şablonları — kullanıcı girdisi asla SQL'e gömülmez (parametreli sorgular)
 _SELECT_BY_ID = (
     "SELECT id, course_id, material_id, status, progress, error, created_at, updated_at "
-    "FROM indexing_jobs WHERE id = ?"
+    "FROM indexing_jobs WHERE id = ? AND tenant_id = ?"
 )
 _LIST_BY_COURSE = (
     "SELECT id, course_id, material_id, status, progress, error, created_at, updated_at "
-    "FROM indexing_jobs WHERE course_id = ? ORDER BY id DESC"
+    "FROM indexing_jobs WHERE course_id = ? AND tenant_id = ? ORDER BY id DESC"
 )
 
 
@@ -32,28 +33,31 @@ class IndexingJobOut(BaseModel):
     updated_at: str
 
 
-async def _fetch_job(db, job_id: int) -> dict | None:
-    cursor = await db.execute(_SELECT_BY_ID, (job_id,))
+async def _fetch_job(db, job_id: int, tenant_id: str) -> dict | None:
+    cursor = await db.execute(_SELECT_BY_ID, (job_id, tenant_id))
     row = await cursor.fetchone()
     return dict(row) if row else None
 
 
 @router.post("/materials/{material_id}/index", response_model=IndexingJobOut, status_code=201)
-async def enqueue_index(material_id: int) -> IndexingJobOut:
+async def enqueue_index(
+    material_id: int, tenant_id: str = Depends(get_tenant_id)
+) -> IndexingJobOut:
     """Materyal için indeksleme işi kuyruğa alır (çift iş çalışmaz — idempotent)."""
     db = await get_db()
     try:
         cursor = await db.execute(
-            "SELECT id, course_id FROM materials WHERE id = ?", (material_id,)
+            "SELECT id, course_id FROM materials WHERE id = ? AND tenant_id = ?",
+            (material_id, tenant_id),
         )
         material = await cursor.fetchone()
         if material is None:
             raise HTTPException(status_code=404, detail="Materyal bulunamadı")
 
         cursor = await db.execute(
-            "SELECT id FROM indexing_jobs WHERE material_id = ? "
+            "SELECT id FROM indexing_jobs WHERE material_id = ? AND tenant_id = ? "
             "AND status IN ('pending', 'processing')",
-            (material_id,),
+            (material_id, tenant_id),
         )
         existing = await cursor.fetchone()
         if existing is not None:
@@ -63,9 +67,9 @@ async def enqueue_index(material_id: int) -> IndexingJobOut:
             )
 
         cursor = await db.execute(
-            "INSERT INTO indexing_jobs (course_id, material_id, status, progress) "
-            "VALUES (?, ?, 'pending', 0)",
-            (material["course_id"], material_id),
+            "INSERT INTO indexing_jobs (tenant_id, course_id, material_id, status, progress) "
+            "VALUES (?, ?, ?, 'pending', 0)",
+            (tenant_id, material["course_id"], material_id),
         )
         await db.commit()
         job_id = cursor.lastrowid
@@ -79,7 +83,7 @@ async def enqueue_index(material_id: int) -> IndexingJobOut:
 
     db = await get_db()
     try:
-        job = await _fetch_job(db, job_id)
+        job = await _fetch_job(db, job_id, tenant_id)
     finally:
         await db.close()
     if job is None:
@@ -88,11 +92,13 @@ async def enqueue_index(material_id: int) -> IndexingJobOut:
 
 
 @router.get("/courses/{course_id}/indexing-jobs", response_model=list[IndexingJobOut])
-async def list_indexing_jobs(course_id: int) -> list[IndexingJobOut]:
+async def list_indexing_jobs(
+    course_id: int, tenant_id: str = Depends(get_tenant_id)
+) -> list[IndexingJobOut]:
     """Bir derse ait indeksleme işlerini (yeniden eskiye) döner."""
     db = await get_db()
     try:
-        cursor = await db.execute(_LIST_BY_COURSE, (course_id,))
+        cursor = await db.execute(_LIST_BY_COURSE, (course_id, tenant_id))
         rows = await cursor.fetchall()
     finally:
         await db.close()

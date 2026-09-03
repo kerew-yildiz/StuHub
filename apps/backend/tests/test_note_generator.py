@@ -52,6 +52,8 @@ def _setup_mocks(monkeypatch, *, topics=None, section=None, coverage_missing=Non
     async def fake_chat_json(messages, **kwargs):
         await llm_service.log_generation(
             kind=kwargs.get("kind", "json"),
+            provider="gemini",
+            model="gemini-2.5-flash",
             course_id=kwargs.get("course_id"),
             chapter_id=kwargs.get("chapter_id"),
         )
@@ -68,6 +70,8 @@ def _setup_mocks(monkeypatch, *, topics=None, section=None, coverage_missing=Non
     async def fake_chat_stream(messages, **kwargs):
         await llm_service.log_generation(
             kind=kwargs.get("kind", "stream"),
+            provider="gemini",
+            model="gemini-2.5-flash",
             course_id=kwargs.get("course_id"),
             chapter_id=kwargs.get("chapter_id"),
         )
@@ -95,7 +99,7 @@ async def test_generate_notes_full_flow(client, monkeypatch):
     chapter_id = await _make_chapter_with_slides(client)
     await _insert_slide(chapter_id, 1, "Bağlı listeler konusu")
 
-    monkeypatch.setattr(llm_service.settings, "deepseek_api_key", "sk-test")
+    monkeypatch.setattr(llm_service.settings, "google_api_key", "sk-test")
     _setup_mocks(monkeypatch)
 
     events = await _collect_events(note_generator.generate_notes_stream(chapter_id))
@@ -125,7 +129,7 @@ async def test_generate_notes_full_flow(client, monkeypatch):
 
 async def test_generate_notes_no_slides(client, monkeypatch):
     chapter_id = await _make_chapter_with_slides(client)
-    monkeypatch.setattr(llm_service.settings, "deepseek_api_key", "sk-test")
+    monkeypatch.setattr(llm_service.settings, "google_api_key", "sk-test")
     _setup_mocks(monkeypatch)
 
     events = await _collect_events(note_generator.generate_notes_stream(chapter_id))
@@ -136,7 +140,7 @@ async def test_generate_notes_no_slides(client, monkeypatch):
 async def test_generate_notes_no_api_key(client, monkeypatch):
     chapter_id = await _make_chapter_with_slides(client)
     await _insert_slide(chapter_id, 1, "İçerik")
-    monkeypatch.setattr(llm_service.settings, "deepseek_api_key", "")
+    monkeypatch.setattr(llm_service.settings, "google_api_key", "")
 
     events = await _collect_events(note_generator.generate_notes_stream(chapter_id))
     assert events[-1]["type"] == "error"
@@ -146,7 +150,7 @@ async def test_generate_notes_no_api_key(client, monkeypatch):
 async def test_generate_notes_missing_topic_regenerated(client, monkeypatch):
     chapter_id = await _make_chapter_with_slides(client)
     await _insert_slide(chapter_id, 1, "İki konu: Bağlı Listeler ve Sıralama")
-    monkeypatch.setattr(llm_service.settings, "deepseek_api_key", "sk-test")
+    monkeypatch.setattr(llm_service.settings, "google_api_key", "sk-test")
 
     # önce eksik döndür, yeniden üretimden sonra tamam
     coverage = {"calls": 0}
@@ -188,7 +192,7 @@ async def test_generate_notes_unresolvable_citation_never_fails(client, monkeypa
     """Çözümsüz atıflar notu HATAYA DÜŞÜRMEZ — slayt yedeğiyle bölüm teslim edilir."""
     chapter_id = await _make_chapter_with_slides(client)
     await _insert_slide(chapter_id, 1, "İçerik")
-    monkeypatch.setattr(llm_service.settings, "deepseek_api_key", "sk-test")
+    monkeypatch.setattr(llm_service.settings, "google_api_key", "sk-test")
     # alıntı chunk'la eşleşmeyecek ve LLM onayı da 'hayır' → yedek zincir devreye girer
     bad_section = f"### {TOPIC}\n\nTamamen alakasız bir cümle burada [1]."
     _setup_mocks(monkeypatch, section=bad_section, confirm=False)
@@ -238,7 +242,7 @@ def _setup_fallback_mocks(monkeypatch, *, web_enabled, section):
 async def test_web_fallback_produces_cited_section(client, monkeypatch):
     chapter_id = await _make_chapter_with_slides(client)
     await _insert_slide(chapter_id, 1, "Bağlı listeler konusu")
-    monkeypatch.setattr(llm_service.settings, "deepseek_api_key", "sk-test")
+    monkeypatch.setattr(llm_service.settings, "google_api_key", "sk-test")
     _setup_fallback_mocks(monkeypatch, web_enabled=True, section=WEB_SECTION)
 
     events = await _collect_events(note_generator.generate_notes_stream(chapter_id))
@@ -254,7 +258,7 @@ async def test_web_fallback_produces_cited_section(client, monkeypatch):
 async def test_slide_fallback_produces_full_section(client, monkeypatch):
     chapter_id = await _make_chapter_with_slides(client)
     await _insert_slide(chapter_id, 1, "Bağlı listeler: düğüm ve işaretçi yapısı")
-    monkeypatch.setattr(llm_service.settings, "deepseek_api_key", "sk-test")
+    monkeypatch.setattr(llm_service.settings, "google_api_key", "sk-test")
     _setup_fallback_mocks(monkeypatch, web_enabled=False, section=SLIDE_ONLY_SECTION)
 
     events = await _collect_events(note_generator.generate_notes_stream(chapter_id))
@@ -268,7 +272,7 @@ async def test_slide_fallback_produces_full_section(client, monkeypatch):
 async def test_web_fallback_never_emits_missing_source_warning(client, monkeypatch):
     chapter_id = await _make_chapter_with_slides(client)
     await _insert_slide(chapter_id, 1, "Bağlı listeler konusu")
-    monkeypatch.setattr(llm_service.settings, "deepseek_api_key", "sk-test")
+    monkeypatch.setattr(llm_service.settings, "google_api_key", "sk-test")
     _setup_fallback_mocks(monkeypatch, web_enabled=True, section=WEB_SECTION)
 
     events = await _collect_events(note_generator.generate_notes_stream(chapter_id))
@@ -282,7 +286,7 @@ async def test_web_fallback_never_emits_missing_source_warning(client, monkeypat
 async def test_generation_logs_written(client, monkeypatch):
     chapter_id = await _make_chapter_with_slides(client)
     await _insert_slide(chapter_id, 1, "İçerik")
-    monkeypatch.setattr(llm_service.settings, "deepseek_api_key", "sk-test")
+    monkeypatch.setattr(llm_service.settings, "google_api_key", "sk-test")
     _setup_mocks(monkeypatch)
     await _collect_events(note_generator.generate_notes_stream(chapter_id))
 

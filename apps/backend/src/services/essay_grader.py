@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 
+from ..auth import LOCAL_TENANT_ID
 from ..prompts.overall_prompts import ESSAY_GRADE_PROMPT
 from . import llm_service
 
@@ -58,6 +59,7 @@ async def grade_essay(
     user_answer: str,
     course_id: int,
     chapter_id: int | None = None,
+    tenant_id: str = LOCAL_TENANT_ID,
 ) -> dict:
     """Kullanıcı cevabını 0-10 puanlar; düşük güvende bir kez yeniden değerlendirir.
 
@@ -77,6 +79,7 @@ async def grade_essay(
         data = await llm_service.chat_json(
             [{"role": "user", "content": prompt}],
             kind="essay_grade",
+            tenant_id=tenant_id,
             course_id=course_id,
             chapter_id=chapter_id,
         )

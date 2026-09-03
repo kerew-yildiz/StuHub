@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from ..auth import get_tenant_id
 from ..db import get_db
+from ..quota import enforce_quota
 from ..services.essay_grader import EssayGradeError, grade_essay
 from ..services.fib_utils import fib_is_correct
 from ..services.overall_generator import generate_overall_quiz_stream
@@ -30,10 +32,12 @@ class OverallAttemptIn(BaseModel):
 
 
 @router.post("/courses/{course_id}/overall-quiz")
-async def generate_overall_quiz(course_id: int) -> StreamingResponse:
+async def generate_overall_quiz(
+    course_id: int, tenant_id: str = Depends(enforce_quota)
+) -> StreamingResponse:
     """Ders seviyesinde 55 soruluk genel quiz üretir; SSE akışı."""
     async def event_stream():
-        async for event in generate_overall_quiz_stream(course_id):
+        async for event in generate_overall_quiz_stream(course_id, tenant_id):
             yield _sse(event)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
@@ -47,14 +51,16 @@ def _strip_answers(questions_json: dict) -> dict:
 
 
 @router.get("/courses/{course_id}/overall-quiz")
-async def get_latest_overall_quiz(course_id: int) -> dict | None:
+async def get_latest_overall_quiz(
+    course_id: int, tenant_id: str = Depends(get_tenant_id)
+) -> dict | None:
     """Dersin en güncel genel quizini döner (cevap anahtarları SIZMAZ)."""
     db = await get_db()
     try:
         cursor = await db.execute(
             "SELECT id, questions_json, created_at FROM overall_quizzes "
-            "WHERE course_id = ? ORDER BY id DESC LIMIT 1",
-            (course_id,),
+            "WHERE course_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1",
+            (course_id, tenant_id),
         )
         row = await cursor.fetchone()
     finally:
@@ -80,12 +86,15 @@ def _numbered_sources(question: dict) -> str:
 
 
 @router.post("/overall-quizzes/{quiz_id}/attempts")
-async def submit_overall_attempt(quiz_id: int, payload: OverallAttemptIn) -> dict:
+async def submit_overall_attempt(
+    quiz_id: int, payload: OverallAttemptIn, tenant_id: str = Depends(get_tenant_id)
+) -> dict:
     """55 soruyu değerlendirir; mcq/tf/fib anında, açık uçlu Essay Grader (LLM) ile."""
     db = await get_db()
     try:
         cursor = await db.execute(
-            "SELECT course_id, questions_json FROM overall_quizzes WHERE id = ?", (quiz_id,)
+            "SELECT course_id, questions_json FROM overall_quizzes WHERE id = ? AND tenant_id = ?",
+            (quiz_id, tenant_id),
         )
         row = await cursor.fetchone()
     finally:
@@ -168,6 +177,7 @@ async def submit_overall_attempt(quiz_id: int, payload: OverallAttemptIn) -> dic
                     numbered_sources=_numbered_sources(question),
                     user_answer=user_text,
                     course_id=course_id,
+                    tenant_id=tenant_id,
                 )
             except EssayGradeError as exc:
                 raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -210,9 +220,10 @@ async def submit_overall_attempt(quiz_id: int, payload: OverallAttemptIn) -> dic
     db = await get_db()
     try:
         cursor = await db.execute(
-            "INSERT INTO overall_attempts (overall_quiz_id, answers_json, score_json) "
-            "VALUES (?, ?, ?)",
+            "INSERT INTO overall_attempts (tenant_id, overall_quiz_id, answers_json, score_json) "
+            "VALUES (?, ?, ?, ?)",
             (
+                tenant_id,
                 quiz_id,
                 json.dumps([a.model_dump() for a in payload.answers], ensure_ascii=False),
                 json.dumps(score_json, ensure_ascii=False),
@@ -227,14 +238,16 @@ async def submit_overall_attempt(quiz_id: int, payload: OverallAttemptIn) -> dic
 
 
 @router.get("/courses/{course_id}/overall-quizzes")
-async def list_course_overall_quizzes(course_id: int) -> list[dict]:
+async def list_course_overall_quizzes(
+    course_id: int, tenant_id: str = Depends(get_tenant_id)
+) -> list[dict]:
     """Dersin TÜM genel quizlerini (yeniden eskiye) döner — answer_key'ler SIZMAZ."""
     db = await get_db()
     try:
         cursor = await db.execute(
             "SELECT id, questions_json, created_at FROM overall_quizzes "
-            "WHERE course_id = ? ORDER BY id DESC",
-            (course_id,),
+            "WHERE course_id = ? AND tenant_id = ? ORDER BY id DESC",
+            (course_id, tenant_id),
         )
         rows = await cursor.fetchall()
     finally:
@@ -251,12 +264,12 @@ async def list_course_overall_quizzes(course_id: int) -> list[dict]:
 
 
 @router.delete("/overall-quizzes/{quiz_id}", status_code=204)
-async def delete_overall_quiz(quiz_id: int) -> None:
+async def delete_overall_quiz(quiz_id: int, tenant_id: str = Depends(get_tenant_id)) -> None:
     """Genel quiz'i siler (denemeleriyle birlikte)."""
     db = await get_db()
     try:
         cursor = await db.execute(
-            "DELETE FROM overall_quizzes WHERE id = ?", (quiz_id,)
+            "DELETE FROM overall_quizzes WHERE id = ? AND tenant_id = ?", (quiz_id, tenant_id)
         )
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Genel quiz bulunamadı")
@@ -266,14 +279,16 @@ async def delete_overall_quiz(quiz_id: int) -> None:
 
 
 @router.get("/overall-quizzes/{quiz_id}/attempts")
-async def list_overall_attempts(quiz_id: int) -> list[dict]:
+async def list_overall_attempts(
+    quiz_id: int, tenant_id: str = Depends(get_tenant_id)
+) -> list[dict]:
     """Genel quiz'in kayıtlı denemeleri (yeniden eskiye) — cevaplar kalıcıdır."""
     db = await get_db()
     try:
         cursor = await db.execute(
             "SELECT id, score_json, created_at FROM overall_attempts "
-            "WHERE overall_quiz_id = ? ORDER BY id DESC",
-            (quiz_id,),
+            "WHERE overall_quiz_id = ? AND tenant_id = ? ORDER BY id DESC",
+            (quiz_id, tenant_id),
         )
         rows = await cursor.fetchall()
     finally:
@@ -290,12 +305,14 @@ async def list_overall_attempts(quiz_id: int) -> list[dict]:
 
 
 @router.delete("/overall-attempts/{attempt_id}", status_code=204)
-async def delete_overall_attempt(attempt_id: int) -> None:
+async def delete_overall_attempt(
+    attempt_id: int, tenant_id: str = Depends(get_tenant_id)
+) -> None:
     """Bir genel quiz denemesini (cevapları) siler."""
     db = await get_db()
     try:
         cursor = await db.execute(
-            "DELETE FROM overall_attempts WHERE id = ?", (attempt_id,)
+            "DELETE FROM overall_attempts WHERE id = ? AND tenant_id = ?", (attempt_id, tenant_id)
         )
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Deneme bulunamadı")

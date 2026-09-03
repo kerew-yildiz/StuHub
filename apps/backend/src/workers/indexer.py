@@ -36,7 +36,7 @@ async def process_pending_jobs() -> int:
     db = await get_db()
     try:
         cursor = await db.execute(
-            "SELECT id FROM indexing_jobs WHERE status = 'pending' ORDER BY id"
+            "SELECT id, tenant_id FROM indexing_jobs WHERE status = 'pending' ORDER BY id"
         )
         rows = await cursor.fetchall()
         started = 0
@@ -48,7 +48,7 @@ async def process_pending_jobs() -> int:
             )
             if update.rowcount == 1:
                 await db.commit()
-                asyncio.create_task(run_indexing_job(row["id"]))
+                asyncio.create_task(run_indexing_job(row["id"], row["tenant_id"]))
                 started += 1
         return started
     finally:

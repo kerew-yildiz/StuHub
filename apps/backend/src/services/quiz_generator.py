@@ -12,6 +12,7 @@ import json
 import logging
 import re
 
+from ..auth import LOCAL_TENANT_ID
 from ..config import settings
 from ..db import get_db
 from ..prompts.common import dil_talimati
@@ -156,6 +157,7 @@ async def _generate_batch(
     topic: dict,
     course_id: int,
     chapter_id: int,
+    tenant_id: str = LOCAL_TENANT_ID,
 ) -> list[dict] | None:
     """Bir konu için 5 soruluk zarf üretir; şema/denge/atıf denetimlerinden geçerse döner."""
     allowed = topic.get("citations", [])
@@ -176,6 +178,7 @@ async def _generate_batch(
             data = await llm_service.chat_json(
                 [{"role": "user", "content": prompt}],
                 kind="quiz_batch",
+                tenant_id=tenant_id,
                 course_id=course_id,
                 chapter_id=chapter_id,
             )
@@ -223,10 +226,10 @@ async def _generate_batch(
     return _rebalance(questions)
 
 
-async def generate_quiz_stream(chapter_id: int):
+async def generate_quiz_stream(chapter_id: int, tenant_id: str = LOCAL_TENANT_ID):
     """Bölüm quizi üretim hattı — SSE olayları yield eder (Faz 4.1)."""
     try:
-        async for event in _generate(chapter_id):
+        async for event in _generate(chapter_id, tenant_id):
             yield event
     except QuizGenerationError as exc:
         yield {"type": "error", "message": str(exc)}
@@ -240,11 +243,12 @@ async def generate_quiz_stream(chapter_id: int):
         }
 
 
-async def _generate(chapter_id: int):
+async def _generate(chapter_id: int, tenant_id: str = LOCAL_TENANT_ID):
     db = await get_db()
     try:
         cursor = await db.execute(
-            "SELECT id, course_id FROM chapters WHERE id = ?", (chapter_id,)
+            "SELECT id, course_id FROM chapters WHERE id = ? AND tenant_id = ?",
+            (chapter_id, tenant_id),
         )
         chapter = await cursor.fetchone()
         if chapter is None:
@@ -252,8 +256,8 @@ async def _generate(chapter_id: int):
         course_id = chapter["course_id"]
         cursor = await db.execute(
             "SELECT content_md, citations_json, topics_json FROM notes "
-            "WHERE chapter_id = ? ORDER BY id DESC LIMIT 1",
-            (chapter_id,),
+            "WHERE chapter_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1",
+            (chapter_id, tenant_id),
         )
         note_row = await cursor.fetchone()
     finally:
@@ -280,7 +284,7 @@ async def _generate(chapter_id: int):
             "percent": percent,
             "message": f"“{topic['topic']}” için sorular hazırlanıyor…",
         }
-        questions = await _generate_batch(topic, course_id, chapter_id)
+        questions = await _generate_batch(topic, course_id, chapter_id, tenant_id)
         if questions is None:
             # Asla başarısız olma: sorunlu konu uyarıyla atlanır, quiz yine teslim edilir.
             warnings.append(f"“{topic['topic']}” için soru üretilemedi (atlandı).")
@@ -293,8 +297,8 @@ async def _generate(chapter_id: int):
     db = await get_db()
     try:
         cursor = await db.execute(
-            "INSERT INTO quizzes (chapter_id, questions_json) VALUES (?, ?)",
-            (chapter_id, json.dumps(questions_json, ensure_ascii=False)),
+            "INSERT INTO quizzes (tenant_id, chapter_id, questions_json) VALUES (?, ?, ?)",
+            (tenant_id, chapter_id, json.dumps(questions_json, ensure_ascii=False)),
         )
         await db.commit()
         row_id = cursor.lastrowid

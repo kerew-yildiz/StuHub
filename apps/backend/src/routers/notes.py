@@ -6,12 +6,14 @@ import json
 from pathlib import Path
 
 import lancedb
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
+from ..auth import get_tenant_id
 from ..config import settings
 from ..db import get_db
+from ..quota import enforce_quota
 from ..services.export_service import note_markdown_to_pdf
 from ..services.note_generator import generate_notes_stream
 
@@ -33,27 +35,32 @@ def _sse(event: dict) -> str:
 
 
 @router.post("/chapters/{chapter_id}/notes")
-async def generate_chapter_notes(chapter_id: int) -> StreamingResponse:
+async def generate_chapter_notes(
+    chapter_id: int, tenant_id: str = Depends(enforce_quota)
+) -> StreamingResponse:
     """Not üretimini başlatır; SSE akışı: status / delta / done / error.
 
     Frontend `fetch` ile POST eder ve akışı okur (EventSource GET kısıtı yok).
     """
     async def event_stream():
-        async for event in generate_notes_stream(chapter_id):
+        async for event in generate_notes_stream(chapter_id, tenant_id):
             yield _sse(event)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @router.get("/chapters/{chapter_id}/notes", response_model=NoteOut | None)
-async def get_latest_note(chapter_id: int) -> NoteOut | None:
+async def get_latest_note(
+    chapter_id: int, tenant_id: str = Depends(get_tenant_id)
+) -> NoteOut | None:
     """Chapter'ın en güncel notunu döner (yoksa null)."""
     db = await get_db()
     try:
         cursor = await db.execute(
             "SELECT id, chapter_id, content_md, citations_json, topics_json, "
-            "generated_at, model_used FROM notes WHERE chapter_id = ? ORDER BY id DESC LIMIT 1",
-            (chapter_id,),
+            "generated_at, model_used FROM notes WHERE chapter_id = ? AND tenant_id = ? "
+            "ORDER BY id DESC LIMIT 1",
+            (chapter_id, tenant_id),
         )
         row = await cursor.fetchone()
     finally:
@@ -67,7 +74,7 @@ async def get_latest_note(chapter_id: int) -> NoteOut | None:
 
 
 @router.get("/citations/{chunk_id}")
-async def resolve_citation(chunk_id: str) -> dict:
+async def resolve_citation(chunk_id: str, tenant_id: str = Depends(get_tenant_id)) -> dict:
     """Chunk kimliğinden kaynak parçayı çözer (atıf pop-up'ı — Yetenek 06 §4)."""
     db = lancedb.connect(str(settings.data_dir / "lancedb"))
     for table_name in db.list_tables().tables or []:
@@ -87,7 +94,9 @@ async def resolve_citation(chunk_id: str) -> dict:
 
 
 @router.get("/notes/{note_id}/export")
-async def export_note(note_id: int, format: str = "pdf") -> Response:
+async def export_note(
+    note_id: int, format: str = "pdf", tenant_id: str = Depends(get_tenant_id)
+) -> Response:
     """Notu PDF (varsayılan) ya da Markdown olarak indirir (Türkçe karakter destekli)."""
     if format not in ("pdf", "md"):
         raise HTTPException(status_code=422, detail="format 'pdf' veya 'md' olmalı")
@@ -95,8 +104,8 @@ async def export_note(note_id: int, format: str = "pdf") -> Response:
     try:
         cursor = await db.execute(
             "SELECT n.content_md, c.title FROM notes n "
-            "JOIN chapters c ON c.id = n.chapter_id WHERE n.id = ?",
-            (note_id,),
+            "JOIN chapters c ON c.id = n.chapter_id WHERE n.id = ? AND n.tenant_id = ?",
+            (note_id, tenant_id),
         )
         row = await cursor.fetchone()
     finally:
@@ -127,12 +136,15 @@ async def export_note(note_id: int, format: str = "pdf") -> Response:
 
 
 @router.get("/materials/{material_id}/file")
-async def material_file(material_id: int) -> FileResponse:
+async def material_file(
+    material_id: int, tenant_id: str = Depends(get_tenant_id)
+) -> FileResponse:
     """Materyal dosyası — Range destekli (pdfjs sayfa render'ı, Yetenek 06 §4)."""
     db = await get_db()
     try:
         cursor = await db.execute(
-            "SELECT filepath FROM materials WHERE id = ?", (material_id,)
+            "SELECT filepath FROM materials WHERE id = ? AND tenant_id = ?",
+            (material_id, tenant_id),
         )
         row = await cursor.fetchone()
     finally:

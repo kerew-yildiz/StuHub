@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from ..auth import get_tenant_id
 from ..db import get_db
+from ..quota import enforce_quota
 from ..services import srs, streak_service
 from ..services.flashcard_generator import generate_flashcards_stream
 
@@ -28,25 +30,29 @@ class ReviewIn(BaseModel):
 
 
 @router.post("/chapters/{chapter_id}/flashcards")
-async def generate_chapter_flashcards(chapter_id: int) -> StreamingResponse:
+async def generate_chapter_flashcards(
+    chapter_id: int, tenant_id: str = Depends(enforce_quota)
+) -> StreamingResponse:
     """Bölüm flashcard'larını üretir; SSE akışı (status / done / error)."""
 
     async def event_stream():
-        async for event in generate_flashcards_stream(chapter_id):
+        async for event in generate_flashcards_stream(chapter_id, tenant_id):
             yield _sse(event)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @router.get("/chapters/{chapter_id}/flashcard-sets")
-async def list_chapter_flashcard_sets(chapter_id: int) -> list[dict]:
+async def list_chapter_flashcard_sets(
+    chapter_id: int, tenant_id: str = Depends(get_tenant_id)
+) -> list[dict]:
     """Chapter'ın TÜM flashcard setlerini (yeniden eskiye) döner — geçmiş korunur."""
     db = await get_db()
     try:
         cursor = await db.execute(
             "SELECT id, chapter_id, cards_json, created_at, model_used "
-            "FROM flashcard_sets WHERE chapter_id = ? ORDER BY id DESC",
-            (chapter_id,),
+            "FROM flashcard_sets WHERE chapter_id = ? AND tenant_id = ? ORDER BY id DESC",
+            (chapter_id, tenant_id),
         )
         rows = await cursor.fetchall()
     finally:
@@ -65,14 +71,14 @@ async def list_chapter_flashcard_sets(chapter_id: int) -> list[dict]:
 
 
 @router.get("/flashcard-sets/{set_id}")
-async def get_flashcard_set(set_id: int) -> dict:
+async def get_flashcard_set(set_id: int, tenant_id: str = Depends(get_tenant_id)) -> dict:
     """Tek bir flashcard setini döner (yoksa 404)."""
     db = await get_db()
     try:
         cursor = await db.execute(
             "SELECT id, course_id, chapter_id, cards_json, created_at, model_used "
-            "FROM flashcard_sets WHERE id = ?",
-            (set_id,),
+            "FROM flashcard_sets WHERE id = ? AND tenant_id = ?",
+            (set_id, tenant_id),
         )
         row = await cursor.fetchone()
     finally:
@@ -91,11 +97,13 @@ async def get_flashcard_set(set_id: int) -> dict:
 
 
 @router.delete("/flashcard-sets/{set_id}", status_code=204)
-async def delete_flashcard_set(set_id: int) -> None:
+async def delete_flashcard_set(set_id: int, tenant_id: str = Depends(get_tenant_id)) -> None:
     """Flashcard setini siler (review'ları cascade)."""
     db = await get_db()
     try:
-        cursor = await db.execute("DELETE FROM flashcard_sets WHERE id = ?", (set_id,))
+        cursor = await db.execute(
+            "DELETE FROM flashcard_sets WHERE id = ? AND tenant_id = ?", (set_id, tenant_id)
+        )
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Flashcard seti bulunamadı")
         await db.commit()
@@ -104,14 +112,16 @@ async def delete_flashcard_set(set_id: int) -> None:
 
 
 @router.get("/courses/{course_id}/flashcards/due")
-async def due_flashcards(course_id: int, limit: int = 20) -> list[dict]:
+async def due_flashcards(
+    course_id: int, limit: int = 20, tenant_id: str = Depends(get_tenant_id)
+) -> list[dict]:
     """Dersin due kuyruğu: vadesi geçenler önce, sonra yeni kartlar (Yetenek 09 §5)."""
     db = await get_db()
     try:
         cursor = await db.execute(
             "SELECT id, cards_json FROM flashcard_sets "
-            "WHERE course_id = ? ORDER BY id ASC",
-            (course_id,),
+            "WHERE course_id = ? AND tenant_id = ? ORDER BY id ASC",
+            (course_id, tenant_id),
         )
         set_rows = await cursor.fetchall()
         set_ids = [row["id"] for row in set_rows]
@@ -120,8 +130,8 @@ async def due_flashcards(course_id: int, limit: int = 20) -> list[dict]:
             cursor = await db.execute(
                 "SELECT set_id, card_index, ease_factor, interval_days, repetitions, "
                 "due_at, last_rating FROM card_reviews "
-                "WHERE set_id IN (SELECT value FROM json_each(?))",
-                (json.dumps(set_ids),),
+                "WHERE set_id IN (SELECT value FROM json_each(?)) AND tenant_id = ?",
+                (json.dumps(set_ids), tenant_id),
             )
             for row in await cursor.fetchall():
                 reviews[(row["set_id"], row["card_index"])] = dict(row)
@@ -173,7 +183,9 @@ async def due_flashcards(course_id: int, limit: int = 20) -> list[dict]:
 
 
 @router.post("/flashcard-sets/{set_id}/reviews")
-async def submit_review(set_id: int, payload: ReviewIn) -> dict:
+async def submit_review(
+    set_id: int, payload: ReviewIn, tenant_id: str = Depends(get_tenant_id)
+) -> dict:
     """SM-2 durumunu günceller; due_at'i hesaplar; activity_log'a 'flashcard' yazar."""
     if payload.rating not in VALID_RATINGS:
         raise HTTPException(
@@ -184,7 +196,8 @@ async def submit_review(set_id: int, payload: ReviewIn) -> dict:
     db = await get_db()
     try:
         cursor = await db.execute(
-            "SELECT course_id, cards_json FROM flashcard_sets WHERE id = ?", (set_id,)
+            "SELECT course_id, cards_json FROM flashcard_sets WHERE id = ? AND tenant_id = ?",
+            (set_id, tenant_id),
         )
         row = await cursor.fetchone()
     finally:
@@ -200,8 +213,8 @@ async def submit_review(set_id: int, payload: ReviewIn) -> dict:
     try:
         cursor = await db.execute(
             "SELECT ease_factor, interval_days, repetitions FROM card_reviews "
-            "WHERE set_id = ? AND card_index = ?",
-            (set_id, payload.card_index),
+            "WHERE set_id = ? AND card_index = ? AND tenant_id = ?",
+            (set_id, payload.card_index, tenant_id),
         )
         review = await cursor.fetchone()
 
@@ -222,9 +235,9 @@ async def submit_review(set_id: int, payload: ReviewIn) -> dict:
 
         await db.execute(
             "INSERT INTO card_reviews "
-            "(set_id, card_index, ease_factor, interval_days, repetitions, due_at, "
+            "(tenant_id, set_id, card_index, ease_factor, interval_days, repetitions, due_at, "
             "last_rating, reviewed_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP) "
             "ON CONFLICT(set_id, card_index) DO UPDATE SET "
             "ease_factor = excluded.ease_factor, "
             "interval_days = excluded.interval_days, "
@@ -232,14 +245,14 @@ async def submit_review(set_id: int, payload: ReviewIn) -> dict:
             "due_at = excluded.due_at, "
             "last_rating = excluded.last_rating, "
             "reviewed_at = CURRENT_TIMESTAMP",
-            (set_id, payload.card_index, new_ease, new_interval, new_reps,
+            (tenant_id, set_id, payload.card_index, new_ease, new_interval, new_reps,
              due_at_iso, payload.rating),
         )
         await db.commit()
     finally:
         await db.close()
 
-    await streak_service.log_activity("flashcard", row["course_id"])
+    await streak_service.log_activity("flashcard", row["course_id"], tenant_id=tenant_id)
 
     return {
         "set_id": set_id,

@@ -16,6 +16,7 @@ import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 
+from ..auth import LOCAL_TENANT_ID
 from ..config import settings
 from ..db import get_db
 
@@ -50,34 +51,39 @@ def _safe_filename(name: str | None, fallback: str) -> str:
 # id listesi tek parametre olarak JSON dizisiyle geçer (json_each).
 _SELECT_BY_IDS: dict[tuple[str, str], str] = {
     ("chapters", "course_id"): (
-        "SELECT * FROM chapters WHERE course_id IN (SELECT value FROM json_each(?)) ORDER BY id"
+        "SELECT * FROM chapters WHERE course_id IN (SELECT value FROM json_each(?))"
+        " AND tenant_id = ? ORDER BY id"
     ),
     ("notes", "chapter_id"): (
-        "SELECT * FROM notes WHERE chapter_id IN (SELECT value FROM json_each(?)) ORDER BY id"
+        "SELECT * FROM notes WHERE chapter_id IN (SELECT value FROM json_each(?))"
+        " AND tenant_id = ? ORDER BY id"
     ),
     ("quizzes", "chapter_id"): (
-        "SELECT * FROM quizzes WHERE chapter_id IN (SELECT value FROM json_each(?)) ORDER BY id"
+        "SELECT * FROM quizzes WHERE chapter_id IN (SELECT value FROM json_each(?))"
+        " AND tenant_id = ? ORDER BY id"
     ),
     ("flashcard_sets", "course_id"): (
         "SELECT * FROM flashcard_sets "
-        "WHERE course_id IN (SELECT value FROM json_each(?)) ORDER BY id"
+        "WHERE course_id IN (SELECT value FROM json_each(?)) AND tenant_id = ? ORDER BY id"
     ),
     ("chat_messages", "course_id"): (
         "SELECT * FROM chat_messages "
-        "WHERE course_id IN (SELECT value FROM json_each(?)) ORDER BY id"
+        "WHERE course_id IN (SELECT value FROM json_each(?)) AND tenant_id = ? ORDER BY id"
     ),
     ("study_guides", "course_id"): (
         "SELECT * FROM study_guides "
-        "WHERE course_id IN (SELECT value FROM json_each(?)) ORDER BY id"
+        "WHERE course_id IN (SELECT value FROM json_each(?)) AND tenant_id = ? ORDER BY id"
     ),
     ("materials", "course_id"): (
         "SELECT * FROM materials "
-        "WHERE course_id IN (SELECT value FROM json_each(?)) ORDER BY id"
+        "WHERE course_id IN (SELECT value FROM json_each(?)) AND tenant_id = ? ORDER BY id"
     ),
 }
 
 
-async def _fetch_rows(table: str, where_col: str, ids: list[int]) -> list[dict]:
+async def _fetch_rows(
+    table: str, where_col: str, ids: list[int], tenant_id: str = LOCAL_TENANT_ID
+) -> list[dict]:
     if not ids:
         return []
     query = _SELECT_BY_IDS.get((table, where_col))
@@ -85,39 +91,44 @@ async def _fetch_rows(table: str, where_col: str, ids: list[int]) -> list[dict]:
         raise ValueError(f"desteklenmeyen sorgu: {table}.{where_col}")
     db = await get_db()
     try:
-        cursor = await db.execute(query, (json.dumps(ids),))
+        cursor = await db.execute(query, (json.dumps(ids), tenant_id))
         rows = [dict(row) for row in await cursor.fetchall()]
     finally:
         await db.close()
     return rows
 
 
-async def build_term_archive(term_id: int, include_files: bool) -> bytes:
+async def build_term_archive(
+    term_id: int, include_files: bool, tenant_id: str = LOCAL_TENANT_ID
+) -> bytes:
     """Dönemin tamamını arşiv zip'ine paketler (bayt döner)."""
     db = await get_db()
     try:
-        cursor = await db.execute("SELECT id, name FROM terms WHERE id = ?", (term_id,))
+        cursor = await db.execute(
+            "SELECT id, name FROM terms WHERE id = ? AND tenant_id = ?",
+            (term_id, tenant_id),
+        )
         term = await cursor.fetchone()
         if term is None:
             raise ArchiveError("Dönem bulunamadı")
         cursor = await db.execute(
             "SELECT id, name, instructor, metadata_json FROM courses "
-            "WHERE term_id = ? ORDER BY id",
-            (term_id,),
+            "WHERE term_id = ? AND tenant_id = ? ORDER BY id",
+            (term_id, tenant_id),
         )
         courses = [dict(row) for row in await cursor.fetchall()]
         course_ids = [c["id"] for c in courses]
     finally:
         await db.close()
 
-    chapters = await _fetch_rows("chapters", "course_id", course_ids)
+    chapters = await _fetch_rows("chapters", "course_id", course_ids, tenant_id)
     chapters_by_course: dict[int, list[dict]] = {}
     for chapter in chapters:
         chapters_by_course.setdefault(chapter["course_id"], []).append(chapter)
 
     materials: dict[int, list[dict]] = {}
     if include_files:
-        for row in await _fetch_rows("materials", "course_id", course_ids):
+        for row in await _fetch_rows("materials", "course_id", course_ids, tenant_id):
             materials.setdefault(row["course_id"], []).append(row)
 
     manifest = {
@@ -152,28 +163,28 @@ async def build_term_archive(term_id: int, include_files: bool) -> bytes:
                         archive.write(path, f"{prefix}/materials/{row['id']}.bin")
 
         chapter_ids = [c["id"] for c in chapters]
-        for row in await _fetch_rows("notes", "chapter_id", chapter_ids):
+        for row in await _fetch_rows("notes", "chapter_id", chapter_ids, tenant_id):
             prefix = f"chapters/{row['chapter_id']}"
             archive.writestr(
                 f"{prefix}/note-{row['id']}.json", json.dumps(row, ensure_ascii=False)
             )
-        for row in await _fetch_rows("quizzes", "chapter_id", chapter_ids):
+        for row in await _fetch_rows("quizzes", "chapter_id", chapter_ids, tenant_id):
             prefix = f"chapters/{row['chapter_id']}"
             archive.writestr(
                 f"{prefix}/quiz-{row['id']}.json", json.dumps(row, ensure_ascii=False)
             )
 
-        for row in await _fetch_rows("flashcard_sets", "course_id", course_ids):
+        for row in await _fetch_rows("flashcard_sets", "course_id", course_ids, tenant_id):
             archive.writestr(
                 f"courses/{row['course_id']}/flashcards/{row['id']}.json",
                 json.dumps(row, ensure_ascii=False),
             )
-        for row in await _fetch_rows("chat_messages", "course_id", course_ids):
+        for row in await _fetch_rows("chat_messages", "course_id", course_ids, tenant_id):
             archive.writestr(
                 f"courses/{row['course_id']}/chats/{row['id']}.json",
                 json.dumps(row, ensure_ascii=False),
             )
-        for row in await _fetch_rows("study_guides", "course_id", course_ids):
+        for row in await _fetch_rows("study_guides", "course_id", course_ids, tenant_id):
             archive.writestr(
                 f"courses/{row['course_id']}/guides/{row['id']}.json",
                 json.dumps(row, ensure_ascii=False),
@@ -181,7 +192,9 @@ async def build_term_archive(term_id: int, include_files: bool) -> bytes:
     return buffer.getvalue()
 
 
-async def import_term_archive(data: bytes, include_files: bool) -> dict:
+async def import_term_archive(
+    data: bytes, include_files: bool, tenant_id: str = LOCAL_TENANT_ID
+) -> dict:
     """Arşivi yeni bir dönem olarak içe aktarır; kimlikleri yeniden eşler.
 
     Tüm metadata doğrulaması yazma öncesinde yapılır (atomik davranış).
@@ -223,12 +236,15 @@ async def import_term_archive(data: bytes, include_files: bool) -> dict:
     try:
         term_name = str(manifest.get("term") or "İçe aktarılan dönem")
         cursor = await db.execute(
-            "SELECT COUNT(*) AS c FROM terms WHERE name = ?", (term_name,)
+            "SELECT COUNT(*) AS c FROM terms WHERE name = ? AND tenant_id = ?",
+            (term_name, tenant_id),
         )
         row = await cursor.fetchone()
         if row is not None and row["c"] > 0:
             term_name = f"{term_name}{TERM_SUFFIX}"
-        cursor = await db.execute("INSERT INTO terms (name) VALUES (?)", (term_name,))
+        cursor = await db.execute(
+            "INSERT INTO terms (tenant_id, name) VALUES (?, ?)", (tenant_id, term_name)
+        )
         await db.commit()
         term_id = cursor.lastrowid
         if term_id is None:
@@ -246,9 +262,10 @@ async def import_term_archive(data: bytes, include_files: bool) -> dict:
             db = await get_db()
             try:
                 cursor = await db.execute(
-                    "INSERT INTO courses (term_id, name, instructor, metadata_json) "
-                    "VALUES (?, ?, ?, ?)",
+                    "INSERT INTO courses (tenant_id, term_id, name, instructor,"
+                    " metadata_json) VALUES (?, ?, ?, ?, ?)",
                     (
+                        tenant_id,
                         term_id,
                         course.get("name") or "Ders",
                         course.get("instructor"),
@@ -273,9 +290,10 @@ async def import_term_archive(data: bytes, include_files: bool) -> dict:
                 db = await get_db()
                 try:
                     cursor = await db.execute(
-                        "INSERT INTO chapters (course_id, title, created_at) "
-                        "VALUES (?, ?, ?)",
+                        "INSERT INTO chapters (tenant_id, course_id, title, created_at) "
+                        "VALUES (?, ?, ?, ?)",
                         (
+                            tenant_id,
                             new_course_id,
                             chapter.get("title") or f"Chapter {chapter['id']}",
                             chapter.get("created_at"),
@@ -293,13 +311,16 @@ async def import_term_archive(data: bytes, include_files: bool) -> dict:
                     prefix=f"chapters/{chapter['id']}",
                     old_chapter_id=chapter["id"],
                     new_chapter_id=new_chapter_id,
+                    tenant_id=tenant_id,
                 )
 
-            await _import_course_rows(archive, course.get("id"), new_course_id, chapter_map)
+            await _import_course_rows(
+                archive, course.get("id"), new_course_id, chapter_map, tenant_id
+            )
 
             if include_files and manifest.get("materials_included"):
                 material_count += await _import_materials(
-                    archive, course.get("id"), new_course_id
+                    archive, course.get("id"), new_course_id, tenant_id
                 )
 
         return {
@@ -320,6 +341,7 @@ async def _import_rows(
     prefix: str,
     old_chapter_id: int,
     new_chapter_id: int,
+    tenant_id: str = LOCAL_TENANT_ID,
 ) -> None:
     """Bir chapter'ın not + quiz kayıtlarını yeni kimlikle ekler."""
     for name in archive.namelist():
@@ -330,9 +352,10 @@ async def _import_rows(
             db = await get_db()
             try:
                 await db.execute(
-                    "INSERT INTO notes (chapter_id, content_md, citations_json,"
-                    " topics_json, generated_at, model_used) VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO notes (tenant_id, chapter_id, content_md, citations_json,"
+                    " topics_json, generated_at, model_used) VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (
+                        tenant_id,
                         new_chapter_id,
                         row.get("content_md", ""),
                         row.get("citations_json", "{}"),
@@ -348,9 +371,10 @@ async def _import_rows(
             db = await get_db()
             try:
                 await db.execute(
-                    "INSERT INTO quizzes (chapter_id, questions_json, created_at)"
-                    " VALUES (?, ?, ?)",
+                    "INSERT INTO quizzes (tenant_id, chapter_id, questions_json, created_at)"
+                    " VALUES (?, ?, ?, ?)",
                     (
+                        tenant_id,
                         new_chapter_id,
                         row.get("questions_json", "{}"),
                         row.get("created_at"),
@@ -366,6 +390,7 @@ async def _import_course_rows(
     old_course_id: int,
     new_course_id: int,
     chapter_map: dict[int, int],
+    tenant_id: str = LOCAL_TENANT_ID,
 ) -> None:
     """Flashcard/chat/guide kayıtlarını yeni kurs kimliğiyle ekler."""
     for kind, _table in (
@@ -388,9 +413,10 @@ async def _import_course_rows(
                         else None
                     )
                     await db.execute(
-                        "INSERT INTO flashcard_sets (course_id, chapter_id, cards_json,"
-                        " created_at, model_used) VALUES (?, ?, ?, ?, ?)",
+                        "INSERT INTO flashcard_sets (tenant_id, course_id, chapter_id,"
+                        " cards_json, created_at, model_used) VALUES (?, ?, ?, ?, ?, ?)",
                         (
+                            tenant_id,
                             new_course_id,
                             mapped_chapter,
                             row.get("cards_json", "[]"),
@@ -400,9 +426,10 @@ async def _import_course_rows(
                     )
                 elif kind == "chats":
                     await db.execute(
-                        "INSERT INTO chat_messages (course_id, role, content,"
-                        " citations_json, mode, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                        "INSERT INTO chat_messages (tenant_id, course_id, role, content,"
+                        " citations_json, mode, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
                         (
+                            tenant_id,
                             new_course_id,
                             row.get("role", "user"),
                             row.get("content", ""),
@@ -419,9 +446,10 @@ async def _import_course_rows(
                         else None
                     )
                     await db.execute(
-                        "INSERT INTO study_guides (course_id, chapter_id, kind,"
-                        " content_json, created_at, model_used) VALUES (?, ?, ?, ?, ?, ?)",
+                        "INSERT INTO study_guides (tenant_id, course_id, chapter_id, kind,"
+                        " content_json, created_at, model_used) VALUES (?, ?, ?, ?, ?, ?, ?)",
                         (
+                            tenant_id,
                             new_course_id,
                             mapped_chapter,
                             row.get("kind", "summary"),
@@ -439,6 +467,7 @@ async def _import_materials(
     archive: zipfile.ZipFile,
     old_course_id: int,
     new_course_id: int,
+    tenant_id: str = LOCAL_TENANT_ID,
 ) -> int:
     """Materyal kayıtlarını ve (varsa) dosyalarını yeni kursa taşır."""
     prefix = f"courses/{old_course_id}/materials/"
@@ -459,9 +488,10 @@ async def _import_materials(
         db = await get_db()
         try:
             await db.execute(
-                "INSERT INTO materials (course_id, type, filepath, extracted_text,"
-                " page_count, vector_ns) VALUES (?, ?, ?, ?, ?, NULL)",
+                "INSERT INTO materials (tenant_id, course_id, type, filepath,"
+                " extracted_text, page_count, vector_ns) VALUES (?, ?, ?, ?, ?, ?, NULL)",
                 (
+                    tenant_id,
                     new_course_id,
                     row.get("type", "textbook"),
                     stored_path,

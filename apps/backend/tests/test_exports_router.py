@@ -48,13 +48,13 @@ async def _seed(client) -> dict:
         cursor = await conn.execute(
             "INSERT INTO notes (chapter_id, content_md, citations_json, topics_json, "
             "model_used) VALUES (?, ?, ?, ?, ?)",
-            (chapter_id, "# Giriş\n\nİçerik metni.", "{}", "[]", "deepseek-chat"),
+            (chapter_id, "# Giriş\n\nİçerik metni.", "{}", "[]", "gemini-2.5-flash"),
         )
         note_id = cursor.lastrowid
         cursor = await conn.execute(
             "INSERT INTO flashcard_sets (course_id, chapter_id, cards_json, model_used) "
             "VALUES (?, ?, ?, ?)",
-            (course_id, chapter_id, json.dumps(CARDS, ensure_ascii=False), "deepseek-chat"),
+            (course_id, chapter_id, json.dumps(CARDS, ensure_ascii=False), "gemini-2.5-flash"),
         )
         set_id = cursor.lastrowid
         materials_dir = settings.materials_dir / str(course_id)

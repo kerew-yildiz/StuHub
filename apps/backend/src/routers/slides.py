@@ -5,9 +5,10 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
+from ..auth import get_tenant_id
 from ..config import settings
 from ..db import get_db
 from ..services import pdf_service, slides_service
@@ -29,6 +30,7 @@ class SlideOut(BaseModel):
 async def upload_guide_slides(
     chapter_id: int,
     file: UploadFile = File(...),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> list[SlideOut]:
     """Chapter için guide slides yükler; slide içeriklerini çıkarıp `slides`'a yazar.
 
@@ -47,7 +49,8 @@ async def upload_guide_slides(
     db = await get_db()
     try:
         cursor = await db.execute(
-            "SELECT course_id FROM chapters WHERE id = ?", (chapter_id,)
+            "SELECT course_id FROM chapters WHERE id = ? AND tenant_id = ?",
+            (chapter_id, tenant_id),
         )
         chapter = await cursor.fetchone()
         if chapter is None:
@@ -62,8 +65,9 @@ async def upload_guide_slides(
         dest.write_bytes(content)
 
         cursor = await db.execute(
-            "INSERT INTO materials (course_id, type, filepath) VALUES (?, 'slides', ?)",
-            (course_id, str(dest)),
+            "INSERT INTO materials (tenant_id, course_id, type, filepath) "
+            "VALUES (?, ?, 'slides', ?)",
+            (tenant_id, course_id, str(dest)),
         )
         await db.commit()
         material_id = cursor.lastrowid
@@ -90,8 +94,9 @@ async def upload_guide_slides(
         # İkinci bir sunum yüklendiğinde slide_no 1'den başlamasın — mevcut destenin
         # devamından numaralansın (birden fazla deste sorunsuz birleşir).
         cursor = await db.execute(
-            "SELECT COALESCE(MAX(slide_no), 0) AS max_no FROM slides WHERE chapter_id = ?",
-            (chapter_id,),
+            "SELECT COALESCE(MAX(slide_no), 0) AS max_no FROM slides "
+            "WHERE chapter_id = ? AND tenant_id = ?",
+            (chapter_id, tenant_id),
         )
         offset_row = await cursor.fetchone()
         offset = offset_row["max_no"] if offset_row is not None else 0
@@ -100,9 +105,9 @@ async def upload_guide_slides(
         for slide_data in extracted:
             slide_no = slide_data["slide"] + offset
             cursor = await db.execute(
-                "INSERT INTO slides (chapter_id, material_id, slide_no, content_text) "
-                "VALUES (?, ?, ?, ?)",
-                (chapter_id, material_id, slide_no, slide_data["text"]),
+                "INSERT INTO slides (tenant_id, chapter_id, material_id, slide_no, content_text) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (tenant_id, chapter_id, material_id, slide_no, slide_data["text"]),
             )
             await db.commit()
             slide_id = cursor.lastrowid
@@ -123,14 +128,14 @@ async def upload_guide_slides(
 
 
 @router.get("/chapters/{chapter_id}/slides", response_model=list[SlideOut])
-async def list_slides(chapter_id: int) -> list[SlideOut]:
+async def list_slides(chapter_id: int, tenant_id: str = Depends(get_tenant_id)) -> list[SlideOut]:
     """Bir chapter'ın guide slide'larını sıralı döner."""
     db = await get_db()
     try:
         cursor = await db.execute(
             "SELECT id, chapter_id, material_id, slide_no, content_text FROM slides "
-            "WHERE chapter_id = ? ORDER BY slide_no ASC",
-            (chapter_id,),
+            "WHERE chapter_id = ? AND tenant_id = ? ORDER BY slide_no ASC",
+            (chapter_id, tenant_id),
         )
         rows = await cursor.fetchall()
     finally:
@@ -139,11 +144,13 @@ async def list_slides(chapter_id: int) -> list[SlideOut]:
 
 
 @router.delete("/slides/{slide_id}", status_code=204)
-async def delete_slide(slide_id: int) -> None:
+async def delete_slide(slide_id: int, tenant_id: str = Depends(get_tenant_id)) -> None:
     """Tek slide'ı siler."""
     db = await get_db()
     try:
-        cursor = await db.execute("DELETE FROM slides WHERE id = ?", (slide_id,))
+        cursor = await db.execute(
+            "DELETE FROM slides WHERE id = ? AND tenant_id = ?", (slide_id, tenant_id)
+        )
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Slide bulunamadı")
         await db.commit()

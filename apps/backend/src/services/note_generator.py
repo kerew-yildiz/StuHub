@@ -13,6 +13,7 @@ import json
 import logging
 import re
 
+from ..auth import LOCAL_TENANT_ID
 from ..config import settings
 from ..db import get_db
 from ..prompts.common import dil_talimati
@@ -162,7 +163,9 @@ def _chunk_to_citation(number: int, chunk: dict) -> dict:
 
 # ── LLM adımları ───────────────────────────────────────────────────────
 
-async def _extract_topics(slide_text: str, course_id: int, chapter_id: int) -> list[dict]:
+async def _extract_topics(
+    slide_text: str, course_id: int, chapter_id: int, tenant_id: str
+) -> list[dict]:
     data = await llm_service.chat_json(
         [
             {
@@ -174,6 +177,7 @@ async def _extract_topics(slide_text: str, course_id: int, chapter_id: int) -> l
             }
         ],
         kind="topic_extraction",
+        tenant_id=tenant_id,
         course_id=course_id,
         chapter_id=chapter_id,
     )
@@ -183,7 +187,7 @@ async def _extract_topics(slide_text: str, course_id: int, chapter_id: int) -> l
 
 
 async def _check_coverage(
-    topics: list[dict], content_md: str, course_id: int, chapter_id: int
+    topics: list[dict], content_md: str, course_id: int, chapter_id: int, tenant_id: str
 ) -> list[str]:
     topic_names = [t["topic"] for t in topics]
     data = await llm_service.chat_json(
@@ -197,6 +201,7 @@ async def _check_coverage(
             }
         ],
         kind="coverage_check",
+        tenant_id=tenant_id,
         course_id=course_id,
         chapter_id=chapter_id,
     )
@@ -292,6 +297,7 @@ async def _generate_fallback_section(
     course_id: int,
     chapter_id: int,
     course_name: str,
+    tenant_id: str,
     allow_web: bool = True,
 ) -> tuple[str, list[dict], list[str], str]:
     """Kitapta kaynak yokken (ya da atıf sorunu giderilirken) kaynak zinciri.
@@ -318,6 +324,7 @@ async def _generate_fallback_section(
                 async for delta in llm_service.chat_stream(
                     [{"role": "user", "content": prompt}],
                     kind="note_generation_web",
+                    tenant_id=tenant_id,
                     course_id=course_id,
                     chapter_id=chapter_id,
                 ):
@@ -345,6 +352,7 @@ async def _generate_fallback_section(
         async for delta in llm_service.chat_stream(
             [{"role": "user", "content": prompt}],
             kind="note_generation_slide_only",
+            tenant_id=tenant_id,
             course_id=course_id,
             chapter_id=chapter_id,
         ):
@@ -376,6 +384,7 @@ async def _regen_topic(
     course_id: int,
     chapter_id: int,
     course_name: str,
+    tenant_id: str,
 ) -> tuple[str | None, list[dict]]:
     """Kapsama/atıf düzeltme turu için konuyu yeniden üretir (stream'siz).
 
@@ -384,7 +393,7 @@ async def _regen_topic(
     chunks = retrieval.hybrid_search(course_id, topic["topic"], topic.get("keywords", []))
     if not chunks:
         section, citations, _deltas, _msg = await _generate_fallback_section(
-            topic, slides, course_id, chapter_id, course_name
+            topic, slides, course_id, chapter_id, course_name, tenant_id
         )
         return _strip_own_heading(section, topic["topic"]), citations
     prompt = _build_prompt(topic, slides, chunks)
@@ -392,6 +401,7 @@ async def _regen_topic(
     async for delta in llm_service.chat_stream(
         [{"role": "user", "content": prompt}],
         kind="note_regeneration",
+        tenant_id=tenant_id,
         course_id=course_id,
         chapter_id=chapter_id,
     ):
@@ -428,19 +438,24 @@ async def _validate_citations(
 
 
 async def _save_note(
-    chapter_id: int, content_md: str, citations_json: dict, topics_json: list[dict]
+    chapter_id: int,
+    content_md: str,
+    citations_json: dict,
+    topics_json: list[dict],
+    tenant_id: str,
 ) -> int:
     db = await get_db()
     try:
         cursor = await db.execute(
-            "INSERT INTO notes (chapter_id, content_md, citations_json, topics_json, model_used) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO notes (tenant_id, chapter_id, content_md, citations_json, topics_json, model_used) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
             (
+                tenant_id,
                 chapter_id,
                 content_md,
                 json.dumps(citations_json, ensure_ascii=False),
                 json.dumps(topics_json, ensure_ascii=False),
-                settings.model,
+                llm_service.last_model_label(),
             ),
         )
         await db.commit()
@@ -459,10 +474,10 @@ def _strip_internal(citations: list[dict]) -> list[dict]:
 
 # ── Ana akış ───────────────────────────────────────────────────────────
 
-async def generate_notes_stream(chapter_id: int):
+async def generate_notes_stream(chapter_id: int, tenant_id: str = LOCAL_TENANT_ID):
     """Not üretim hattı — SSE olayları yield eder (Faz 3.1)."""
     try:
-        async for event in _generate(chapter_id):
+        async for event in _generate(chapter_id, tenant_id):
             yield event
     except NoteGenerationError as exc:
         yield {"type": "error", "message": str(exc)}
@@ -477,22 +492,26 @@ async def generate_notes_stream(chapter_id: int):
         }
 
 
-async def _generate(chapter_id: int):
+async def _generate(chapter_id: int, tenant_id: str):
     db = await get_db()
     try:
         cursor = await db.execute(
-            "SELECT id, course_id FROM chapters WHERE id = ?", (chapter_id,)
+            "SELECT id, course_id FROM chapters WHERE id = ? AND tenant_id = ?",
+            (chapter_id, tenant_id),
         )
         chapter = await cursor.fetchone()
         if chapter is None:
             raise NoteGenerationError("Chapter bulunamadı")
         course_id = chapter["course_id"]
-        cursor = await db.execute("SELECT name FROM courses WHERE id = ?", (course_id,))
+        cursor = await db.execute(
+            "SELECT name FROM courses WHERE id = ? AND tenant_id = ?", (course_id, tenant_id)
+        )
         course_row = await cursor.fetchone()
         course_name = course_row["name"] if course_row else "ders"
         cursor = await db.execute(
-            "SELECT slide_no, content_text FROM slides WHERE chapter_id = ? ORDER BY slide_no ASC",
-            (chapter_id,),
+            "SELECT slide_no, content_text FROM slides WHERE chapter_id = ? AND tenant_id = ? "
+            "ORDER BY slide_no ASC",
+            (chapter_id, tenant_id),
         )
         slides = [dict(r) for r in await cursor.fetchall()]
     finally:
@@ -507,7 +526,7 @@ async def _generate(chapter_id: int):
 
     # 1) Konu çıkarımı
     yield {"type": "status", "percent": 6, "message": "Konular belirleniyor…"}
-    topics = await _extract_topics(slide_text, course_id, chapter_id)
+    topics = await _extract_topics(slide_text, course_id, chapter_id, tenant_id)
     if not topics:
         raise NoteGenerationError(
             "Sunumdan konu çıkarılamadı. Sunum içeriğini kontrol edip tekrar deneyin."
@@ -537,6 +556,7 @@ async def _generate(chapter_id: int):
             async for delta in llm_service.chat_stream(
                 [{"role": "user", "content": prompt}],
                 kind="note_generation",
+                tenant_id=tenant_id,
                 course_id=course_id,
                 chapter_id=chapter_id,
             ):
@@ -550,7 +570,7 @@ async def _generate(chapter_id: int):
 
         # Kitapta kaynak yok → web → slayt yedeği → deterministik slayt (her koşulda not)
         section, citations, deltas, status_message = await _generate_fallback_section(
-            topic, slides, course_id, chapter_id, course_name
+            topic, slides, course_id, chapter_id, course_name, tenant_id
         )
         yield {"type": "status", "percent": base + 3, "message": status_message}
         for delta in deltas:
@@ -563,7 +583,7 @@ async def _generate(chapter_id: int):
 
     # 4) Kapsama doğrulama + yeniden üretim (max 3 iterasyon)
     yield {"type": "status", "percent": 86, "message": "Kapsama doğrulanıyor…"}
-    missing = await _check_coverage(topics, content_md, course_id, chapter_id)
+    missing = await _check_coverage(topics, content_md, course_id, chapter_id, tenant_id)
     for _ in range(MAX_COVERAGE_ITERATIONS):
         if not missing:
             break
@@ -571,7 +591,7 @@ async def _generate(chapter_id: int):
             if topic["topic"] not in missing:
                 continue
             section, citations = await _regen_topic(
-                topic, slides, course_id, chapter_id, course_name
+                topic, slides, course_id, chapter_id, course_name, tenant_id
             )
             if section is None:
                 continue
@@ -587,7 +607,7 @@ async def _generate(chapter_id: int):
             else:
                 content_md += f"\n\n{new_block}"
                 topic_citations[topic["topic"]] = citations
-        missing = await _check_coverage(topics, content_md, course_id, chapter_id)
+        missing = await _check_coverage(topics, content_md, course_id, chapter_id, tenant_id)
     if missing:
         content_md += "\n\n> ⚠️ Eksik konular (kaynak bulunamadı): " + ", ".join(missing)
 
@@ -601,7 +621,7 @@ async def _generate(chapter_id: int):
             if topic["topic"] not in problems:
                 continue
             section, citations = await _regen_topic(
-                topic, slides, course_id, chapter_id, course_name
+                topic, slides, course_id, chapter_id, course_name, tenant_id
             )
             if section is None:
                 continue
@@ -627,7 +647,7 @@ async def _generate(chapter_id: int):
             if topic["topic"] not in problems:
                 continue
             section, citations, _deltas, _msg = await _generate_fallback_section(
-                topic, slides, course_id, chapter_id, course_name, allow_web=True
+                topic, slides, course_id, chapter_id, course_name, tenant_id, allow_web=True
             )
             new_block = f"### {topic['topic']}\n\n{_strip_own_heading(section, topic['topic'])}"
             pattern = re.compile(
@@ -646,7 +666,7 @@ async def _generate(chapter_id: int):
             if topic["topic"] not in problems:
                 continue
             section, citations, _deltas, _msg = await _generate_fallback_section(
-                topic, slides, course_id, chapter_id, course_name, allow_web=False
+                topic, slides, course_id, chapter_id, course_name, tenant_id, allow_web=False
             )
             new_block = f"### {topic['topic']}\n\n{_strip_own_heading(section, topic['topic'])}"
             pattern = re.compile(
@@ -681,7 +701,7 @@ async def _generate(chapter_id: int):
         }
         for t in topics
     ]
-    note_id = await _save_note(chapter_id, content_md, citations_json, topics_json)
+    note_id = await _save_note(chapter_id, content_md, citations_json, topics_json, tenant_id)
 
     yield {
         "type": "done",
@@ -691,7 +711,7 @@ async def _generate(chapter_id: int):
             "content_md": content_md,
             "citations_json": citations_json,
             "topics_json": topics_json,
-            "model_used": settings.model,
+            "model_used": llm_service.last_model_label(),
         },
     }
 

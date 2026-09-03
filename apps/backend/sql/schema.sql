@@ -8,6 +8,7 @@ PRAGMA foreign_keys = ON;
 -- Dönem klasörleri (ör. "2026 Bahar")
 CREATE TABLE IF NOT EXISTS terms (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id  TEXT NOT NULL DEFAULT 'local',
     name       TEXT NOT NULL,
     start_date TEXT,
     end_date   TEXT,
@@ -17,6 +18,7 @@ CREATE TABLE IF NOT EXISTS terms (
 -- Dersler (bir dönem altında)
 CREATE TABLE IF NOT EXISTS courses (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id     TEXT NOT NULL DEFAULT 'local',
     term_id       INTEGER NOT NULL REFERENCES terms(id) ON DELETE CASCADE,
     name          TEXT NOT NULL,
     instructor    TEXT,
@@ -28,6 +30,7 @@ CREATE TABLE IF NOT EXISTS courses (
 -- (youtube, audio, docx, epub, image, text — YETENEKLER/11-medya-alimi.md)
 CREATE TABLE IF NOT EXISTS materials (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id      TEXT NOT NULL DEFAULT 'local',
     course_id      INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
     type           TEXT NOT NULL CHECK (type IN ('textbook', 'slides', 'youtube', 'audio', 'docx', 'epub', 'image', 'text')),
     filepath       TEXT NOT NULL,
@@ -40,6 +43,7 @@ CREATE TABLE IF NOT EXISTS materials (
 -- Chapter'lar (ders içi bölümler)
 CREATE TABLE IF NOT EXISTS chapters (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id  TEXT NOT NULL DEFAULT 'local',
     course_id  INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
     title      TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -48,6 +52,7 @@ CREATE TABLE IF NOT EXISTS chapters (
 -- Slide bazlı atıf granülaritesi (Faz 2)
 CREATE TABLE IF NOT EXISTS slides (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id    TEXT NOT NULL DEFAULT 'local',
     chapter_id   INTEGER NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
     material_id  INTEGER REFERENCES materials(id) ON DELETE SET NULL,
     slide_no     INTEGER NOT NULL,
@@ -57,6 +62,7 @@ CREATE TABLE IF NOT EXISTS slides (
 -- Üretilen notlar (markdown + atıf/topic JSON'ları)
 CREATE TABLE IF NOT EXISTS notes (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id      TEXT NOT NULL DEFAULT 'local',
     chapter_id     INTEGER NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
     content_md     TEXT NOT NULL,
     citations_json TEXT NOT NULL DEFAULT '[]',
@@ -68,6 +74,7 @@ CREATE TABLE IF NOT EXISTS notes (
 -- Quiz'ler (sorular denormalize JSON; v4.3: type kaldırıldı)
 CREATE TABLE IF NOT EXISTS quizzes (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id      TEXT NOT NULL DEFAULT 'local',
     chapter_id     INTEGER NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
     questions_json TEXT NOT NULL,
     created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -75,6 +82,7 @@ CREATE TABLE IF NOT EXISTS quizzes (
 
 CREATE TABLE IF NOT EXISTS quiz_attempts (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id         TEXT NOT NULL DEFAULT 'local',
     quiz_id           INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
     user_answers_json TEXT NOT NULL,
     score             REAL,
@@ -84,6 +92,7 @@ CREATE TABLE IF NOT EXISTS quiz_attempts (
 
 CREATE TABLE IF NOT EXISTS overall_quizzes (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id      TEXT NOT NULL DEFAULT 'local',
     course_id      INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
     questions_json TEXT NOT NULL,
     created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -91,6 +100,7 @@ CREATE TABLE IF NOT EXISTS overall_quizzes (
 
 CREATE TABLE IF NOT EXISTS overall_attempts (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id       TEXT NOT NULL DEFAULT 'local',
     overall_quiz_id INTEGER NOT NULL REFERENCES overall_quizzes(id) ON DELETE CASCADE,
     answers_json    TEXT NOT NULL,
     score_json      TEXT,
@@ -101,6 +111,7 @@ CREATE TABLE IF NOT EXISTS overall_attempts (
 -- kind: 'index' (çıkarım+embed) | 'transcribe' (v2: ses/youtube → transkript, ardından index zincirlenir)
 CREATE TABLE IF NOT EXISTS indexing_jobs (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id   TEXT NOT NULL DEFAULT 'local',
     course_id   INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
     material_id INTEGER REFERENCES materials(id) ON DELETE SET NULL,
     status      TEXT NOT NULL DEFAULT 'pending',
@@ -114,6 +125,7 @@ CREATE TABLE IF NOT EXISTS indexing_jobs (
 -- Atıf defteri (chunk → kaynak eşlemesi; doğrulama Faz 3+)
 CREATE TABLE IF NOT EXISTS citations_ledger (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id   TEXT NOT NULL DEFAULT 'local',
     chunk_id    TEXT,
     text        TEXT,
     source_type TEXT,
@@ -122,13 +134,15 @@ CREATE TABLE IF NOT EXISTS citations_ledger (
     slide       INTEGER
 );
 
--- LLM çağrı günlüğü (maliyet gözetimi — Ücretsizlik Ajanı denetimi)
+-- LLM çağrı günlüğü (maliyet gözetimi)
 CREATE TABLE IF NOT EXISTS generation_logs (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id         TEXT NOT NULL DEFAULT 'local',
     kind              TEXT NOT NULL,
     course_id         INTEGER,
     chapter_id        INTEGER,
     model             TEXT,
+    provider          TEXT,
     prompt_tokens     INTEGER,
     completion_tokens INTEGER,
     created_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -145,6 +159,7 @@ CREATE TABLE IF NOT EXISTS settings (
 -- Flashcard desteleri (chapter veya ders seviyesi; kartlar denormalize JSON)
 CREATE TABLE IF NOT EXISTS flashcard_sets (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id   TEXT NOT NULL DEFAULT 'local',
     course_id   INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
     chapter_id  INTEGER REFERENCES chapters(id) ON DELETE CASCADE,
     cards_json  TEXT NOT NULL,
@@ -155,6 +170,7 @@ CREATE TABLE IF NOT EXISTS flashcard_sets (
 -- SM-2 uzamsal tekrar durumu (Yetenek 09; kart = cards_json[indeks])
 CREATE TABLE IF NOT EXISTS card_reviews (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id     TEXT NOT NULL DEFAULT 'local',
     set_id        INTEGER NOT NULL REFERENCES flashcard_sets(id) ON DELETE CASCADE,
     card_index    INTEGER NOT NULL,
     ease_factor   REAL NOT NULL DEFAULT 2.5,
@@ -169,6 +185,7 @@ CREATE TABLE IF NOT EXISTS card_reviews (
 -- "Materyale Sor" sohbet geçmişi (yerel; atıflar JSON)
 CREATE TABLE IF NOT EXISTS chat_messages (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id      TEXT NOT NULL DEFAULT 'local',
     course_id      INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
     role           TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
     content        TEXT NOT NULL,
@@ -180,6 +197,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 -- Çalışma rehberi çıktıları (özet / kavram haritası)
 CREATE TABLE IF NOT EXISTS study_guides (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id    TEXT NOT NULL DEFAULT 'local',
     course_id    INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
     chapter_id   INTEGER REFERENCES chapters(id) ON DELETE CASCADE,
     kind         TEXT NOT NULL CHECK (kind IN ('summary', 'concept_map')),
@@ -191,6 +209,7 @@ CREATE TABLE IF NOT EXISTS study_guides (
 -- Genel ödev değerlendirme gönderimleri (Yetenek 14)
 CREATE TABLE IF NOT EXISTS essay_submissions (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id   TEXT NOT NULL DEFAULT 'local',
     course_id   INTEGER REFERENCES courses(id) ON DELETE CASCADE,
     chapter_id  INTEGER REFERENCES chapters(id) ON DELETE CASCADE,
     prompt      TEXT NOT NULL,
@@ -202,6 +221,7 @@ CREATE TABLE IF NOT EXISTS essay_submissions (
 -- Öğrenme alışkanlıkları — streak/günlük hedef için etkinlik sayacı (Yetenek 15)
 CREATE TABLE IF NOT EXISTS activity_log (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id TEXT NOT NULL DEFAULT 'local',
     date      TEXT NOT NULL,
     kind      TEXT NOT NULL CHECK (kind IN ('note', 'quiz', 'flashcard', 'chat')),
     count     INTEGER NOT NULL DEFAULT 1,
@@ -231,4 +251,4 @@ CREATE INDEX IF NOT EXISTS idx_study_guides_course       ON study_guides(course_
 CREATE INDEX IF NOT EXISTS idx_essay_submissions_course  ON essay_submissions(course_id);
 CREATE INDEX IF NOT EXISTS idx_activity_log_date         ON activity_log(date);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_activity_day_kind_course
-    ON activity_log(date, kind, COALESCE(course_id, 0));
+    ON activity_log(tenant_id, date, kind, COALESCE(course_id, 0));

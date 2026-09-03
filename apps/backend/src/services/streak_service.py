@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
+from ..auth import LOCAL_TENANT_ID
 from ..db import get_db
 
 ACTIVITY_KINDS = ("note", "quiz", "flashcard", "chat")
@@ -57,42 +58,60 @@ def progress_percent(counts: dict[str, int], daily_goal: int) -> int:
     return min(100, round(100 * total / goal))
 
 
-async def log_activity(kind: str, course_id: int | None = None) -> None:
+async def log_activity(
+    kind: str, course_id: int | None = None, tenant_id: str = LOCAL_TENANT_ID
+) -> None:
     """activity_log'a etkinlik yazar; aynı gün+tür+kurs için count artırır.
 
     kind: note | quiz | flashcard | chat (diğerleri ValueError).
+
+    Not: benzersiz indeks (date, kind, COALESCE(course_id, 0)) tenant_id içermez
+    (schema.sql değiştirilemez) — bu yüzden ON CONFLICT yerine elle kontrol edilir,
+    aksi halde SaaS modunda farklı kiracıların sayaçları birbirine karışırdı.
     """
     if kind not in ACTIVITY_KINDS:
         raise ValueError(f"Geçersiz etkinlik türü: {kind!r}")
+    today = datetime.now().date().isoformat()
     db = await get_db()
     try:
-        await db.execute(
-            "INSERT INTO activity_log (date, kind, count, course_id) "
-            "VALUES (?, ?, 1, ?) "
-            "ON CONFLICT(date, kind, COALESCE(course_id, 0)) "
-            "DO UPDATE SET count = count + 1",
-            (datetime.now().date().isoformat(), kind, course_id),
+        cursor = await db.execute(
+            "SELECT id FROM activity_log WHERE tenant_id = ? AND date = ? AND kind = ? "
+            "AND COALESCE(course_id, 0) = COALESCE(?, 0)",
+            (tenant_id, today, kind, course_id),
         )
+        row = await cursor.fetchone()
+        if row is not None:
+            await db.execute(
+                "UPDATE activity_log SET count = count + 1 WHERE id = ?", (row["id"],)
+            )
+        else:
+            await db.execute(
+                "INSERT INTO activity_log (tenant_id, date, kind, count, course_id) "
+                "VALUES (?, ?, ?, 1, ?)",
+                (tenant_id, today, kind, course_id),
+            )
         await db.commit()
     finally:
         await db.close()
 
 
-async def load_today_counts(course_id: int | None = None) -> dict[str, int]:
+async def load_today_counts(
+    course_id: int | None = None, tenant_id: str = LOCAL_TENANT_ID
+) -> dict[str, int]:
     """Bugünün etkinlik sayılarını döner (opsiyonel kurs filtresi)."""
     db = await get_db()
     try:
         if course_id is None:
             cursor = await db.execute(
                 "SELECT kind, SUM(count) AS total FROM activity_log "
-                "WHERE date = ? GROUP BY kind",
-                (datetime.now().date().isoformat(),),
+                "WHERE date = ? AND tenant_id = ? GROUP BY kind",
+                (datetime.now().date().isoformat(), tenant_id),
             )
         else:
             cursor = await db.execute(
                 "SELECT kind, SUM(count) AS total FROM activity_log "
-                "WHERE date = ? AND course_id = ? GROUP BY kind",
-                (datetime.now().date().isoformat(), course_id),
+                "WHERE date = ? AND course_id = ? AND tenant_id = ? GROUP BY kind",
+                (datetime.now().date().isoformat(), course_id, tenant_id),
             )
         rows = list(await cursor.fetchall())
     finally:
@@ -100,11 +119,13 @@ async def load_today_counts(course_id: int | None = None) -> dict[str, int]:
     return {row["kind"]: int(row["total"] or 0) for row in rows}
 
 
-async def load_active_dates() -> set[str]:
+async def load_active_dates(tenant_id: str = LOCAL_TENANT_ID) -> set[str]:
     """Etkinlik kaydı olan tüm tarihler (streak hesabı için)."""
     db = await get_db()
     try:
-        cursor = await db.execute("SELECT DISTINCT date FROM activity_log")
+        cursor = await db.execute(
+            "SELECT DISTINCT date FROM activity_log WHERE tenant_id = ?", (tenant_id,)
+        )
         rows = list(await cursor.fetchall())
     finally:
         await db.close()

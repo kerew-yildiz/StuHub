@@ -40,9 +40,11 @@ async def test_fresh_install_creates_v2_schema(tmp_path, monkeypatch):
         db.row_factory = aiosqlite.Row
         cursor = await db.execute("SELECT version, name FROM schema_migrations ORDER BY version")
         rows = list(await cursor.fetchall())
-        assert [row["version"] for row in rows] == [1, 2]
+        assert [row["version"] for row in rows] == [1, 2, 3, 4]
         assert rows[0]["name"] == "materials_tipleri"
         assert rows[1]["name"] == "yeni_tablolar"
+        assert rows[2]["name"] == "llm_provider_column"
+        assert rows[3]["name"] == "tenant_id"
 
         cursor = await db.execute("PRAGMA table_info(indexing_jobs)")
         columns = [row["name"] for row in list(await cursor.fetchall())]
@@ -126,7 +128,7 @@ async def test_upgrade_preserves_existing_data(tmp_path, monkeypatch):
 
         cursor = await db.execute("SELECT COUNT(*) AS c FROM schema_migrations")
         row = await cursor.fetchone()
-        assert row is not None and row["c"] == 2
+        assert row is not None and row["c"] == 4
 
 
 async def test_init_db_is_idempotent(tmp_path, monkeypatch):
@@ -138,7 +140,7 @@ async def test_init_db_is_idempotent(tmp_path, monkeypatch):
         db.row_factory = aiosqlite.Row
         cursor = await db.execute("SELECT COUNT(*) AS c FROM schema_migrations")
         row = await cursor.fetchone()
-        assert row is not None and row["c"] == 2
+        assert row is not None and row["c"] == 4
 
         cursor = await db.execute("SELECT COUNT(*) AS c FROM materials")
         row = await cursor.fetchone()

@@ -7,9 +7,10 @@ import uuid
 from contextlib import suppress
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
+from ..auth import get_tenant_id
 from ..config import settings
 from ..db import get_db
 from ..services import vector_store
@@ -21,11 +22,11 @@ router = APIRouter(prefix="/api", tags=["materials"])
 # Sabit SQL şablonları — kullanıcı girdisi asla SQL'e gömülmez (parametreli sorgular)
 _SELECT_BY_ID = (
     "SELECT id, course_id, type, filepath, extracted_text, page_count, vector_ns, created_at "
-    "FROM materials WHERE id = ?"
+    "FROM materials WHERE id = ? AND tenant_id = ?"
 )
 _LIST_BY_COURSE = (
     "SELECT id, course_id, type, filepath, extracted_text, page_count, vector_ns, created_at "
-    "FROM materials WHERE course_id = ? ORDER BY created_at DESC, id DESC"
+    "FROM materials WHERE course_id = ? AND tenant_id = ? ORDER BY created_at DESC, id DESC"
 )
 
 _UUID_PREFIX_RE = re.compile(r"^[0-9a-f]{32}_")
@@ -77,8 +78,10 @@ def _safe_filename(original: str) -> str:
     return name or "dosya"
 
 
-async def _course_exists(db, course_id: int) -> bool:
-    cursor = await db.execute("SELECT 1 FROM courses WHERE id = ?", (course_id,))
+async def _course_exists(db, course_id: int, tenant_id: str) -> bool:
+    cursor = await db.execute(
+        "SELECT 1 FROM courses WHERE id = ? AND tenant_id = ?", (course_id, tenant_id)
+    )
     return await cursor.fetchone() is not None
 
 
@@ -87,6 +90,7 @@ async def upload_material(
     course_id: int,
     file: UploadFile = File(...),
     type: str = Form(...),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> MaterialOut:
     """Ders materyali yükler (textbook PDF ya da slides PDF/PPTX).
 
@@ -105,7 +109,7 @@ async def upload_material(
 
     db = await get_db()
     try:
-        if not await _course_exists(db, course_id):
+        if not await _course_exists(db, course_id, tenant_id):
             raise HTTPException(status_code=404, detail="Ders bulunamadı")
 
         course_dir = settings.materials_dir / str(course_id)
@@ -128,14 +132,14 @@ async def upload_material(
             )
 
         cursor = await db.execute(
-            "INSERT INTO materials (course_id, type, filepath) VALUES (?, ?, ?)",
-            (course_id, type, str(dest)),
+            "INSERT INTO materials (tenant_id, course_id, type, filepath) VALUES (?, ?, ?, ?)",
+            (tenant_id, course_id, type, str(dest)),
         )
         await db.commit()
         row_id = cursor.lastrowid
         if row_id is None:
             raise RuntimeError("materyal kimliği alınamadı")
-        cursor2 = await db.execute(_SELECT_BY_ID, (row_id,))
+        cursor2 = await db.execute(_SELECT_BY_ID, (row_id, tenant_id))
         row = await cursor2.fetchone()
     finally:
         await db.close()
@@ -146,18 +150,18 @@ async def upload_material(
     # ses → önce transkripsiyon; docx/epub/görsel → doğrudan indeksleme
     if type in MEDIA_TYPES:
         kind = "transcribe" if type == "audio" else "index"
-        await create_indexing_job(course_id, row_id, kind=kind)
+        await create_indexing_job(course_id, row_id, tenant_id, kind=kind)
         await process_pending_jobs()
 
     return _to_out(dict(row))
 
 
 @router.get("/materials/{material_id}", response_model=MaterialOut)
-async def get_material(material_id: int) -> MaterialOut:
+async def get_material(material_id: int, tenant_id: str = Depends(get_tenant_id)) -> MaterialOut:
     """Tek materyal (önizleme/title için)."""
     db = await get_db()
     try:
-        cursor = await db.execute(_SELECT_BY_ID, (material_id,))
+        cursor = await db.execute(_SELECT_BY_ID, (material_id, tenant_id))
         row = await cursor.fetchone()
     finally:
         await db.close()
@@ -167,11 +171,11 @@ async def get_material(material_id: int) -> MaterialOut:
 
 
 @router.get("/courses/{course_id}/materials", response_model=list[MaterialOut])
-async def list_materials(course_id: int) -> list[MaterialOut]:
+async def list_materials(course_id: int, tenant_id: str = Depends(get_tenant_id)) -> list[MaterialOut]:
     """Bir derse ait materyaller."""
     db = await get_db()
     try:
-        cursor = await db.execute(_LIST_BY_COURSE, (course_id,))
+        cursor = await db.execute(_LIST_BY_COURSE, (course_id, tenant_id))
         rows = await cursor.fetchall()
     finally:
         await db.close()
@@ -179,18 +183,18 @@ async def list_materials(course_id: int) -> list[MaterialOut]:
 
 
 @router.delete("/materials/{material_id}", status_code=204)
-async def delete_material(material_id: int) -> None:
+async def delete_material(material_id: int, tenant_id: str = Depends(get_tenant_id)) -> None:
     """Materyali siler (dosyayı ve vektör chunk'larını da kaldırır)."""
     db = await get_db()
     try:
         cursor = await db.execute(
-            "SELECT course_id, filepath, vector_ns FROM materials WHERE id = ?",
-            (material_id,),
+            "SELECT course_id, filepath, vector_ns FROM materials WHERE id = ? AND tenant_id = ?",
+            (material_id, tenant_id),
         )
         row = await cursor.fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="Materyal bulunamadı")
-        await db.execute("DELETE FROM materials WHERE id = ?", (material_id,))
+        await db.execute("DELETE FROM materials WHERE id = ? AND tenant_id = ?", (material_id, tenant_id))
         await db.commit()
     finally:
         await db.close()

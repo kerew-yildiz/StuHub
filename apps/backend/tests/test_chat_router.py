@@ -23,7 +23,7 @@ async def _make_course(client) -> int:
 async def test_chat_sse_endpoint(client, monkeypatch):
     course_id = await _make_course(client)
 
-    async def fake_generator(course_id, message, mode):
+    async def fake_generator(course_id, message, mode, tenant_id="local"):
         yield {"type": "citations", "citations": []}
         yield {"type": "delta", "text": "Yanıt [1]."}
         yield {
@@ -53,7 +53,7 @@ async def test_chat_sse_endpoint(client, monkeypatch):
 async def test_chat_error_event(client, monkeypatch):
     course_id = await _make_course(client)
 
-    async def fake_generator(course_id, message, mode):
+    async def fake_generator(course_id, message, mode, tenant_id="local"):
         yield {"type": "delta", "text": "kısmi"}
         raise LLMError("API anahtarı ayarlanmadı. Ayarlar sayfasından girin.")
 

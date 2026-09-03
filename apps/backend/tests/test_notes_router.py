@@ -26,7 +26,7 @@ def test_sse_format():
 async def test_notes_sse_endpoint(client, monkeypatch):
     chapter_id = await _make_chapter(client)
 
-    async def fake_generator(chapter_id):
+    async def fake_generator(chapter_id, tenant_id="local"):
         yield {"type": "status", "percent": 5, "message": "Başlıyor…"}
         yield {"type": "delta", "text": "## Konu"}
         yield {
@@ -67,7 +67,7 @@ async def test_export_note_pdf(client):
                 "# Başlık\n\nTürkçe içerik şğı çiçek [1].",
                 json.dumps({"topics": []}, ensure_ascii=False),
                 json.dumps([], ensure_ascii=False),
-                "deepseek-chat",
+                "gemini-2.5-flash",
             ),
         )
         await conn.commit()
@@ -109,7 +109,7 @@ async def test_get_latest_note_roundtrip(client):
                 "# Not",
                 json.dumps({"topics": []}, ensure_ascii=False),
                 json.dumps([], ensure_ascii=False),
-                "deepseek-chat",
+                "gemini-2.5-flash",
             ),
         )
         await conn.commit()
@@ -119,7 +119,7 @@ async def test_get_latest_note_roundtrip(client):
     body = resp.json()
     assert body["content_md"] == "# Not"
     assert body["citations_json"] == {"topics": []}
-    assert body["model_used"] == "deepseek-chat"
+    assert body["model_used"] == "gemini-2.5-flash"
 
     # notu olmayan chapter → null
     other = await _make_chapter(client)

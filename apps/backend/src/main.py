@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from .config import settings
 from .db import init_db
 from .routers import api_router
 from .workers.indexer import recover_stale_jobs, worker_loop
@@ -49,9 +50,18 @@ app.include_router(api_router)
 
 
 @app.get("/health")
-async def health() -> dict[str, str]:
-    """Sağlık kontrolü — frontend 5 saniyede bir yoklar (yol haritası 2.2.4)."""
-    return {"status": "ok", "app": "stuhub-backend", "version": APP_VERSION}
+async def health() -> dict[str, str | bool]:
+    """Sağlık kontrolü — frontend 5 saniyede bir yoklar (yol haritası 2.2.4).
+
+    `saas_mode`: frontend'in giriş ekranı gösterip göstermeyeceğine karar vermesi için
+    (DATABASE_URL doluysa True — bkz. KARAR-SAAS-GECISI.md, src/config.py `Settings.saas_mode`).
+    """
+    return {
+        "status": "ok",
+        "app": "stuhub-backend",
+        "version": APP_VERSION,
+        "saas_mode": settings.saas_mode,
+    }
 
 
 # ── Üretim modu: inşa edilmiş SPA'yi servis et ─────────────────────────

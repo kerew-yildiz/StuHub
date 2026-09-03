@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 
+from ..auth import LOCAL_TENANT_ID
 from ..db import get_db
 from ..prompts.essay_prompts import (
     DEFAULT_CRITERIA_TEXT,
@@ -82,11 +83,12 @@ async def grade_homework(
     rubric: str | None,
     course_id: int | None = None,
     chapter_id: int | None = None,
+    tenant_id: str = LOCAL_TENANT_ID,
 ) -> dict:
     """Ödevi 0–100 değerlendirir, `essay_submissions`'a kaydeder ve sonucu döner."""
     if not user_text.strip():
         grade = _empty_grade()
-        await _save_submission(instructions, user_text, grade, course_id, chapter_id)
+        await _save_submission(instructions, user_text, grade, course_id, chapter_id, tenant_id)
         return grade
 
     criteria_text = rubric.strip() if rubric and rubric.strip() else DEFAULT_CRITERIA_TEXT
@@ -100,6 +102,7 @@ async def grade_homework(
         data = await llm_service.chat_json(
             [{"role": "user", "content": prompt}],
             kind="essay_grade",
+            tenant_id=tenant_id,
             course_id=course_id,
             chapter_id=chapter_id,
         )
@@ -113,7 +116,9 @@ async def grade_homework(
             continue
         confidence = float(data.get("confidence", 0.0))
         if confidence >= CONFIDENCE_THRESHOLD or attempt == 1:
-            await _save_submission(instructions, user_text, data, course_id, chapter_id)
+            await _save_submission(
+                instructions, user_text, data, course_id, chapter_id, tenant_id
+            )
             return data
         # düşük güven → tek yeniden değerlendirme (Yetenek 05 §4)
 
@@ -126,13 +131,16 @@ async def _save_submission(
     grade: dict,
     course_id: int | None,
     chapter_id: int | None,
+    tenant_id: str,
 ) -> None:
     db = await get_db()
     try:
         await db.execute(
-            "INSERT INTO essay_submissions (course_id, chapter_id, prompt, user_text, grade_json) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO essay_submissions "
+            "(tenant_id, course_id, chapter_id, prompt, user_text, grade_json) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
             (
+                tenant_id,
                 course_id,
                 chapter_id,
                 instructions,
@@ -145,14 +153,15 @@ async def _save_submission(
         await db.close()
 
 
-async def list_submissions(course_id: int) -> list[dict]:
+async def list_submissions(course_id: int, tenant_id: str = LOCAL_TENANT_ID) -> list[dict]:
     """Dersin ödev geçmişi (yeni→eski) — metinler kısaltılmadan saklanır, listede özetlenir."""
     db = await get_db()
     try:
         cursor = await db.execute(
             "SELECT id, course_id, chapter_id, prompt, grade_json, created_at "
-            "FROM essay_submissions WHERE course_id = ? ORDER BY id DESC LIMIT 50",
-            (course_id,),
+            "FROM essay_submissions WHERE course_id = ? AND tenant_id = ? "
+            "ORDER BY id DESC LIMIT 50",
+            (course_id, tenant_id),
         )
         rows = list(await cursor.fetchall())
     finally:
@@ -168,3 +177,5 @@ async def list_submissions(course_id: int) -> list[dict]:
         }
         for row in rows
     ]
+
+

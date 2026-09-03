@@ -88,20 +88,30 @@ def _validate_overall_question(q: dict, category: str) -> bool:
     return False
 
 
-async def _load_course_notes(course_id: int) -> list[dict]:
+async def _course_exists(db, course_id: int, tenant_id: str) -> bool:
+    cursor = await db.execute(
+        "SELECT 1 FROM courses WHERE id = ? AND tenant_id = ?", (course_id, tenant_id)
+    )
+    return await cursor.fetchone() is not None
+
+
+async def _load_course_notes(course_id: int, tenant_id: str) -> list[dict]:
     """Dersin tüm chapter notlarını (en güncel) toplar."""
     db = await get_db()
     try:
+        if not await _course_exists(db, course_id, tenant_id):
+            return []
         cursor = await db.execute(
-            "SELECT id, title FROM chapters WHERE course_id = ? ORDER BY id", (course_id,)
+            "SELECT id, title FROM chapters WHERE course_id = ? AND tenant_id = ? ORDER BY id",
+            (course_id, tenant_id),
         )
         chapters = await cursor.fetchall()
         notes: list[dict] = []
         for chapter in chapters:
             cursor = await db.execute(
                 "SELECT content_md, citations_json FROM notes "
-                "WHERE chapter_id = ? ORDER BY id DESC LIMIT 1",
-                (chapter["id"],),
+                "WHERE chapter_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1",
+                (chapter["id"], tenant_id),
             )
             row = await cursor.fetchone()
             if row is not None:
@@ -198,6 +208,7 @@ async def _generate_batch(
     note_sections: str,
     distribution_plan: str,
     course_id: int,
+    tenant_id: str,
 ) -> list[dict] | None:
     allowed_text = json.dumps(
         [
@@ -222,6 +233,7 @@ async def _generate_batch(
             data = await llm_service.chat_json(
                 [{"role": "user", "content": prompt}],
                 kind=f"overall_{category}",
+                tenant_id=tenant_id,
                 course_id=course_id,
                 max_tokens=4096,  # 5 açık uçlu + answer_key'ler uzun çıktıdır (Yetenek 04 hata modları)
             )
@@ -292,10 +304,10 @@ def _strip_answer_keys(questions: list[dict]) -> tuple[list[dict], dict]:
     return questions, answer_keys
 
 
-async def generate_overall_quiz_stream(course_id: int):
+async def generate_overall_quiz_stream(course_id: int, tenant_id: str):
     """Genel quiz üretim hattı — SSE olayları yield eder (Faz 5.1)."""
     try:
-        async for event in _generate(course_id):
+        async for event in _generate(course_id, tenant_id):
             yield event
     except OverallGenerationError as exc:
         yield {"type": "error", "message": str(exc)}
@@ -309,8 +321,8 @@ async def generate_overall_quiz_stream(course_id: int):
         }
 
 
-async def _generate(course_id: int):
-    notes = await _load_course_notes(course_id)
+async def _generate(course_id: int, tenant_id: str):
+    notes = await _load_course_notes(course_id, tenant_id)
     if not notes:
         raise OverallGenerationError(
             "Henüz hiç chapter notu yok. Önce chapter'lar için not oluşturun."
@@ -337,7 +349,7 @@ async def _generate(course_id: int):
             "message": f"{label} sorular üretiliyor ({count} adet)…",
         }
         batch = await _generate_batch(
-            category, count, citation_pool, note_sections, distribution_plan, course_id
+            category, count, citation_pool, note_sections, distribution_plan, course_id, tenant_id
         )
         if batch is None:
             # Asla başarısız olma: sorunlu batch uyarıyla atlanır, quiz yine teslim edilir.
@@ -356,7 +368,7 @@ async def _generate(course_id: int):
         }
         non_tf = [q for q in questions if q["type"] != "tf"]
         tf_batch = await _generate_batch(
-            "tf", 15, citation_pool, note_sections, distribution_plan, course_id
+            "tf", 15, citation_pool, note_sections, distribution_plan, course_id, tenant_id
         )
         if tf_batch is not None:
             questions = non_tf + tf_batch
@@ -383,8 +395,8 @@ async def _generate(course_id: int):
     db = await get_db()
     try:
         cursor = await db.execute(
-            "INSERT INTO overall_quizzes (course_id, questions_json) VALUES (?, ?)",
-            (course_id, json.dumps(questions_json, ensure_ascii=False)),
+            "INSERT INTO overall_quizzes (tenant_id, course_id, questions_json) VALUES (?, ?, ?)",
+            (tenant_id, course_id, json.dumps(questions_json, ensure_ascii=False)),
         )
         await db.commit()
         row_id = cursor.lastrowid

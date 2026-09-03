@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 
+from ..auth import LOCAL_TENANT_ID
 from ..config import settings
 from ..db import get_db
 from ..prompts.guide_prompts import (
@@ -93,14 +94,14 @@ def validate_summary(data: dict) -> list[str]:
     return errors
 
 
-async def _latest_note_md(chapter_id: int) -> tuple[int, str]:
+async def _latest_note_md(chapter_id: int, tenant_id: str) -> tuple[int, str]:
     db = await get_db()
     try:
         cursor = await db.execute(
             "SELECT n.id, c.course_id, n.content_md FROM notes n "
             "JOIN chapters c ON c.id = n.chapter_id "
-            "WHERE n.chapter_id = ? ORDER BY n.id DESC LIMIT 1",
-            (chapter_id,),
+            "WHERE n.chapter_id = ? AND c.tenant_id = ? ORDER BY n.id DESC LIMIT 1",
+            (chapter_id, tenant_id),
         )
         row = await cursor.fetchone()
     finally:
@@ -115,18 +116,20 @@ async def _save_guide(
     chapter_id: int | None,
     kind: str,
     content: dict,
+    tenant_id: str,
 ) -> dict:
     db = await get_db()
     try:
         cursor = await db.execute(
-            "INSERT INTO study_guides (course_id, chapter_id, kind, content_json, model_used) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO study_guides (tenant_id, course_id, chapter_id, kind, content_json, model_used) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
             (
+                tenant_id,
                 course_id,
                 chapter_id,
                 kind,
                 json.dumps(content, ensure_ascii=False),
-                settings.model,
+                llm_service.last_model_label(),
             ),
         )
         await db.commit()
@@ -138,18 +141,21 @@ async def _save_guide(
     return {"id": row_id, "course_id": course_id, "chapter_id": chapter_id, "kind": kind}
 
 
+
 async def _produce(
     prompt: str,
     validator,
     kind: str,
     course_id: int,
     chapter_id: int | None,
+    tenant_id: str,
 ) -> dict:
     """LLM çağrısı + doğrulama + kayıt; geçersiz çıktıda tek yeniden üretim."""
     for attempt in range(2):
         data = await llm_service.chat_json(
             [{"role": "user", "content": prompt}],
             kind="guide",
+            tenant_id=tenant_id,
             course_id=course_id,
             chapter_id=chapter_id,
         )
@@ -161,35 +167,40 @@ async def _produce(
                     "Rehber çıktısı geçersiz. Lütfen tekrar deneyin."
                 )
             continue
-        return await _save_guide(course_id, chapter_id, kind, data)
+        return await _save_guide(course_id, chapter_id, kind, data, tenant_id)
     raise GuideError("Rehber üretilemedi. Lütfen tekrar deneyin.")
 
 
-async def generate_chapter_guide(chapter_id: int, kind: str) -> dict:
+async def generate_chapter_guide(
+    chapter_id: int, kind: str, tenant_id: str = LOCAL_TENANT_ID
+) -> dict:
     """Chapter seviyesi özet ya da kavram haritası üretir ve kaydeder."""
     if kind not in KINDS:
         raise GuideError("kind 'summary' veya 'concept_map' olmalı")
-    course_id, content_md = await _latest_note_md(chapter_id)
+    course_id, content_md = await _latest_note_md(chapter_id, tenant_id)
     note_md = content_md[:MAX_NOTE_CHARS]
     if kind == "summary":
         prompt = SUMMARY_PROMPT.format(
             dil_talimati=dil_talimati(settings.not_dili), note_md=note_md
         )
-        return await _produce(prompt, validate_summary, kind, course_id, chapter_id)
+        return await _produce(prompt, validate_summary, kind, course_id, chapter_id, tenant_id)
     prompt = CONCEPT_MAP_PROMPT.format(
         dil_talimati=dil_talimati(settings.not_dili), note_md=note_md
     )
-    return await _produce(prompt, validate_concept_map, kind, course_id, chapter_id)
+    return await _produce(prompt, validate_concept_map, kind, course_id, chapter_id, tenant_id)
 
 
-async def generate_course_guide(course_id: int, kind: str) -> dict:
+async def generate_course_guide(
+    course_id: int, kind: str, tenant_id: str = LOCAL_TENANT_ID
+) -> dict:
     """Ders seviyesi özet ya da kavram haritası üretir ve kaydeder (Yetenek 13)."""
     if kind not in KINDS:
         raise GuideError("kind 'summary' veya 'concept_map' olmalı")
     db = await get_db()
     try:
         cursor = await db.execute(
-            "SELECT COUNT(*) AS c FROM chapters WHERE course_id = ?", (course_id,)
+            "SELECT COUNT(*) AS c FROM chapters WHERE course_id = ? AND tenant_id = ?",
+            (course_id, tenant_id),
         )
         row = await cursor.fetchone()
         if row is None or row["c"] == 0:
@@ -198,15 +209,15 @@ async def generate_course_guide(course_id: int, kind: str) -> dict:
         await db.close()
 
     if kind == "concept_map":
-        return await _course_concept_map(course_id)
+        return await _course_concept_map(course_id, tenant_id)
 
     db = await get_db()
     try:
         cursor = await db.execute(
             "SELECT n.content_md, c.title FROM notes n "
             "JOIN chapters c ON c.id = n.chapter_id "
-            "WHERE c.course_id = ? ORDER BY c.id",
-            (course_id,),
+            "WHERE c.course_id = ? AND c.tenant_id = ? ORDER BY c.id",
+            (course_id, tenant_id),
         )
         rows = list(await cursor.fetchall())
     finally:
@@ -221,18 +232,18 @@ async def generate_course_guide(course_id: int, kind: str) -> dict:
     prompt = COURSE_SUMMARY_PROMPT.format(
         dil_talimati=dil_talimati(settings.not_dili), notes_md=notes_md
     )
-    return await _produce(prompt, validate_summary, kind, course_id, None)
+    return await _produce(prompt, validate_summary, kind, course_id, None, tenant_id)
 
 
-async def _course_concept_map(course_id: int) -> dict:
+async def _course_concept_map(course_id: int, tenant_id: str) -> dict:
     """Ders kavram haritası: chapter haritalarının birleşimi (çevrim kontrolü ile)."""
     db = await get_db()
     try:
         cursor = await db.execute(
             "SELECT content_json FROM study_guides "
-            "WHERE course_id = ? AND chapter_id IS NOT NULL AND kind = 'concept_map' "
-            "ORDER BY id",
-            (course_id,),
+            "WHERE course_id = ? AND tenant_id = ? AND chapter_id IS NOT NULL "
+            "AND kind = 'concept_map' ORDER BY id",
+            (course_id, tenant_id),
         )
         rows = list(await cursor.fetchall())
     finally:
@@ -273,11 +284,14 @@ async def _course_concept_map(course_id: int) -> dict:
     merged = {"nodes": nodes, "edges": edges}
     if validate_concept_map(merged):
         raise GuideError("Chapter haritaları çevrimli birleşim üretti — tekrar deneyin.")
-    return await _save_guide(course_id, None, "concept_map", merged)
+    return await _save_guide(course_id, None, "concept_map", merged, tenant_id)
 
 
 async def get_latest_guide(
-    course_id: int | None, chapter_id: int | None, kind: str
+    course_id: int | None,
+    chapter_id: int | None,
+    kind: str,
+    tenant_id: str = LOCAL_TENANT_ID,
 ) -> dict | None:
     """Son rehberi döner (yoksa None)."""
     db = await get_db()
@@ -285,16 +299,16 @@ async def get_latest_guide(
         if chapter_id is not None:
             cursor = await db.execute(
                 "SELECT id, course_id, chapter_id, kind, content_json, created_at, model_used "
-                "FROM study_guides WHERE chapter_id = ? AND kind = ? "
+                "FROM study_guides WHERE chapter_id = ? AND kind = ? AND tenant_id = ? "
                 "ORDER BY id DESC LIMIT 1",
-                (chapter_id, kind),
+                (chapter_id, kind, tenant_id),
             )
         else:
             cursor = await db.execute(
                 "SELECT id, course_id, chapter_id, kind, content_json, created_at, model_used "
                 "FROM study_guides WHERE course_id = ? AND chapter_id IS NULL AND kind = ? "
-                "ORDER BY id DESC LIMIT 1",
-                (course_id, kind),
+                "AND tenant_id = ? ORDER BY id DESC LIMIT 1",
+                (course_id, kind, tenant_id),
             )
         row = await cursor.fetchone()
     finally:

@@ -1,6 +1,6 @@
 """Materyale Sor (RAG chat) servisi — retrieval + atıflı yanıt + SSE olayları (Faz V2.1).
 
-`stream_chat_answer(course_id, user_message, mode)` bir async generator'dır; şunları üretir:
+`stream_chat_answer(course_id, user_message, mode, tenant_id)` bir async generator'dır; şunları üretir:
   {"type": "citations", "citations": [...]}
   {"type": "delta", "text": str}
   {"type": "done", "message": {...assistant kaydı...}}
@@ -14,6 +14,7 @@ import json
 import re
 from datetime import datetime
 
+from ..auth import LOCAL_TENANT_ID
 from ..db import get_db
 from ..prompts.chat_prompts import (
     DIRECT_SYSTEM_PROMPT,
@@ -122,13 +123,13 @@ def _build_messages(
     return messages
 
 
-async def _load_history(course_id: int) -> list[dict]:
+async def _load_history(course_id: int, tenant_id: str) -> list[dict]:
     db = await get_db()
     try:
         cursor = await db.execute(
-            "SELECT role, content FROM chat_messages WHERE course_id = ? "
+            "SELECT role, content FROM chat_messages WHERE course_id = ? AND tenant_id = ? "
             "ORDER BY id DESC LIMIT ?",
-            (course_id, HISTORY_MESSAGES),
+            (course_id, tenant_id, HISTORY_MESSAGES),
         )
         rows = await cursor.fetchall()
     finally:
@@ -145,14 +146,21 @@ def _row_to_message(row: dict) -> dict:
 
 
 async def _save_message(
-    course_id: int, role: str, content: str, citations: list[dict], mode: str
+    course_id: int, role: str, content: str, citations: list[dict], mode: str, tenant_id: str
 ) -> dict:
     db = await get_db()
     try:
         cursor = await db.execute(
-            "INSERT INTO chat_messages (course_id, role, content, citations_json, mode) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (course_id, role, content, json.dumps(citations, ensure_ascii=False), mode),
+            "INSERT INTO chat_messages (tenant_id, course_id, role, content, citations_json, mode) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                tenant_id,
+                course_id,
+                role,
+                content,
+                json.dumps(citations, ensure_ascii=False),
+                mode,
+            ),
         )
         await db.commit()
         row_id = cursor.lastrowid
@@ -160,8 +168,8 @@ async def _save_message(
             raise RuntimeError("mesaj kimliği alınamadı")
         cursor = await db.execute(
             "SELECT id, role, content, citations_json, mode, created_at "
-            "FROM chat_messages WHERE id = ?",
-            (row_id,),
+            "FROM chat_messages WHERE id = ? AND tenant_id = ?",
+            (row_id, tenant_id),
         )
         row = await cursor.fetchone()
         if row is None:
@@ -171,40 +179,44 @@ async def _save_message(
     return _row_to_message(dict(row))
 
 
-async def _log_activity(course_id: int) -> None:
+async def _log_activity(course_id: int, tenant_id: str) -> None:
     db = await get_db()
     try:
         await db.execute(
-            "INSERT INTO activity_log (date, kind, count, course_id) "
-            "VALUES (?, 'chat', 1, ?) "
-            "ON CONFLICT(date, kind, COALESCE(course_id, 0)) "
+            "INSERT INTO activity_log (tenant_id, date, kind, count, course_id) "
+            "VALUES (?, ?, 'chat', 1, ?) "
+            "ON CONFLICT(tenant_id, date, kind, COALESCE(course_id, 0)) "
             "DO UPDATE SET count = count + 1",
-            (datetime.now().date().isoformat(), course_id),
+            (tenant_id, datetime.now().date().isoformat(), course_id),
         )
         await db.commit()
     finally:
         await db.close()
 
 
-async def _stream_answer(messages: list[dict], course_id: int):
+async def _stream_answer(messages: list[dict], course_id: int, tenant_id: str):
     """LLM deltalarını `delta` olayları olarak akıtır."""
-    async for delta in llm_service.chat_stream(messages, kind="chat", course_id=course_id):
+    async for delta in llm_service.chat_stream(
+        messages, kind="chat", course_id=course_id, tenant_id=tenant_id
+    ):
         yield {"type": "delta", "text": delta}
 
 
-async def stream_chat_answer(course_id: int, user_message: str, mode: str):
+async def stream_chat_answer(
+    course_id: int, user_message: str, mode: str, tenant_id: str = LOCAL_TENANT_ID
+):
     """Kullanıcı sorusuna atıflı yanıt üretir; SSE olayları yield eder (Faz V2.1)."""
-    history = await _load_history(course_id)
-    await _save_message(course_id, "user", user_message, [], mode)
+    history = await _load_history(course_id, tenant_id)
+    await _save_message(course_id, "user", user_message, [], mode, tenant_id)
 
     chunks = retrieval.hybrid_search(course_id, user_message)
     if not chunks:
         yield {"type": "citations", "citations": []}
         yield {"type": "delta", "text": NO_SOURCES_MESSAGE}
         assistant = await _save_message(
-            course_id, "assistant", NO_SOURCES_MESSAGE, [], mode
+            course_id, "assistant", NO_SOURCES_MESSAGE, [], mode, tenant_id
         )
-        await _log_activity(course_id)
+        await _log_activity(course_id, tenant_id)
         yield {"type": "done", "message": assistant}
         return
 
@@ -214,7 +226,7 @@ async def stream_chat_answer(course_id: int, user_message: str, mode: str):
 
     messages = _build_messages(mode, sources, history, user_message)
     text = ""
-    async for event in _stream_answer(messages, course_id):
+    async for event in _stream_answer(messages, course_id, tenant_id):
         yield event
         text += event["text"]
     text = text.strip()
@@ -232,7 +244,7 @@ async def stream_chat_answer(course_id: int, user_message: str, mode: str):
         )
         messages = [*messages, {"role": "user", "content": corrective}]
         text = ""
-        async for event in _stream_answer(messages, course_id):
+        async for event in _stream_answer(messages, course_id, tenant_id):
             yield event
             text += event["text"]
         text = text.strip()
@@ -243,6 +255,6 @@ async def stream_chat_answer(course_id: int, user_message: str, mode: str):
 
     used = sorted({n for n in _citation_numbers(text) if 1 <= n <= len(sources)})
     citations_json = [citations[n - 1] for n in used]
-    assistant = await _save_message(course_id, "assistant", text, citations_json, mode)
-    await _log_activity(course_id)
+    assistant = await _save_message(course_id, "assistant", text, citations_json, mode, tenant_id)
+    await _log_activity(course_id, tenant_id)
     yield {"type": "done", "message": assistant}

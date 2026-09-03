@@ -66,7 +66,7 @@ async def _insert_quiz(client, chapter_id: int) -> int:
 async def test_quiz_sse_endpoint(client, monkeypatch):
     chapter_id = await _make_chapter(client)
 
-    async def fake_generator(chapter_id):
+    async def fake_generator(chapter_id, tenant_id):
         yield {"type": "status", "percent": 10, "message": "Soru üretiliyor…"}
         yield {
             "type": "done",

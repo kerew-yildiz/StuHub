@@ -15,8 +15,10 @@ import sqlite3
 from pathlib import Path
 
 import aiosqlite
+import asyncpg
 
 from .config import settings
+from .pg_compat import PgConnection
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +26,17 @@ SCHEMA_PATH = Path(__file__).resolve().parents[1] / "sql" / "schema.sql"
 MIGRATIONS_DIR = Path(__file__).resolve().parents[1] / "sql" / "migrations"
 
 _MIGRATION_NAME_RE = re.compile(r"^(\d{3,})_(.+)\.sql$")
+
+# SaaS modunda (settings.saas_mode) tekil havuz — get_db() her çağrıda oluşturmaz,
+# yalnızca alır/serbest bırakır (asyncpg bağlantı açma maliyeti aiosqlite'tan yüksektir).
+_pg_pool: asyncpg.Pool | None = None
+
+
+async def _get_pg_pool() -> asyncpg.Pool:
+    global _pg_pool
+    if _pg_pool is None:
+        _pg_pool = await asyncpg.create_pool(settings.database_url, min_size=1, max_size=10)
+    return _pg_pool
 
 
 def _split_sql(script: str) -> list[str]:
@@ -87,7 +100,16 @@ async def _apply_migrations(db: aiosqlite.Connection) -> int:
 
 
 async def init_db() -> None:
-    """Veri dizinini oluşturur; şemayı + migration'ları uygular (idempotent)."""
+    """Yerel modda (SQLite): veri dizinini oluşturur, şemayı + migration'ları uygular.
+
+    SaaS modunda (settings.saas_mode): şema Supabase SQL Editor'da elle uygulanır
+    (bkz. sql/schema_postgres.sql) — burada yalnızca havuz bağlantısı doğrulanır.
+    """
+    if settings.saas_mode:
+        pool = await _get_pg_pool()
+        async with pool.acquire() as conn:
+            await conn.execute("SELECT 1")
+        return
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     async with aiosqlite.connect(settings.db_path) as db:
         db.row_factory = aiosqlite.Row
@@ -98,15 +120,24 @@ async def init_db() -> None:
         await _apply_migrations(db)
 
 
-async def get_db() -> aiosqlite.Connection:
-    """Yeni bir bağlantı açar; zorunlu pragmaları uygular.
+async def get_db() -> aiosqlite.Connection | PgConnection:
+    """Yeni bir bağlantı döner (SaaS modunda havuzdan alınır); zorunlu pragmaları uygular.
 
     Not: Bağlantı tam hazır (thread başlamış) döner; kullanan taraf
     `await db.close()` ile kapatır. `async with conn` YENİDEN başlatmayı
     dener ve aiosqlite'te "threads can only be started once" hatası verir.
     """
+    if settings.saas_mode:
+        pool = await _get_pg_pool()
+        raw = await pool.acquire()
+
+        async def _release() -> None:
+            await pool.release(raw)
+
+        return PgConnection(raw, _release)
     conn = await aiosqlite.connect(settings.db_path)
     conn.row_factory = aiosqlite.Row
     await conn.execute("PRAGMA journal_mode = WAL;")
     await conn.execute("PRAGMA foreign_keys = ON;")
     return conn
+

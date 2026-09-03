@@ -7,8 +7,9 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, HTTPException, Response, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile
 
+from ..auth import get_tenant_id
 from ..db import get_db
 from ..services.anki_export import build_apkg, flashcards_to_csv, validate_apkg
 from ..services.archive_service import (
@@ -38,22 +39,24 @@ def _cards_from_sets(sets: list[dict]) -> list[dict]:
     return cards
 
 
-async def _sets_for(course_id: int, set_id: int | None) -> tuple[str, list[dict]]:
+async def _sets_for(
+    course_id: int, set_id: int | None, tenant_id: str
+) -> tuple[str, list[dict]]:
     db = await get_db()
     try:
         if set_id is not None:
             cursor = await db.execute(
                 "SELECT fs.id, fs.course_id, fs.cards_json, c.name AS course_name "
                 "FROM flashcard_sets fs JOIN courses c ON c.id = fs.course_id "
-                "WHERE fs.id = ?",
-                (set_id,),
+                "WHERE fs.id = ? AND fs.tenant_id = ?",
+                (set_id, tenant_id),
             )
         else:
             cursor = await db.execute(
                 "SELECT fs.id, fs.course_id, fs.cards_json, c.name AS course_name "
                 "FROM flashcard_sets fs JOIN courses c ON c.id = fs.course_id "
-                "WHERE fs.course_id = ? ORDER BY fs.id",
-                (course_id,),
+                "WHERE fs.course_id = ? AND fs.tenant_id = ? ORDER BY fs.id",
+                (course_id, tenant_id),
             )
         rows = [dict(row) for row in await cursor.fetchall()]
     finally:
@@ -95,11 +98,13 @@ def _cards_response(deck_name: str, cards: list[dict], format: str, stem: str) -
 
 
 @router.get("/flashcard-sets/{set_id}/export")
-async def export_flashcard_set(set_id: int, format: str = "apkg") -> Response:
+async def export_flashcard_set(
+    set_id: int, format: str = "apkg", tenant_id: str = Depends(get_tenant_id)
+) -> Response:
     """Bir flashcard setini apkg/csv/md olarak indirir."""
     if format not in ("apkg", "csv", "md"):
         raise HTTPException(status_code=422, detail="format 'apkg', 'csv' veya 'md' olmalı")
-    course_name, sets = await _sets_for(0, set_id)
+    course_name, sets = await _sets_for(0, set_id, tenant_id)
     cards = _cards_from_sets(sets)
     return _cards_response(
         f"StuHub::{course_name}", cards, format, f"stuhub-kartlar-{set_id}"
@@ -107,11 +112,13 @@ async def export_flashcard_set(set_id: int, format: str = "apkg") -> Response:
 
 
 @router.get("/courses/{course_id}/flashcards/export")
-async def export_course_flashcards(course_id: int, format: str = "apkg") -> Response:
+async def export_course_flashcards(
+    course_id: int, format: str = "apkg", tenant_id: str = Depends(get_tenant_id)
+) -> Response:
     """Dersin TÜM flashcard'larını tek dosyada indirir."""
     if format not in ("apkg", "csv", "md"):
         raise HTTPException(status_code=422, detail="format 'apkg', 'csv' veya 'md' olmalı")
-    course_name, sets = await _sets_for(course_id, None)
+    course_name, sets = await _sets_for(course_id, None, tenant_id)
     cards = _cards_from_sets(sets)
     return _cards_response(
         f"StuHub::{course_name}", cards, format, f"stuhub-kartlar-{course_id}"
@@ -119,10 +126,12 @@ async def export_course_flashcards(course_id: int, format: str = "apkg") -> Resp
 
 
 @router.get("/terms/{term_id}/archive")
-async def export_term_archive(term_id: int, include_files: bool = False) -> Response:
+async def export_term_archive(
+    term_id: int, include_files: bool = False, tenant_id: str = Depends(get_tenant_id)
+) -> Response:
     """Dönemin tamamını arşiv zip'i olarak indirir (Yetenek 12 Format 4)."""
     try:
-        data = await build_term_archive(term_id, include_files)
+        data = await build_term_archive(term_id, include_files, tenant_id)
     except ArchiveError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return Response(
@@ -133,12 +142,16 @@ async def export_term_archive(term_id: int, include_files: bool = False) -> Resp
 
 
 @router.post("/archive/import")
-async def import_archive(file: UploadFile, include_files: bool = False) -> dict:
+async def import_archive(
+    file: UploadFile,
+    include_files: bool = False,
+    tenant_id: str = Depends(get_tenant_id),
+) -> dict:
     """Arşiv zip'ini yeni bir dönem olarak içe aktarır (yalnızca ekleme yapar)."""
     raw = await file.read()
     if not raw:
         raise HTTPException(status_code=422, detail="Boş dosya yüklendi — arşiv zip olmalı.")
     try:
-        return await import_term_archive(raw, include_files)
+        return await import_term_archive(raw, include_files, tenant_id)
     except ArchiveError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

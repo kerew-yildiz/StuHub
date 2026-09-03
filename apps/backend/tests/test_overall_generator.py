@@ -42,7 +42,7 @@ async def _make_course_with_note(client) -> int:
                 "### Konu A\n\nİçerik [1].",
                 citations_blob,
                 topics_blob,
-                "deepseek-chat",
+                "gemini-2.5-flash",
             ),
         )
         await conn.commit()
@@ -115,10 +115,10 @@ async def _collect(agen) -> list[dict]:
 
 async def test_overall_generation_full_flow(client, monkeypatch):
     course_id = await _make_course_with_note(client)
-    monkeypatch.setattr(llm_service.settings, "deepseek_api_key", "sk-test")
+    monkeypatch.setattr(llm_service.settings, "google_api_key", "sk-test")
     _mock_chat_json(monkeypatch)
 
-    events = await _collect(overall_generator.generate_overall_quiz_stream(course_id))
+    events = await _collect(overall_generator.generate_overall_quiz_stream(course_id, "local"))
     assert events[-1]["type"] == "done"
     quiz = events[-1]["quiz"]
     questions = quiz["questions"]
@@ -161,16 +161,16 @@ async def test_overall_generation_requires_notes(client, monkeypatch):
     term_id = resp.json()["id"]
     resp = await client.post(f"/api/terms/{term_id}/courses", json={"name": "Ders"})
     course_id = resp.json()["id"]
-    monkeypatch.setattr(llm_service.settings, "deepseek_api_key", "sk-test")
+    monkeypatch.setattr(llm_service.settings, "google_api_key", "sk-test")
 
-    events = await _collect(overall_generator.generate_overall_quiz_stream(course_id))
+    events = await _collect(overall_generator.generate_overall_quiz_stream(course_id, "local"))
     assert events[-1]["type"] == "error"
     assert "not" in events[-1]["message"].lower()
 
 
 async def test_overall_generation_tf_rebalance(client, monkeypatch):
     course_id = await _make_course_with_note(client)
-    monkeypatch.setattr(llm_service.settings, "deepseek_api_key", "sk-test")
+    monkeypatch.setattr(llm_service.settings, "google_api_key", "sk-test")
 
     async def fake(messages, **kwargs):
         prompt = messages[0]["content"]
@@ -191,7 +191,7 @@ async def test_overall_generation_tf_rebalance(client, monkeypatch):
         return {"category": "open", "questions": [_question("open", i) for i in range(5)]}
 
     monkeypatch.setattr(llm_service, "chat_json", fake)
-    events = await _collect(overall_generator.generate_overall_quiz_stream(course_id))
+    events = await _collect(overall_generator.generate_overall_quiz_stream(course_id, "local"))
     assert events[-1]["type"] == "done"
     tf = [q for q in events[-1]["quiz"]["questions"] if q["type"] == "tf"]
     assert 7 <= sum(1 for q in tf if q["answer"]) <= 8

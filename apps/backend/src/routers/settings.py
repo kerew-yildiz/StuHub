@@ -1,16 +1,21 @@
-"""Uygulama ayarları router'ı — API anahtarı + model seçimi (Faz 1.4 temeli)."""
+"""Uygulama ayarları router'ı — ücretsiz LLM sağlayıcı anahtarları + durumu (Faz 1.4 temeli)."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
+from ..auth import require_admin
 from ..db import get_db
+from ..services import llm_service
+from ..services.llm_providers import PROVIDER_CHAIN
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 # Değerleri API yanıtında maskelenecek anahtarlar
-SENSITIVE_KEYS = {"deepseek_api_key"}
+SENSITIVE_KEYS = {p.api_key_setting for p in PROVIDER_CHAIN}
 
 
 class SettingIn(BaseModel):
@@ -25,7 +30,7 @@ def _mask(key: str, value: str) -> str:
 
 
 @router.get("")
-async def get_settings() -> dict[str, str]:
+async def get_settings(_: str = Depends(require_admin)) -> dict[str, str]:
     """Tüm ayarları döner; gizli anahtarlar maskeli."""
     db = await get_db()
     try:
@@ -37,7 +42,7 @@ async def get_settings() -> dict[str, str]:
 
 
 @router.put("")
-async def upsert_setting(item: SettingIn) -> dict[str, bool]:
+async def upsert_setting(item: SettingIn, _: str = Depends(require_admin)) -> dict[str, bool]:
     """Bir ayarı kaydeder (yoksa ekler, varsa günceller)."""
     db = await get_db()
     try:
@@ -50,3 +55,37 @@ async def upsert_setting(item: SettingIn) -> dict[str, bool]:
     finally:
         await db.close()
     return {"ok": True}
+
+
+@router.get("/llm-status")
+async def get_llm_status(_: str = Depends(require_admin)) -> list[dict[str, object]]:
+    """Ücretsiz sağlayıcı zincirinin durumu — yapılandırılmış mı, cooldown'da mı, aktif mi.
+
+    Anahtar değerleri döndürmez; yalnızca Ayarlar sayfasındaki durum göstergesi için.
+    """
+    await llm_service._apply_table_config()
+    cooldowns = await llm_service._load_cooldowns()
+    active_found = False
+    result: list[dict[str, object]] = []
+    for provider in PROVIDER_CHAIN:
+        configured = llm_service._is_provider_configured(provider)
+        cooldown_until = cooldowns.get(provider.name)
+        in_cooldown = False
+        if cooldown_until:
+            try:
+                in_cooldown = datetime.fromisoformat(cooldown_until) > datetime.now(timezone.utc)
+            except ValueError:
+                in_cooldown = False
+        is_active = configured and not in_cooldown and not active_found
+        if is_active:
+            active_found = True
+        result.append(
+            {
+                "name": provider.name,
+                "label": provider.label,
+                "configured": configured,
+                "cooldown_until": cooldown_until if in_cooldown else None,
+                "active": is_active,
+            }
+        )
+    return result

@@ -77,7 +77,7 @@ async def _insert_quiz(client, course_id: int) -> int:
 async def test_overall_sse_endpoint(client, monkeypatch):
     course_id = await _make_course(client)
 
-    async def fake_generator(course_id):
+    async def fake_generator(course_id, tenant_id):
         yield {"type": "status", "percent": 10, "message": "Üretiliyor…"}
         yield {
             "type": "done",

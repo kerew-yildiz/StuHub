@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from contextlib import suppress
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from ..auth import get_tenant_id
 from ..config import settings
 from ..db import get_db
+from ..quota import enforce_quota
 from ..services.essay_service import EssayServiceError, grade_homework, list_submissions
 from ..services.guide_service import (
     GuideError,
@@ -41,47 +43,89 @@ class EssayGradeIn(BaseModel):
     rubric: str | None = None
     user_text: str
 
+async def _chapter_exists(db, chapter_id: int, tenant_id: str) -> bool:
+    cursor = await db.execute(
+        "SELECT 1 FROM chapters WHERE id = ? AND tenant_id = ?", (chapter_id, tenant_id)
+    )
+    return await cursor.fetchone() is not None
+
+
+async def _course_exists(db, course_id: int, tenant_id: str) -> bool:
+    cursor = await db.execute(
+        "SELECT 1 FROM courses WHERE id = ? AND tenant_id = ?", (course_id, tenant_id)
+    )
+    return await cursor.fetchone() is not None
+
+
 
 # ── Çalışma rehberi ─────────────────────────────────────────────────────
 
 
 @router.post("/chapters/{chapter_id}/guide")
-async def create_chapter_guide(chapter_id: int, kind: str = "summary") -> dict:
+async def create_chapter_guide(
+    chapter_id: int, kind: str = "summary", tenant_id: str = Depends(enforce_quota)
+) -> dict:
     """Chapter özeti ya da kavram haritası üretir ve kaydeder."""
+    db = await get_db()
     try:
-        return await generate_chapter_guide(chapter_id, kind)
+        if not await _chapter_exists(db, chapter_id, tenant_id):
+            raise HTTPException(status_code=404, detail="Chapter bulunamadı")
+    finally:
+        await db.close()
+    try:
+        return await generate_chapter_guide(chapter_id, kind, tenant_id=tenant_id)
     except GuideError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/courses/{course_id}/guide")
-async def create_course_guide(course_id: int, kind: str = "summary") -> dict:
+async def create_course_guide(
+    course_id: int, kind: str = "summary", tenant_id: str = Depends(enforce_quota)
+) -> dict:
     """Ders seviyesi rehber üretir ve kaydeder."""
+    db = await get_db()
     try:
-        return await generate_course_guide(course_id, kind)
+        if not await _course_exists(db, course_id, tenant_id):
+            raise HTTPException(status_code=404, detail="Ders bulunamadı")
+    finally:
+        await db.close()
+    try:
+        return await generate_course_guide(course_id, kind, tenant_id=tenant_id)
     except GuideError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/chapters/{chapter_id}/guides")
-async def latest_chapter_guide(chapter_id: int, kind: str = "summary") -> dict | None:
-    return await get_latest_guide(course_id=None, chapter_id=chapter_id, kind=kind)
+async def latest_chapter_guide(
+    chapter_id: int, kind: str = "summary", tenant_id: str = Depends(get_tenant_id)
+) -> dict | None:
+    return await get_latest_guide(
+        course_id=None, chapter_id=chapter_id, kind=kind, tenant_id=tenant_id
+    )
 
 
 @router.get("/courses/{course_id}/guides")
-async def latest_course_guide(course_id: int, kind: str = "summary") -> dict | None:
-    return await get_latest_guide(course_id=course_id, chapter_id=None, kind=kind)
+async def latest_course_guide(
+    course_id: int, kind: str = "summary", tenant_id: str = Depends(get_tenant_id)
+) -> dict | None:
+    return await get_latest_guide(
+        course_id=course_id, chapter_id=None, kind=kind, tenant_id=tenant_id
+    )
 
 
 # ── Ödev değerlendirme ──────────────────────────────────────────────────
 
 
 @router.post("/courses/{course_id}/essays/grade")
-async def grade_essay_homework(course_id: int, payload: EssayGradeIn) -> dict:
+async def grade_essay_homework(
+    course_id: int, payload: EssayGradeIn, tenant_id: str = Depends(enforce_quota)
+) -> dict:
     """Ödevi 0-100 değerlendirir, geçmişe kaydeder ve sonucu döner."""
     db = await get_db()
     try:
-        cursor = await db.execute("SELECT id FROM courses WHERE id = ?", (course_id,))
+        cursor = await db.execute(
+            "SELECT id FROM courses WHERE id = ? AND tenant_id = ?", (course_id, tenant_id)
+        )
         if await cursor.fetchone() is None:
             raise HTTPException(status_code=404, detail="Ders bulunamadı")
     finally:
@@ -92,26 +136,29 @@ async def grade_essay_homework(course_id: int, payload: EssayGradeIn) -> dict:
             user_text=payload.user_text,
             rubric=payload.rubric,
             course_id=course_id,
+            tenant_id=tenant_id,
         )
     except EssayServiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/courses/{course_id}/essays")
-async def list_essay_submissions(course_id: int) -> list[dict]:
-    return await list_submissions(course_id)
+async def list_essay_submissions(
+    course_id: int, tenant_id: str = Depends(get_tenant_id)
+) -> list[dict]:
+    return await list_submissions(course_id, tenant_id=tenant_id)
 
 
 # ── Streak / günlük hedef ───────────────────────────────────────────────
 
 
 @router.get("/streaks")
-async def streak_summary() -> dict:
+async def streak_summary(tenant_id: str = Depends(get_tenant_id)) -> dict:
     """Dashboard özeti: streak günü, bugünkü etkinlikler, hedef ve yüzde.
 
     `daily_goal` önce settings tablosundan (Ayarlar sayfası), yoksa env'den okunur.
     """
-    counts = await load_today_counts()
+    counts = await load_today_counts(tenant_id=tenant_id)
     goal = settings.daily_goal
     db = await get_db()
     try:
@@ -123,7 +170,7 @@ async def streak_summary() -> dict:
         with suppress(ValueError):
             goal = max(int(row["value"]), 1)
     return {
-        "streak_days": compute_streak(await load_active_dates()),
+        "streak_days": compute_streak(await load_active_dates(tenant_id=tenant_id)),
         "today_counts": counts,
         "daily_goal": goal,
         "progress_percent": progress_percent(counts, goal),
