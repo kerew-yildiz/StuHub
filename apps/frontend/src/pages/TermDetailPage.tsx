@@ -5,7 +5,6 @@ import { coursesApi, type Course, type CourseInput } from '../api/courses'
 import { downloadFile, termArchiveUrl } from '../api/exports'
 import { termsApi, type Term } from '../api/terms'
 import { CourseForm } from '../components/CourseForm'
-import { getCourseHue, hueColorVar, hueSoftVar, hueTextVar } from '../lib/courseColors'
 
 type LoadState = 'loading' | 'ready' | 'error'
 
@@ -208,52 +207,33 @@ export function TermDetailPage() {
             </p>
           </div>
         )}
-        {courses.map((course) => {
-          const hue = getCourseHue(course)
-          return (
-            <div key={course.id} className="space-y-3">
-              <div
-                className="glass-panel glass-interactive flex items-center justify-between gap-4 border-l-4 p-6"
-                style={{ borderLeftColor: hueColorVar(hue.id) }}
+        {courses.map((course) => (
+          <div key={course.id} className="space-y-3">
+            <div className="glass-panel glass-interactive flex items-center justify-between gap-4 p-6">
+              <Link to={`/dersler/${course.id}`} className="min-w-0">
+                <h2 className="text-lg font-semibold">{course.name}</h2>
+                {course.instructor && (
+                  <p className="mt-1 text-sm text-stuhub-text-secondary">{course.instructor}</p>
+                )}
+              </Link>
+              <button
+                type="button"
+                onClick={() => setEditingCourse(course)}
+                className="shrink-0 rounded-control px-3 py-1.5 text-sm font-medium text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-glass-2-hover"
+                aria-label={`${course.name} dersini düzenle`}
               >
-                <Link to={`/dersler/${course.id}`} className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span
-                      aria-hidden="true"
-                      className="h-2.5 w-2.5 shrink-0 rounded-pill"
-                      style={{ backgroundColor: hueColorVar(hue.id) }}
-                    />
-                    <h2 className="text-lg font-semibold">{course.name}</h2>
-                    <span
-                      className="rounded-chip px-2 py-0.5 text-xs font-medium"
-                      style={{ backgroundColor: hueSoftVar(hue.id), color: hueTextVar(hue.id) }}
-                    >
-                      {hue.name}
-                    </span>
-                  </div>
-                  {course.instructor && (
-                    <p className="mt-1 text-sm text-stuhub-text-secondary">{course.instructor}</p>
-                  )}
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => setEditingCourse(course)}
-                  className="shrink-0 rounded-control px-3 py-1.5 text-sm font-medium text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-glass-2-hover"
-                  aria-label={`${course.name} dersini düzenle`}
-                >
-                  Düzenle
-                </button>
-              </div>
-              {editingCourse?.id === course.id && (
-                <CourseEditForm
-                  course={course}
-                  onSubmit={(input) => handleUpdate(course.id, input)}
-                  onCancel={() => setEditingCourse(null)}
-                />
-              )}
+                Düzenle
+              </button>
             </div>
-          )
-        })}
+            {editingCourse?.id === course.id && (
+              <CourseEditForm
+                course={course}
+                onSubmit={(input) => handleUpdate(course.id, input)}
+                onCancel={() => setEditingCourse(null)}
+              />
+            )}
+          </div>
+        ))}
       </div>
     </section>
   )

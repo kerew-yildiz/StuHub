@@ -3,15 +3,12 @@ import { useState } from 'react'
 
 import { submitReview, type DueCard, type Rating } from '../api/flashcards'
 import type { Citation } from '../api/notes'
-import { hueColorVar, hueSoftVar, hueTextVar } from '../lib/courseColors'
 import { CitationPopup } from './CitationPopup'
 
 interface FlashcardPlayerProps {
   dueCards: DueCard[]
   onFinished: () => void
   onExit: () => void
-  /** Ders hue id'si — kart üst şeridi ve konu çipi rengi (Şema 5). */
-  hueId?: string
 }
 
 /** Atıf çipi için kaynak etiketi (Kitap s.X / Sunum slayt X). */
@@ -48,7 +45,6 @@ export function FlashcardPlayer({
   dueCards,
   onFinished,
   onExit,
-  hueId,
 }: FlashcardPlayerProps) {
   const [index, setIndex] = useState(0)
   const [flipped, setFlipped] = useState(false)
@@ -137,35 +133,17 @@ export function FlashcardPlayer({
             <button
               type="button"
               onClick={() => setFlipped(true)}
-              className="glass-panel-subtle absolute inset-0 flex flex-col items-center justify-center border-t-4 p-6 text-center [backface-visibility:hidden]"
-              style={hueId ? { borderTopColor: hueColorVar(hueId) } : undefined}
+              className="glass-panel-subtle absolute inset-0 flex flex-col items-center justify-center p-6 text-center [backface-visibility:hidden]"
             >
-              <span
-                className="rounded-chip px-2 py-0.5 text-xs font-medium"
-                style={
-                  hueId
-                    ? { backgroundColor: hueSoftVar(hueId), color: hueTextVar(hueId) }
-                    : undefined
-                }
-              >
+              <span className="glass-panel-subtle rounded-chip px-2 py-0.5 text-xs font-medium text-stuhub-text-secondary">
                 {card.card.topic}
               </span>
               <p className="mt-4 text-lg font-semibold leading-relaxed">{card.card.front}</p>
               <p className="mt-4 text-xs text-stuhub-text-secondary">Çevirmek için tıkla</p>
             </button>
           ) : (
-            <div
-              className="glass-panel absolute inset-0 flex flex-col overflow-y-auto border-t-4 p-6 [backface-visibility:hidden] [transform:rotateY(180deg)]"
-              style={hueId ? { borderTopColor: hueColorVar(hueId) } : undefined}
-            >
-              <span
-                className="self-start rounded-chip px-2 py-0.5 text-xs font-medium"
-                style={
-                  hueId
-                    ? { backgroundColor: hueSoftVar(hueId), color: hueTextVar(hueId) }
-                    : undefined
-                }
-              >
+            <div className="glass-panel absolute inset-0 flex flex-col overflow-y-auto p-6 [backface-visibility:hidden] [transform:rotateY(180deg)]">
+              <span className="glass-panel-subtle self-start rounded-chip px-2 py-0.5 text-xs font-medium text-stuhub-text-secondary">
                 {card.card.topic}
               </span>
               <p className="mt-3 text-base leading-relaxed">{card.card.back}</p>

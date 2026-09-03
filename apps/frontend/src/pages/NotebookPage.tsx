@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { chaptersApi, type Chapter } from '../api/chapters'
-import { coursesApi } from '../api/courses'
 import { downloadFile, flashcardSetExportUrl, noteMarkdownUrl } from '../api/exports'
 import { deleteFlashcardSet, listFlashcardSets, type DueCard, type FlashcardSet } from '../api/flashcards'
 import { materialsApi } from '../api/materials'
@@ -17,7 +16,6 @@ import { NoteViewer } from '../components/NoteViewer'
 import { QuizPlayer } from '../components/QuizPlayer'
 import { SlidePreview } from '../components/SlidePreview'
 import { TabBar } from '../components/TabBar'
-import { getCourseHue, hueColorVar } from '../lib/courseColors'
 import { useAnimatedProgress } from '../lib/useAnimatedProgress'
 import { confirmDialog } from '../stores/confirmStore'
 import { useGenerationStore } from '../stores/generationStore'
@@ -51,8 +49,6 @@ export function NotebookPage() {
   const [tab, setTab] = useState<NotebookTab>('notes')
   // Guide slides formu — liste doluysa kapalı, boşsa açık başlar (çoklu sunum)
   const [slidesFormOpen, setSlidesFormOpen] = useState(true)
-  // Ders rengi — not başlıkları, kart ve quiz şeritleri (Şema 5)
-  const [courseHueId, setCourseHueId] = useState<string | undefined>(undefined)
 
   // Küresel üretim deposu — sayfa değişse bile üretim sürer (madde 2)
   const noteJob = useGenerationStore((s) =>
@@ -86,16 +82,6 @@ export function NotebookPage() {
       setNote(existingNote)
       setQuizzes(quizList)
       setFlashcardSets(flashcardSetList)
-      // Ders rengi — başlık şeritleri ve sekme vurguları için (başarısız olursa sessiz)
-      const numericCourseId = Number(courseId)
-      if (Number.isFinite(numericCourseId)) {
-        try {
-          const courseData = await coursesApi.get(numericCourseId)
-          setCourseHueId(getCourseHue(courseData).id)
-        } catch {
-          setCourseHueId(undefined)
-        }
-      }
       // Slayt materyalinin PDF'i varsa önizleme URL'si hazırla (madde 1)
       const withMaterial = slideList.find((s) => s.material_id != null)
       if (withMaterial?.material_id != null) {
@@ -113,7 +99,7 @@ export function NotebookPage() {
       setState('error')
       setError('Chapter yüklenemedi. Lütfen tekrar deneyin.')
     }
-  }, [numericChapterId, courseId])
+  }, [numericChapterId])
 
   useEffect(() => {
     void load()
@@ -355,7 +341,7 @@ export function NotebookPage() {
 
         {!generatingNote && note && (
           <div className="mt-4">
-            <NoteViewer note={note} hueId={courseHueId} />
+            <NoteViewer note={note} />
           </div>
         )}
         {!generatingNote && !note && !error && (
@@ -393,7 +379,6 @@ export function NotebookPage() {
                 void refreshFlashcardSets()
               }}
               onExit={() => setPlayingCards(null)}
-              hueId={courseHueId}
             />
           </div>
         ) : (
@@ -422,10 +407,7 @@ export function NotebookPage() {
               {flashcardSets.map((set, setIndex) => (
                 <div
                   key={set.id}
-                  className="glass-panel flex items-center justify-between border-l-4 px-5 py-4"
-                  style={
-                    courseHueId ? { borderLeftColor: hueColorVar(courseHueId) } : undefined
-                  }
+                  className="glass-panel flex items-center justify-between px-5 py-4"
                 >
                   <span className="text-sm">
                     <span className="font-medium">
@@ -519,10 +501,7 @@ export function NotebookPage() {
           {quizzes.map((quiz, index) => (
             <details key={quiz.id} open={index === 0}>
               <summary
-                className="glass-panel flex cursor-pointer items-center justify-between border-l-4 px-5 py-3 font-medium"
-                style={
-                  courseHueId ? { borderLeftColor: hueColorVar(courseHueId) } : undefined
-                }
+                className="glass-panel flex cursor-pointer items-center justify-between px-5 py-3 font-medium"
               >
                 <span>
                   Quiz {quizzes.length - index} ·{' '}

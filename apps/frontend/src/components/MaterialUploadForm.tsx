@@ -35,30 +35,56 @@ export function MaterialUploadForm({ onUpload }: MaterialUploadFormProps) {
     <form onSubmit={handleSubmit} className="glass-panel space-y-4 p-6">
       <div className="flex items-end gap-4">
         <div>
-          <label htmlFor="material-type" className="mb-1 block text-sm font-medium">
-            Tür
-          </label>
-          <select
-            id="material-type"
-            value={type}
-            onChange={(e) => setType(e.target.value as 'textbook' | 'slides')}
-            className="rounded-control border border-stuhub-border bg-stuhub-glass-2 px-3 py-2 text-sm text-stuhub-text outline-none transition-colors duration-[var(--duration-micro)] focus:border-stuhub-accent"
+          <span className="mb-1 block text-sm font-medium">Tür</span>
+          <div
+            className="glass-panel-subtle inline-flex gap-1 p-1"
+            role="radiogroup"
+            aria-label="Materyal türü"
           >
-            <option value="textbook">Kitap (PDF)</option>
-            <option value="slides">Sunum (PDF / PPTX)</option>
-          </select>
+            {(
+              [
+                { value: 'textbook', label: 'Kitap (PDF)' },
+                { value: 'slides', label: 'Sunum (PDF / PPTX)' },
+              ] as const
+            ).map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={type === option.value}
+                onClick={() => setType(option.value)}
+                className={`rounded-pill px-3 py-1.5 text-sm font-medium transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] active:scale-[0.98] ${
+                  type === option.value
+                    ? 'border border-stuhub-accent-glass-border bg-stuhub-accent-glass text-stuhub-text'
+                    : 'border border-transparent text-stuhub-text-secondary hover:text-stuhub-text'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="flex-1">
-          <label htmlFor="material-file" className="mb-1 block text-sm font-medium">
-            Dosya
-          </label>
+          <label htmlFor="material-file" className="mb-1 block text-sm font-medium">Dosya</label>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              className="glass-panel-subtle glass-interactive shrink-0 rounded-control px-3 py-2 text-sm font-medium text-stuhub-text-secondary"
+            >
+              Dosya Seç
+            </button>
+            <span className="min-w-0 truncate text-sm text-stuhub-text-secondary">
+              {file ? file.name : 'Dosya seçilmedi'}
+            </span>
+          </div>
           <input
             id="material-file"
             ref={inputRef}
             type="file"
             accept={type === 'textbook' ? '.pdf' : '.pdf,.pptx,.ppt'}
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="w-full text-sm text-stuhub-text-secondary"
+            className="hidden"
           />
         </div>
         <button

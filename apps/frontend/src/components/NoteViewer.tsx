@@ -2,13 +2,10 @@ import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 
 import type { Citation, SavedNote } from '../api/notes'
-import { hueColorVar, hueSoftVar } from '../lib/courseColors'
 import { CitationPopup } from './CitationPopup'
 
 interface NoteViewerProps {
   note: SavedNote
-  /** Ders hue id'si — bölüm başlıkları bu renkle şeritlenir (Şema 5). */
-  hueId?: string
 }
 
 interface RenderedSection {
@@ -106,8 +103,8 @@ function CitationLink({
   return <span>{children}</span>
 }
 
-/** Not görüntüleyici — markdown + interaktif atıflar + ders renk şeritleri (Şema 5). */
-export function NoteViewer({ note, hueId }: NoteViewerProps) {
+/** Not görüntüleyici — markdown + interaktif atıflar. */
+export function NoteViewer({ note }: NoteViewerProps) {
   const [active, setActive] = useState<Citation | null>(null)
   const sections = splitSections(note)
 
@@ -131,27 +128,17 @@ export function NoteViewer({ note, hueId }: NoteViewerProps) {
                   />
                 ),
                 h1: ({ children }) => (
-                  <h1 className="mt-0 mb-3 border-l-4 pl-3 text-2xl font-semibold"
-                    style={
-                      hueId
-                        ? { borderLeftColor: hueColorVar(hueId), backgroundColor: hueSoftVar(hueId) }
-                        : undefined
-                    }
-                  >
+                  <h1 className="mt-0 mb-3 border-l-4 border-stuhub-accent pl-3 text-2xl font-semibold">
                     {children}
                   </h1>
                 ),
                 h2: ({ children }) => (
-                  <h2 className="mt-6 mb-2 border-l-4 pl-3 text-xl font-semibold"
-                    style={hueId ? { borderLeftColor: hueColorVar(hueId) } : undefined}
-                  >
+                  <h2 className="mt-6 mb-2 border-l-4 border-stuhub-border-strong pl-3 text-xl font-semibold">
                     {children}
                   </h2>
                 ),
                 h3: ({ children }) => (
-                  <h3 className="mt-4 mb-2 border-l-4 pl-3 text-lg font-semibold"
-                    style={hueId ? { borderLeftColor: hueColorVar(hueId) } : undefined}
-                  >
+                  <h3 className="mt-4 mb-2 border-l-4 border-stuhub-border pl-3 text-lg font-semibold">
                     {children}
                   </h3>
                 ),

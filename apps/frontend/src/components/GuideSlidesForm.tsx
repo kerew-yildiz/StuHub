@@ -34,16 +34,26 @@ export function GuideSlidesForm({ onUpload }: GuideSlidesFormProps) {
     <form onSubmit={handleSubmit} className="glass-panel space-y-4 p-6">
       <div className="flex items-end gap-4">
         <div className="flex-1">
-          <label htmlFor="guide-slides-file" className="mb-1 block text-sm font-medium">
-            Sunum dosyası (PDF / PPTX)
-          </label>
+          <label htmlFor="guide-slides-file" className="mb-1 block text-sm font-medium">Sunum dosyası (PDF / PPTX)</label>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              className="glass-panel-subtle glass-interactive shrink-0 rounded-control px-3 py-2 text-sm font-medium text-stuhub-text-secondary"
+            >
+              Dosya Seç
+            </button>
+            <span className="min-w-0 truncate text-sm text-stuhub-text-secondary">
+              {file ? file.name : 'Dosya seçilmedi'}
+            </span>
+          </div>
           <input
             id="guide-slides-file"
             ref={inputRef}
             type="file"
             accept=".pdf,.pptx,.ppt"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="w-full text-sm text-stuhub-text-secondary"
+            className="hidden"
           />
           <p className="mt-1 text-xs text-stuhub-text-secondary">
             Bu sunum, chapter notlarının rehberi olarak kullanılacak (guide slides). Birden

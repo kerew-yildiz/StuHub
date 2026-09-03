@@ -4,7 +4,6 @@ import { Link, NavLink, useLocation } from 'react-router-dom'
 import { chaptersApi, type Chapter } from '../api/chapters'
 import { coursesApi, type Course } from '../api/courses'
 import { termsApi, type Term } from '../api/terms'
-import { getCourseHue, hueColorVar } from '../lib/courseColors'
 
 /** Aktif rota vurgusu — tam eşleşme ya da ön ek eşleşmesi. */
 function linkClass(active: boolean): string {
@@ -155,13 +154,8 @@ export function Sidebar() {
                             </button>
                             <Link
                               to={`/dersler/${course.id}`}
-                              className={`${linkClass(isCourseActive(course.id))} flex items-center gap-2`}
+                              className={linkClass(isCourseActive(course.id))}
                             >
-                              <span
-                                aria-hidden="true"
-                                className="h-2 w-2 shrink-0 rounded-full"
-                                style={{ backgroundColor: hueColorVar(getCourseHue(course).id) }}
-                              />
                               <span className="block truncate">{course.name}</span>
                             </Link>
                           </div>

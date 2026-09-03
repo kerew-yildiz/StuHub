@@ -18,7 +18,6 @@ import { MaterialUploadForm } from '../components/MaterialUploadForm'
 import { OverallQuizPlayer } from '../components/OverallQuizPlayer'
 import { TabBar } from '../components/TabBar'
 import { useAnimatedProgress } from '../lib/useAnimatedProgress'
-import { getCourseHue, hueColorVar, hueSoftVar, hueTextVar } from '../lib/courseColors'
 import { confirmDialog } from '../stores/confirmStore'
 import { useGenerationStore } from '../stores/generationStore'
 
@@ -285,17 +284,6 @@ export function CoursePage() {
       <div className="mt-2">
         <div className="flex items-center gap-3">
           <h1 className="text-3xl font-semibold">{course?.name ?? 'Ders'}</h1>
-          {course && (
-            <span
-              className="rounded-chip px-2.5 py-1 text-xs font-medium"
-              style={{
-                backgroundColor: hueSoftVar(getCourseHue(course).id),
-                color: hueTextVar(getCourseHue(course).id),
-              }}
-            >
-              {getCourseHue(course).name}
-            </span>
-          )}
         </div>
         {course?.instructor && (
           <p className="mt-1 text-sm text-stuhub-text-secondary">{course.instructor}</p>
@@ -352,14 +340,7 @@ export function CoursePage() {
           )}
           {chapters.map((chapter) => (
             <div key={chapter.id} className="space-y-2">
-              <div
-                className="glass-panel flex items-center justify-between border-l-4 px-5 py-4"
-                style={
-                  course
-                    ? { borderLeftColor: hueColorVar(getCourseHue(course).id) }
-                    : undefined
-                }
-              >
+              <div className="glass-panel flex items-center justify-between px-5 py-4">
                 <Link
                   to={`/dersler/${numericId}/defter/${chapter.id}`}
                   className="font-medium transition-colors duration-[var(--duration-micro)] hover:text-stuhub-accent"
@@ -595,7 +576,6 @@ export function CoursePage() {
               dueCards={playingDue}
               onFinished={closeDuePlayer}
               onExit={closeDuePlayer}
-              hueId={course ? getCourseHue(course).id : undefined}
             />
           </div>
         ) : dueCards.length > 0 ? (
