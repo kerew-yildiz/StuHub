@@ -6,6 +6,13 @@ import App from './App'
 
 vi.mock('./api/client', () => ({
   getHealth: vi.fn(async () => true),
+  getHealthInfo: vi.fn(async () => ({
+    status: 'ok',
+    app: 'stuhub',
+    version: '0.1.0',
+    saas_mode: false,
+  })),
+  setAccessToken: vi.fn(),
   apiFetch: vi.fn(),
 }))
 
@@ -29,8 +36,9 @@ vi.mock('./api/streaks', () => ({
 
 vi.mock('./api/settings', () => ({
   settingsApi: {
-    list: vi.fn(async () => ({ model: 'deepseek-chat', onboarding_done: '1' })),
+    list: vi.fn(async () => ({ onboarding_done: '1' })),
     set: vi.fn(async () => ({ ok: true })),
+    llmStatus: vi.fn(async () => []),
   },
 }))
 
@@ -42,7 +50,7 @@ describe('App', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByRole('heading', { name: 'Dönemler' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Dönemler' })).toBeInTheDocument()
     expect(await screen.findByText('Henüz dönem yok')).toBeInTheDocument()
   })
 
@@ -54,7 +62,7 @@ describe('App', () => {
     )
 
     expect(await screen.findByRole('heading', { name: 'Ayarlar' })).toBeInTheDocument()
-    expect(screen.getByLabelText('DeepSeek API anahtarı')).toBeInTheDocument()
+    expect(screen.getByLabelText('1. Google Gemini API anahtarı')).toBeInTheDocument()
   })
 
   it('Backend ayaktayken sağlık uyarısı görünmez', async () => {

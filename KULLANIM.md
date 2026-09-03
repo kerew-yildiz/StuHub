@@ -7,7 +7,7 @@ Ders kitaplarınızı (PDF) ve hoca sunumlarınızı yükler; yapay zeka ile **a
 
 ## 1. Kurulum (tek seferlik)
 
-Gereksinimler: **Python 3.12 + uv**, **Node ≥ 20 + npm**, **git**, ve bir **DeepSeek API anahtarı**.
+Gereksinimler: **Python 3.12 + uv**, **Node ≥ 20 + npm**, **git**, ve en az bir **ücretsiz LLM sağlayıcı anahtarı** (Google Gemini önerilir).
 
 ```bash
 # 1) Bağımlılıklar
@@ -15,8 +15,8 @@ cd apps/backend && uv sync
 cd ../frontend && npm install
 
 # 2) API anahtarı
-# .env.example dosyasını .env olarak kopyalayıp DEEPSEEK_API_KEY değerini doldurun
-# (veya uygulama içi Ayarlar sayfasından girin)
+# .env.example dosyasını .env olarak kopyalayıp en az bir sağlayıcı anahtarını doldurun
+# (GOOGLE_API_KEY önerilir — https://aistudio.google.com/apikey; veya uygulama içi Ayarlar sayfasından girin)
 ```
 
 > 💡 **İsteğe bağlı:** Sunum slide'larının pop-up'ta tam PDF sayfası olarak görünmesi için
@@ -44,9 +44,10 @@ Tarayıcıda **http://localhost:5173** açılır. Backend kapalıysa üstte uyar
 
 ## 3. İlk adımlar — uçtan uca akış
 
-1. **Ayarlar → DeepSeek API anahtarı** — anahtarı girin, **modeli** seçin
-   (`deepseek-chat` varsayılan; `deepseek-reasoner` daha derin muhakeme için). Anahtar yalnızca
-   bu cihazda saklanır; yanıtlarda maskelenir.
+1. **Ayarlar → LLM sağlayıcı anahtarları** — en az bir tanesini girin (Google Gemini önerilir,
+   en geniş kota). Birden fazla anahtar girilirse hepsi sırayla yedek olarak kullanılır: biri
+   günlük kota sınırına ulaşınca otomatik olarak sıradakine geçilir. Anahtarlar yalnızca bu
+   cihazda saklanır; yanıtlarda maskelenir.
 2. **Dönemler** sayfasından bir dönem oluşturun (örn. "2026 Bahar") → içine **ders** ekleyin.
 3. **Ders sayfası:**
    - **Materyaller** bölümünden ders kitabını PDF yükleyin → **İndeksle**'ye basın
@@ -110,12 +111,11 @@ flashcard/rehber üretim dili değişir (varsayılan: Türkçe).
 
 ## 4. Maliyet
 
-Not/quiz üretimi DeepSeek API'sini kullanır (kendi anahtarınız). Tüm çağrılar
-`generation_logs` tablosunda izlenir (tür, model, token sayısı). Örnek: tek chapter notu +
-bölüm quizi ≈ **10-30 bin token** (kuruş mertebesinde). Açık uçlu puanlama quiz başına 5 küçük çağrı ekler.
-v2 ekleri: flashcard seti (konu başına çağrı), chat yanıtı (soru başına), rehber ve ödev
-değerlendirme çağrıları aynı kuruş-mertebesi ölçektedir. **Embedding, transkripsiyon ve OCR
-ücretsiz ve yereldir — API kotası harcamaz.**
+Not/quiz üretimi ücretsiz LLM sağlayıcı zincirini kullanır (Gemini → OpenRouter → Groq →
+GitHub Models; geçici çözüm — bkz. `README.md`). Tüm çağrılar `generation_logs` tablosunda
+izlenir (tür, model, sağlayıcı, token sayısı). Sağlayıcıların günlük ücretsiz kotaları vardır;
+biri tükenince otomatik sıradakine geçilir, hepsi tükenirse ertesi gün sıfırlanana kadar
+beklenir. **Embedding, transkripsiyon ve OCR ücretsiz ve yereldir — API kotası harcamaz.**
 
 ## 5. Güvenlik & Gizlilik
 

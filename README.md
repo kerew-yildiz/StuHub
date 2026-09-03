@@ -4,7 +4,13 @@
 
 > ✅ **1.0 sürümü teslim edildi** (Faz 0–6). **2.0 sürümü geliştirildi** (V2.0–V2.9 — Niş Analizi Entegrasyonu). Kullanım için: **[`KULLANIM.md`](./KULLANIM.md)**.
 >
-> 🎯 **Dağıtım hedefi: SaaS.** Bu repodaki sürüm **localhost'ta** çalışır (auth yok, veri `data/` altında, LLM için kendi DeepSeek anahtarınız) — bu bugünkü durumdur, nihai mimari değildir. Ürün SaaS olarak yayınlanacak; açık kararlar vault'taki `KARAR-SAAS-GECISI.md`'de. Aşağıdaki "tüm veri cihazınızda / hesap yok" ifadeleri yerel sürümü tarif eder.
+> 🎯 **Dağıtım hedefi: SaaS — altyapı uygulandı, canlıya alınmadı.** Auth (Supabase JWT),
+> kiracı izolasyonu (`tenant_id`), plan bazlı kota ve Lemon Squeezy abonelik kodu yazıldı
+> (`DATABASE_URL` boşsa uygulama bugünkü gibi auth'suz/yerel modda çalışır — geriye dönük
+> uyumlu). Gerçek Supabase/Lemon Squeezy hesabı henüz kurulmadı, frontend giriş ekranı
+> henüz `App.tsx`'e bağlanmadı. Açık ürün kararları (dosya depolama, KVKK/gizlilik,
+> farklılaşma) vault'taki `KARAR-SAAS-GECISI.md`'de. Aşağıdaki "tüm veri cihazınızda /
+> hesap yok" ifadeleri yalnızca `DATABASE_URL` boşken (yerel mod) geçerlidir.
 >
 > 📓 **Geliştirme belgeleri bu repoda değil.** Yol haritası, sistem yetenekleri, araştırma raporları, `AJANLAR/` ve `YETENEKLER/` sözleşmeleri KerewOS vault'unda tutulur: `KerewOS/🏰 300-Projects/StuHub/`. Belgelerin birbirine verdiği göreli yollar (`PROJE_YOL_HARITASI.md`, `AJANLAR/…`, `YETENEKLER/…`) o klasörde aynen geçerlidir. Tek kaynak doğrusu hâlâ `PROJE_YOL_HARITASI.md`; bu repo yalnızca çalışan uygulamayı barındırır.
 
@@ -32,7 +38,7 @@
 | Backend | FastAPI + SQLite (aiosqlite) (`apps/backend`) |
 | Vektör DB | LanceDB (embedded) |
 | Embedding | sentence-transformers + bge-m3 (yerel, ücretsiz) |
-| LLM | DeepSeek API (kullanıcının kendi anahtarı — onaylı istisna) |
+| LLM | Ücretsiz sağlayıcı zinciri — Gemini 2.5 Flash → OpenRouter (Nemotron 3 Ultra 550B free) → Groq (Llama 3.3 70B) → GitHub Models (GPT-4.1 mini); biri kota sınırına ulaşınca otomatik sıradakine geçer (geçici çözüm, bkz. `src/services/llm_providers.py`) |
 | Medya (v2) | yt-dlp (altyazı/indirme) · faster-whisper (yerel STT) · rapidocr-onnxruntime (yerel OCR) · python-docx (tümü ücretsiz lisanslı; EPUB stdlib) |
 
 ## Hızlı Başlangıç
@@ -50,7 +56,7 @@ npm run dev          # http://localhost:5173
 # Aynı ağdan erişim (PWA/telefon): uvicorn src.main:app --host 0.0.0.0 --port 8000
 ```
 
-`.env` dosyasına `DEEPSEEK_API_KEY` ekleyin (bkz. `.env.example`) — ayrıntılı rehber: `KULLANIM.md`.
+`.env` dosyasına en az bir sağlayıcı anahtarı ekleyin (`GOOGLE_API_KEY` önerilir; bkz. `.env.example`) — ayrıntılı rehber: `KULLANIM.md`.
 
 ## Test / Lint / Güvenlik
 
@@ -62,12 +68,14 @@ cd apps/frontend && npm audit
 gitleaks detect --source .   # commit öncesi (pre-commit hook da çalışır)
 ```
 
-Mevcut kapılar: backend **183 pytest** · frontend **20 vitest** · bandit/pip-audit/npm audit **0 bulgu** · gitleaks temiz.
+Mevcut kapılar: backend **198 pytest** (12'si bu ortama özgü ilgisiz hata — Windows font
+yolu test fixture'ları, build edilmemiş frontend dist; CI/gerçek kurulumda geçerli değil)
+· frontend **30 vitest** · bandit/pip-audit/npm audit **0 bulgu** · gitleaks temiz.
 
 ## Güvenlik & Gizlilik
 
 - Hesap yok, telemetri yok, analytics yok. Tüm veri yerel (`data/`).
 - API anahtarı `settings` tablosunda ya da `.env`'de; asla loglanmaz/yanıtlanmaz (maskeli).
-- Uygulama çalışırken yalnızca DeepSeek API'ye (üretim için gerekli parçalar) ve YouTube altyazı indirmesine ağ çağrısı yapar; embedding, STT ve OCR tamamen yereldir.
+- Uygulama çalışırken yalnızca yapılandırılmış LLM sağlayıcılarına (üretim için gerekli parçalar) ve YouTube altyazı indirmesine ağ çağrısı yapar; embedding, STT ve OCR tamamen yereldir.
 - Quiz `answer_key`'leri frontend'e hiçbir rotada gitmez.
 - Şema evrimi güvenli: `init_db` idempotent + `schema_migrations` migration runner'ı (eski kurulum verisi korunarak yükselir).
