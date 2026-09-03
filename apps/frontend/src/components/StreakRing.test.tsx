@@ -30,7 +30,7 @@ describe('StreakRing', () => {
     })
     render(<StreakRing />)
 
-    expect(await screen.findByText('🔥 3 gün streak')).toBeInTheDocument()
+    expect(await screen.findByText('3 gün streak')).toBeInTheDocument()
     expect(screen.getByText('Bugün 8/3 etkinlik')).toBeInTheDocument()
     expect(screen.getByText('66%')).toBeInTheDocument()
   })
@@ -44,7 +44,7 @@ describe('StreakRing', () => {
     })
     render(<StreakRing />)
 
-    expect(await screen.findByText('🔥 0 gün streak')).toBeInTheDocument()
+    expect(await screen.findByText('0 gün streak')).toBeInTheDocument()
     expect(
       screen.getByText('Bugün ilk etkinliğini yap — not üret, quiz çöz ya da kart tekrarla.'),
     ).toBeInTheDocument()

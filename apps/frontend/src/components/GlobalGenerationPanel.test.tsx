@@ -65,7 +65,7 @@ describe('GlobalGenerationPanel', () => {
     render(<GlobalGenerationPanel />)
 
     const chip = screen.getByRole('button', { name: 'Üretim durumunu aç' })
-    expect(chip.textContent).toContain('⚠')
+    expect(chip.querySelector('svg')).toBeInTheDocument()
     expect(chip.textContent).toContain('Hata')
   })
 

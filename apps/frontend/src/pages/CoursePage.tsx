@@ -39,9 +39,9 @@ function JobProgressBar({ target }: { target: number }) {
   const progress = useAnimatedProgress(target)
   return (
     <span className="flex items-center gap-2">
-      <span className="h-1.5 w-24 overflow-hidden rounded-full bg-stuhub-border">
+      <span className="h-1.5 w-24 overflow-hidden rounded-pill bg-stuhub-border">
         <span
-          className="block h-full rounded-full bg-stuhub-accent transition-[width] duration-150 ease-out"
+          className="block h-full rounded-pill bg-stuhub-accent transition-[width] duration-[var(--duration-state)] ease-[var(--ease-out-expo)]"
           style={{ width: `${Math.round(progress)}%` }}
         />
       </span>
@@ -85,7 +85,7 @@ function ChapterEditForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-3 rounded-md border border-stuhub-border bg-stuhub-surface p-4"
+      className="glass-panel space-y-3 p-4"
     >
       <div>
         <label htmlFor={`chapter-edit-title-${chapter.id}`} className="mb-1 block text-sm font-medium">
@@ -96,7 +96,7 @@ function ChapterEditForm({
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className="w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-stuhub-accent"
+          className="w-full rounded-control border border-stuhub-border bg-stuhub-glass-2 px-3 py-2 text-sm text-stuhub-text outline-none transition-colors duration-[var(--duration-micro)] placeholder:text-stuhub-text-secondary focus:border-stuhub-accent"
         />
       </div>
       {error && <p className="text-sm text-stuhub-error">{error}</p>}
@@ -104,14 +104,14 @@ function ChapterEditForm({
         <button
           type="submit"
           disabled={busy}
-          className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-60"
+          className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100"
         >
           {busy ? 'Kaydediliyor…' : 'Kaydet'}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-sm px-4 py-2 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+          className="glass-panel-subtle glass-interactive rounded-control px-4 py-2 text-sm font-medium text-stuhub-text-secondary"
         >
           İptal
         </button>
@@ -277,7 +277,7 @@ export function CoursePage() {
     <section>
       <Link
         to={`/donemler/${course?.term_id ?? ''}`}
-        className="text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:text-stuhub-text"
+        className="text-sm font-medium text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:text-stuhub-text"
       >
         ← Döneme dön
       </Link>
@@ -286,7 +286,7 @@ export function CoursePage() {
           <h1 className="text-3xl font-semibold">{course?.name ?? 'Ders'}</h1>
           {course && (
             <span
-              className="rounded-full px-2.5 py-1 text-xs font-medium"
+              className="rounded-chip px-2.5 py-1 text-xs font-medium"
               style={{
                 backgroundColor: hueSoftVar(getCourseHue(course).id),
                 color: hueTextVar(getCourseHue(course).id),
@@ -302,7 +302,7 @@ export function CoursePage() {
       </div>
 
       {error && (
-        <p role="alert" className="mt-4 rounded-sm bg-stuhub-error/10 px-4 py-2 text-sm text-stuhub-error">
+        <p role="alert" className="mt-4 rounded-control bg-stuhub-error/10 px-4 py-2 text-sm text-stuhub-error">
           {error}
         </p>
       )}
@@ -330,7 +330,7 @@ export function CoursePage() {
             <button
               type="button"
               onClick={() => setShowChapterForm(true)}
-              className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
+              className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98]"
             >
               Yeni Chapter Ekle
             </button>
@@ -352,7 +352,7 @@ export function CoursePage() {
           {chapters.map((chapter) => (
             <div key={chapter.id} className="space-y-2">
               <div
-                className="flex items-center justify-between rounded-md border border-stuhub-border border-l-4 bg-stuhub-surface px-5 py-4"
+                className="glass-panel flex items-center justify-between border-l-4 px-5 py-4"
                 style={
                   course
                     ? { borderLeftColor: hueColorVar(getCourseHue(course).id) }
@@ -361,7 +361,7 @@ export function CoursePage() {
               >
                 <Link
                   to={`/dersler/${numericId}/defter/${chapter.id}`}
-                  className="font-medium transition-colors duration-150 hover:text-stuhub-accent"
+                  className="font-medium transition-colors duration-[var(--duration-micro)] hover:text-stuhub-accent"
                 >
                   {chapter.title}
                 </Link>
@@ -369,7 +369,7 @@ export function CoursePage() {
                   <button
                     type="button"
                     onClick={() => setEditingChapter(chapter)}
-                    className="rounded-sm px-3 py-1 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                    className="rounded-control px-3 py-1 text-sm font-medium text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-glass-2-hover"
                     aria-label={`${chapter.title} chapter'ını düzenle`}
                   >
                     Düzenle
@@ -377,7 +377,7 @@ export function CoursePage() {
                   <button
                     type="button"
                     onClick={() => handleDeleteChapter(chapter.id)}
-                    className="rounded-sm px-2 py-1 text-sm text-stuhub-error transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                    className="rounded-control px-2 py-1 text-sm text-stuhub-error transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10"
                     aria-label={`${chapter.title} chapter'ını sil`}
                   >
                     Sil
@@ -402,7 +402,7 @@ export function CoursePage() {
         <p className="mt-1 text-sm text-stuhub-text-secondary">
           Ders kitapları (PDF) ve hoca sunumları burada toplanır; AI not ve quiz üretiminde kullanılır.
         </p>
-        <div className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface p-5">
+        <div className="glass-panel mt-4 p-5">
           <MaterialUploadForm onUpload={handleUploadMaterial} />
           <div className="mt-4 space-y-2">
             {materials.length === 0 && (
@@ -414,7 +414,7 @@ export function CoursePage() {
               return (
                 <div
                   key={material.id}
-                  className="flex items-center justify-between gap-4 rounded-sm bg-stuhub-bg px-4 py-2 text-sm"
+                  className="flex items-center justify-between gap-4 rounded-control bg-stuhub-glass-2 px-4 py-2 text-sm"
                 >
                   <span className="min-w-0">
                     <span className="font-medium">{material.display_name}</span>
@@ -437,7 +437,7 @@ export function CoursePage() {
                       <button
                         type="button"
                         onClick={() => void handleIndex(material.id)}
-                        className="rounded-sm bg-stuhub-accent px-3 py-1 text-xs font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
+                        className="rounded-control bg-stuhub-accent px-3 py-1 text-xs font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98]"
                       >
                         İndeksle
                       </button>
@@ -446,7 +446,7 @@ export function CoursePage() {
                       <button
                         type="button"
                         onClick={() => void handleIndex(material.id)}
-                        className="rounded-sm px-3 py-1 text-xs font-medium text-stuhub-error transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                        className="rounded-control px-3 py-1 text-xs font-medium text-stuhub-error transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10"
                       >
                         Tekrar dene
                       </button>
@@ -455,7 +455,7 @@ export function CoursePage() {
                       <button
                         type="button"
                         onClick={() => setPreviewMaterial(material)}
-                        className="rounded-sm px-3 py-1 text-xs font-medium text-stuhub-accent transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                        className="rounded-control px-3 py-1 text-xs font-medium text-stuhub-accent transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-glass-2-hover"
                       >
                         Önizle
                       </button>
@@ -463,7 +463,7 @@ export function CoursePage() {
                     <button
                       type="button"
                       onClick={() => handleDeleteMaterial(material.id)}
-                      className="rounded-sm px-2 py-1 text-stuhub-error transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                      className="rounded-control px-2 py-1 text-stuhub-error transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10"
                       aria-label="Materyali sil"
                     >
                       Sil
@@ -502,18 +502,18 @@ export function CoursePage() {
             type="button"
             onClick={() => void handleGenerateOverallQuiz()}
             disabled={overallJob?.status === 'running'}
-            className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-50"
+            className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
           >
             {overallJob?.status === 'running' ? 'Üretiliyor…' : 'Yeni Genel Quiz Oluştur'}
           </button>
         </div>
 
         {overallJob?.status === 'running' && (
-          <div className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface p-5">
+          <div className="glass-panel mt-4 p-5">
             <p className="text-sm font-medium">{overallJob.message}</p>
-            <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-stuhub-border">
+            <div className="mt-3 h-2 w-full overflow-hidden rounded-pill bg-stuhub-border">
               <div
-                className="h-full rounded-full bg-stuhub-accent transition-[width] duration-150 ease-out"
+                className="h-full rounded-pill bg-stuhub-accent transition-[width] duration-[var(--duration-state)] ease-[var(--ease-out-expo)]"
                 style={{ width: `${Math.max(quizProgress, 2)}%` }}
               />
             </div>
@@ -531,7 +531,7 @@ export function CoursePage() {
           )}
           {overallQuizzes.map((overallQuiz, index) => (
             <details key={overallQuiz.id} open={index === 0}>
-              <summary className="flex cursor-pointer items-center justify-between rounded-md border border-stuhub-border bg-stuhub-surface px-5 py-3 font-medium">
+              <summary className="glass-panel flex cursor-pointer items-center justify-between px-5 py-3 font-medium">
                 <span>
                   Genel Quiz {overallQuizzes.length - index} ·{' '}
                   {overallQuiz.questions_json.questions.length} soru ·{' '}
@@ -545,7 +545,7 @@ export function CoursePage() {
                     e.preventDefault()
                     void handleDeleteOverallQuiz(overallQuiz.id)
                   }}
-                  className="rounded-sm px-2 py-1 text-sm text-stuhub-error transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                  className="rounded-control px-2 py-1 text-sm text-stuhub-error transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10"
                   aria-label="Genel quiz'i sil"
                 >
                   Sil
@@ -575,14 +575,14 @@ export function CoursePage() {
             <button
               type="button"
               onClick={() => downloadFile(courseFlashcardsExportUrl(numericId, 'apkg'))}
-              className="rounded-sm border border-stuhub-border bg-stuhub-surface px-3 py-1 text-xs font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+              className="glass-panel-subtle glass-interactive rounded-control px-3 py-1 text-xs font-medium text-stuhub-text-secondary"
             >
               Tüm kartları Anki'ye aktar (.apkg)
             </button>
             <button
               type="button"
               onClick={() => downloadFile(courseFlashcardsExportUrl(numericId, 'csv'))}
-              className="rounded-sm border border-stuhub-border bg-stuhub-surface px-3 py-1 text-xs font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+              className="glass-panel-subtle glass-interactive rounded-control px-3 py-1 text-xs font-medium text-stuhub-text-secondary"
             >
               CSV
             </button>
@@ -598,14 +598,14 @@ export function CoursePage() {
             />
           </div>
         ) : dueCards.length > 0 ? (
-          <div className="mt-4 flex items-center justify-between rounded-md border border-stuhub-border bg-stuhub-surface px-5 py-4">
+          <div className="glass-panel mt-4 flex items-center justify-between px-5 py-4">
             <p className="text-sm text-stuhub-text-secondary">
               {dueCards.length} kart tekrar bekliyor
             </p>
             <button
               type="button"
               onClick={() => setPlayingDue(dueCards)}
-              className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
+              className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98]"
             >
               Çalış
             </button>

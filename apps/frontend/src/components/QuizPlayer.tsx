@@ -81,7 +81,7 @@ export function QuizPlayer({ quiz, onDelete }: QuizPlayerProps) {
 
   if (phase === 'finished' && outcome) {
     return (
-      <div className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface p-6">
+      <div className="glass-panel mt-4 p-6">
         <h3 className="text-xl font-semibold">Quiz tamamlandı</h3>
         <p className="mt-2 text-3xl font-semibold text-stuhub-accent">
           {outcome.score} / 100
@@ -93,14 +93,14 @@ export function QuizPlayer({ quiz, onDelete }: QuizPlayerProps) {
           <button
             type="button"
             onClick={startFresh}
-            className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
+            className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98]"
           >
             Yeniden çöz
           </button>
           <button
             type="button"
             onClick={() => void handleDeleteAnswers()}
-            className="rounded-sm border border-stuhub-border px-4 py-2 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+            className="glass-panel-subtle glass-interactive rounded-control px-4 py-2 text-sm font-medium text-stuhub-text-secondary"
           >
             Cevapları sil
           </button>
@@ -108,7 +108,7 @@ export function QuizPlayer({ quiz, onDelete }: QuizPlayerProps) {
             <button
               type="button"
               onClick={() => onDelete(quiz.id)}
-              className="rounded-sm px-4 py-2 text-sm font-medium text-stuhub-error transition-colors duration-150 hover:bg-stuhub-surface-hover"
+              className="rounded-control px-4 py-2 text-sm font-medium text-stuhub-error transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10"
             >
               Quiz'i sil
             </button>
@@ -116,8 +116,8 @@ export function QuizPlayer({ quiz, onDelete }: QuizPlayerProps) {
         </div>
 
         {/* Açılır kapanır tam soru önizleme (seçeneklerle birlikte — madde 7) */}
-        <details open className="mt-5 rounded-md border border-stuhub-border">
-          <summary className="cursor-pointer select-none bg-stuhub-bg px-4 py-2.5 text-sm font-medium">
+        <details open className="glass-panel-subtle mt-5 overflow-hidden">
+          <summary className="cursor-pointer select-none px-4 py-2.5 text-sm font-medium">
             Sorular ve cevaplar
           </summary>
           <div className="divide-y divide-stuhub-border">
@@ -127,11 +127,11 @@ export function QuizPlayer({ quiz, onDelete }: QuizPlayerProps) {
                 <div className="mt-2 space-y-1.5">
                   {result.options.map((option, index) => {
                     let className =
-                      'rounded-sm border border-stuhub-border px-3 py-1.5 text-stuhub-text-secondary'
+                      'rounded-chip border border-stuhub-border px-3 py-1.5 text-stuhub-text-secondary'
                     if (index === result.correct_index) {
-                      className = 'rounded-sm border border-stuhub-success bg-stuhub-success/10 px-3 py-1.5 text-stuhub-success'
+                      className = 'rounded-chip border border-stuhub-success bg-stuhub-success/10 px-3 py-1.5 text-stuhub-success'
                     } else if (index === result.selected_index && !result.correct) {
-                      className = 'rounded-sm border border-stuhub-error bg-stuhub-error/10 px-3 py-1.5 text-stuhub-error'
+                      className = 'rounded-chip border border-stuhub-error bg-stuhub-error/10 px-3 py-1.5 text-stuhub-error'
                     }
                     return (
                       <div key={index} className={className}>
@@ -194,16 +194,16 @@ export function QuizPlayer({ quiz, onDelete }: QuizPlayerProps) {
   }
 
   return (
-    <div className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface p-6">
+    <div className="glass-panel mt-4 p-6">
       <div className="flex items-center justify-between text-sm text-stuhub-text-secondary">
         <span>
           Soru {current + 1} / {questions.length}
         </span>
         <span>{Math.round((current / questions.length) * 100)}%</span>
       </div>
-      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-stuhub-border">
+      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-pill bg-stuhub-border">
         <div
-          className="h-full rounded-full bg-stuhub-accent transition-[width] duration-150 ease-out"
+          className="h-full rounded-pill bg-stuhub-accent transition-[width] duration-[var(--duration-state)] ease-[var(--ease-out-expo)]"
           style={{ width: `${Math.max((current / questions.length) * 100, 2)}%` }}
         />
       </div>
@@ -213,9 +213,9 @@ export function QuizPlayer({ quiz, onDelete }: QuizPlayerProps) {
         <div className="mt-4 space-y-2">
           {question.question.options.map((option, index) => {
             let className =
-              'w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-4 py-2.5 text-left text-sm transition-colors duration-150'
+              'w-full rounded-control border border-stuhub-border bg-stuhub-glass-2 px-4 py-2.5 text-left text-sm transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)]'
             if (!revealed) {
-              className += ' hover:border-stuhub-accent'
+              className += ' hover:border-stuhub-border-strong hover:bg-stuhub-glass-2-hover active:scale-[0.98]'
             } else if (index === question.question.correct_index) {
               className += ' border-stuhub-success bg-stuhub-success/10 text-stuhub-success'
             } else if (index === selected && !correct) {
@@ -240,7 +240,7 @@ export function QuizPlayer({ quiz, onDelete }: QuizPlayerProps) {
 
       {revealed && (
         <div
-          className={`mt-4 rounded-sm px-4 py-3 text-sm leading-relaxed ${
+          className={`mt-4 rounded-control px-4 py-3 text-sm leading-relaxed transition-opacity duration-[var(--duration-state)] ${
             correct
               ? 'bg-stuhub-success/10 text-stuhub-success'
               : 'bg-stuhub-error/10 text-stuhub-error'
@@ -259,7 +259,7 @@ export function QuizPlayer({ quiz, onDelete }: QuizPlayerProps) {
           type="button"
           onClick={() => void handleNext()}
           disabled={!revealed || submitting}
-          className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-50"
+          className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
         >
           {submitting ? 'Değerlendiriliyor…' : isLast ? 'Bitir' : 'Sonraki soru'}
         </button>

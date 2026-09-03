@@ -1,3 +1,4 @@
+import { CheckCircle, Warning } from '@phosphor-icons/react'
 import { useState } from 'react'
 
 import { useAnimatedProgress } from '../lib/useAnimatedProgress'
@@ -11,7 +12,7 @@ function JobRow({ kind, targetId }: { kind: string; targetId: number }) {
   const isRunning = job.status === 'running'
 
   return (
-    <div className="rounded-md border border-stuhub-border bg-stuhub-surface p-3 shadow-lg">
+    <div className="glass-panel-subtle p-3">
       <div className="flex items-center justify-between gap-3 text-sm">
         <span className="min-w-0 truncate font-medium">{job.label}</span>
         {!isRunning && job.status === 'error' ? (
@@ -23,9 +24,9 @@ function JobRow({ kind, targetId }: { kind: string; targetId: number }) {
       {isRunning ? (
         <>
           <p className="mt-1 truncate text-xs text-stuhub-text-secondary">{job.message}</p>
-          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-stuhub-border">
+          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-pill bg-stuhub-border">
             <div
-              className="h-full rounded-full bg-stuhub-accent transition-[width] duration-150 ease-out"
+              className="h-full rounded-pill bg-stuhub-accent transition-[width] duration-[var(--duration-state)] ease-[var(--ease-out-expo)]"
               style={{ width: `${Math.max(progress, 2)}%` }}
             />
           </div>
@@ -59,7 +60,7 @@ export function GlobalGenerationPanel() {
         aria-expanded={false}
         aria-label="Üretim durumunu aç"
         onClick={() => setOpen(true)}
-        className="fixed bottom-4 right-4 z-40 flex max-w-56 items-center gap-2 rounded-md border border-stuhub-border bg-stuhub-surface px-3 py-2 text-sm shadow-lg transition-colors duration-150 hover:bg-stuhub-surface-hover"
+        className="glass-panel-subtle glass-interactive fixed bottom-4 right-4 z-40 flex max-w-56 items-center gap-2 px-3 py-2 text-sm"
       >
         {runningJob ? (
           <>
@@ -74,16 +75,12 @@ export function GlobalGenerationPanel() {
           </>
         ) : hasError ? (
           <>
-            <span aria-hidden="true" className="shrink-0 text-stuhub-warning">
-              ⚠
-            </span>
+            <Warning weight="fill" aria-hidden="true" className="h-4 w-4 shrink-0 text-stuhub-warning" />
             <span className="shrink-0 font-medium text-stuhub-text-secondary">Hata</span>
           </>
         ) : (
           <>
-            <span aria-hidden="true" className="shrink-0 text-stuhub-success">
-              ✓
-            </span>
+            <CheckCircle weight="fill" aria-hidden="true" className="h-4 w-4 shrink-0 text-stuhub-success" />
             <span className="min-w-0 truncate font-medium">{jobs[0].label}</span>
           </>
         )}
@@ -92,14 +89,14 @@ export function GlobalGenerationPanel() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-40 w-72 space-y-2 rounded-md border border-stuhub-border bg-stuhub-surface p-3 shadow-lg">
+    <div className="glass-panel fixed bottom-4 right-4 z-40 w-72 space-y-2 p-3">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium">Üretim Durumu</span>
         <button
           type="button"
           aria-expanded={true}
           onClick={() => setOpen(false)}
-          className="rounded-sm px-2 py-1 text-xs font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+          className="rounded-control px-2 py-1 text-xs font-medium text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-glass-1-hover"
         >
           Kapat ▾
         </button>

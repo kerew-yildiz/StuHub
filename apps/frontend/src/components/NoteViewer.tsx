@@ -112,7 +112,7 @@ export function NoteViewer({ note, hueId }: NoteViewerProps) {
   const sections = splitSections(note)
 
   return (
-    <div>
+    <div className="glass-panel p-6">
       <div className="space-y-6">
         {sections.map((section, index) => (
           <section

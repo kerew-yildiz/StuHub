@@ -31,7 +31,7 @@ export function GuideSlidesForm({ onUpload }: GuideSlidesFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="glass-panel space-y-4 p-6">
       <div className="flex items-end gap-4">
         <div className="flex-1">
           <label htmlFor="guide-slides-file" className="mb-1 block text-sm font-medium">
@@ -43,7 +43,7 @@ export function GuideSlidesForm({ onUpload }: GuideSlidesFormProps) {
             type="file"
             accept=".pdf,.pptx,.ppt"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="w-full text-sm"
+            className="w-full text-sm text-stuhub-text-secondary"
           />
           <p className="mt-1 text-xs text-stuhub-text-secondary">
             Bu sunum, chapter notlarının rehberi olarak kullanılacak (guide slides). Birden
@@ -56,7 +56,7 @@ export function GuideSlidesForm({ onUpload }: GuideSlidesFormProps) {
         <button
           type="submit"
           disabled={busy}
-          className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-60"
+          className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100"
         >
           {busy ? 'Yükleniyor…' : 'Yükle'}
         </button>

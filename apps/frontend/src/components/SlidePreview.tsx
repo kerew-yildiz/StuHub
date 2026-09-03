@@ -23,13 +23,13 @@ export function SlidePreview({ slides, onDelete }: SlidePreviewProps) {
   const slide = slides[current]
 
   return (
-    <div className="overflow-hidden rounded-md border border-stuhub-border bg-stuhub-surface">
+    <div className="glass-panel overflow-hidden">
       <div className="flex items-center justify-between border-b border-stuhub-border bg-stuhub-bg px-4 py-2">
         <button
           type="button"
           onClick={() => setIndex((i) => Math.max(0, i - 1))}
           disabled={current === 0}
-          className="rounded-sm px-3 py-1 text-lg text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover disabled:opacity-40"
+          className="rounded-control px-3 py-1 text-lg text-stuhub-text-secondary transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-glass-1-hover active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100"
           aria-label="Önceki slide"
         >
           ‹
@@ -42,7 +42,7 @@ export function SlidePreview({ slides, onDelete }: SlidePreviewProps) {
             type="button"
             onClick={() => setIndex((i) => Math.min(slides.length - 1, i + 1))}
             disabled={current === slides.length - 1}
-            className="rounded-sm px-3 py-1 text-lg text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover disabled:opacity-40"
+            className="rounded-control px-3 py-1 text-lg text-stuhub-text-secondary transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-glass-1-hover active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100"
             aria-label="Sonraki slide"
           >
             ›
@@ -64,10 +64,10 @@ export function SlidePreview({ slides, onDelete }: SlidePreviewProps) {
               key={s.id}
               type="button"
               onClick={() => setIndex(i)}
-              className={`h-6 w-8 rounded-sm text-xs transition-colors duration-150 ${
+              className={`h-6 w-8 rounded-chip text-xs transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] active:scale-[0.98] ${
                 i === current
                   ? 'bg-stuhub-accent text-stuhub-on-accent'
-                  : 'bg-stuhub-bg text-stuhub-text-secondary hover:bg-stuhub-surface-hover'
+                  : 'bg-stuhub-bg text-stuhub-text-secondary hover:bg-stuhub-glass-1-hover'
               }`}
               aria-label={`Slide ${i + 1}'e git`}
             >
@@ -78,7 +78,7 @@ export function SlidePreview({ slides, onDelete }: SlidePreviewProps) {
         <button
           type="button"
           onClick={() => onDelete(slide.id)}
-          className="rounded-sm px-2 py-1 text-sm text-stuhub-error transition-colors duration-150 hover:bg-stuhub-surface-hover"
+          className="rounded-control px-2 py-1 text-sm text-stuhub-error transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10"
           aria-label={`Slide ${current + 1} sil`}
         >
           Sil

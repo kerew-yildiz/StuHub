@@ -71,7 +71,7 @@ function CitationLink({
         <button
           type="button"
           onClick={() => onOpenCitation(citation)}
-          className="mx-1 inline-block rounded-sm bg-stuhub-accent/15 px-1 text-sm font-semibold text-stuhub-accent transition-colors duration-150 hover:bg-stuhub-accent/25"
+          className="mx-1 inline-block rounded-chip bg-stuhub-accent/15 px-1 text-sm font-semibold text-stuhub-accent transition-colors duration-150 hover:bg-stuhub-accent/25"
           title="Atıf kaynağını göster"
         >
           [{n}]
@@ -204,19 +204,23 @@ export function ChatPanel({ courseId }: ChatPanelProps) {
   }
 
   return (
-    <div className="rounded-md border border-stuhub-border bg-stuhub-surface p-5">
+    <div className="glass-panel p-5">
       <div className="flex items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Yanıt modu">
+        <div
+          className="glass-panel-subtle inline-flex max-w-full flex-wrap gap-1 p-1"
+          role="group"
+          aria-label="Yanıt modu"
+        >
           {MODES.map((option) => (
             <button
               key={option.value}
               type="button"
               onClick={() => setMode(option.value)}
               aria-pressed={mode === option.value}
-              className={`rounded-sm px-3 py-1 text-sm font-medium transition-colors duration-150 ${
+              className={`rounded-pill px-3.5 py-1.5 text-sm font-medium transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] active:scale-[0.98] ${
                 mode === option.value
-                  ? 'bg-stuhub-accent text-stuhub-on-accent'
-                  : 'bg-stuhub-bg text-stuhub-text-secondary hover:bg-stuhub-surface-hover'
+                  ? 'bg-stuhub-accent-glass border border-stuhub-accent-glass-border text-stuhub-text shadow-sm'
+                  : 'border border-transparent text-stuhub-text-secondary hover:text-stuhub-text'
               }`}
             >
               {option.label}
@@ -226,7 +230,7 @@ export function ChatPanel({ courseId }: ChatPanelProps) {
         <button
           type="button"
           onClick={() => void handleClear()}
-          className="rounded-sm px-3 py-1 text-sm font-medium text-stuhub-error transition-colors duration-150 hover:bg-stuhub-surface-hover"
+          className="rounded-control px-3 py-1 text-sm font-medium text-stuhub-error transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10"
         >
           Geçmişi Temizle
         </button>
@@ -249,8 +253,8 @@ export function ChatPanel({ courseId }: ChatPanelProps) {
             <div
               className={
                 message.role === 'user'
-                  ? 'max-w-[80%] rounded-md bg-stuhub-accent/10 px-4 py-2 text-sm text-stuhub-text'
-                  : 'max-w-[80%] rounded-md border border-stuhub-border bg-stuhub-bg px-4 py-2'
+                  ? 'max-w-[80%] rounded-control bg-stuhub-accent-glass border border-stuhub-accent-glass-border px-4 py-2 text-sm text-stuhub-text'
+                  : 'max-w-[80%] glass-panel-subtle px-4 py-2'
               }
             >
               {message.role === 'assistant' ? (
@@ -267,7 +271,7 @@ export function ChatPanel({ courseId }: ChatPanelProps) {
         ))}
         {streaming && (
           <div className="flex justify-start">
-            <div className="max-w-[80%] rounded-md border border-stuhub-border bg-stuhub-bg px-4 py-2">
+            <div className="max-w-[80%] glass-panel-subtle px-4 py-2">
               {streamText ? (
                 <AssistantContent
                   content={streamText}
@@ -285,7 +289,7 @@ export function ChatPanel({ courseId }: ChatPanelProps) {
       {error && (
         <p
           role="alert"
-          className="mt-3 rounded-sm bg-stuhub-error/10 px-4 py-2 text-sm text-stuhub-error"
+          className="mt-3 rounded-control bg-stuhub-error/10 px-4 py-2 text-sm text-stuhub-error"
         >
           {error}
         </p>
@@ -303,13 +307,13 @@ export function ChatPanel({ courseId }: ChatPanelProps) {
           }}
           rows={2}
           placeholder="Materyale soru sorun…"
-          className="flex-1 resize-none rounded-md border border-stuhub-border bg-stuhub-bg px-3 py-2 text-sm text-stuhub-text placeholder:text-stuhub-text-secondary focus:outline-none focus:ring-2 focus:ring-stuhub-accent"
+          className="flex-1 resize-none rounded-control border border-stuhub-border bg-stuhub-glass-2 px-3 py-2 text-sm text-stuhub-text placeholder:text-stuhub-text-secondary transition-all duration-[var(--duration-micro)] focus:outline-none focus:border-stuhub-border-strong focus:ring-2 focus:ring-stuhub-accent-glass-border"
         />
         <button
           type="button"
           onClick={() => void handleSubmit()}
           disabled={sending || input.trim() === ''}
-          className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-50"
+          className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
         >
           {sending ? 'Düşünüyor…' : 'Gönder'}
         </button>

@@ -51,7 +51,7 @@ function TermEditForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-3 rounded-md border border-stuhub-border bg-stuhub-surface p-4"
+      className="glass-panel space-y-3 p-4"
     >
       <div>
         <label htmlFor={`term-edit-name-${term.id}`} className="mb-1 block text-sm font-medium">
@@ -62,7 +62,7 @@ function TermEditForm({
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-stuhub-accent"
+          className="w-full rounded-control border border-stuhub-border bg-stuhub-glass-2 px-3 py-2 text-sm text-stuhub-text outline-none transition-colors duration-[var(--duration-micro)] placeholder:text-stuhub-text-secondary focus:border-stuhub-accent"
         />
       </div>
       <div className="grid grid-cols-2 gap-4">
@@ -75,7 +75,7 @@ function TermEditForm({
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-stuhub-accent"
+            className="w-full rounded-control border border-stuhub-border bg-stuhub-glass-2 px-3 py-2 text-sm text-stuhub-text outline-none transition-colors duration-[var(--duration-micro)] placeholder:text-stuhub-text-secondary focus:border-stuhub-accent"
           />
         </div>
         <div>
@@ -87,7 +87,7 @@ function TermEditForm({
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-stuhub-accent"
+            className="w-full rounded-control border border-stuhub-border bg-stuhub-glass-2 px-3 py-2 text-sm text-stuhub-text outline-none transition-colors duration-[var(--duration-micro)] placeholder:text-stuhub-text-secondary focus:border-stuhub-accent"
           />
         </div>
       </div>
@@ -96,14 +96,14 @@ function TermEditForm({
         <button
           type="submit"
           disabled={busy}
-          className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-60"
+          className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100"
         >
           {busy ? 'Kaydediliyor…' : 'Kaydet'}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-sm px-4 py-2 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+          className="glass-panel-subtle glass-interactive rounded-control px-4 py-2 text-sm font-medium text-stuhub-text-secondary"
         >
           İptal
         </button>
@@ -234,7 +234,7 @@ export function TermsPage() {
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={importing}
-                className="rounded-sm border border-stuhub-border bg-stuhub-surface px-4 py-2 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover disabled:opacity-50"
+                className="glass-panel-subtle glass-interactive rounded-control px-4 py-2 text-sm font-medium text-stuhub-text-secondary disabled:opacity-50"
               >
                 {importing ? 'İçe aktarılıyor…' : 'Arşiv İçe Aktar'}
               </button>
@@ -251,7 +251,7 @@ export function TermsPage() {
               <button
                 type="button"
                 onClick={() => setShowForm(true)}
-                className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
+                className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98]"
               >
                 Yeni dönem
               </button>
@@ -261,19 +261,19 @@ export function TermsPage() {
       </div>
 
       {error && (
-        <p role="alert" className="mt-4 rounded-sm bg-stuhub-error/10 px-4 py-2 text-sm text-stuhub-error">
+        <p role="alert" className="mt-4 rounded-control bg-stuhub-error/10 px-4 py-2 text-sm text-stuhub-error">
           {error}
         </p>
       )}
 
       {notice && (
-        <p role="status" className="mt-4 rounded-sm bg-stuhub-success/10 px-4 py-2 text-sm text-stuhub-success">
+        <p role="status" className="mt-4 rounded-control bg-stuhub-success/10 px-4 py-2 text-sm text-stuhub-success">
           {notice}
         </p>
       )}
 
       {importError && (
-        <p role="alert" className="mt-4 rounded-sm bg-stuhub-error/10 px-4 py-2 text-sm text-stuhub-error">
+        <p role="alert" className="mt-4 rounded-control bg-stuhub-error/10 px-4 py-2 text-sm text-stuhub-error">
           {importError}
         </p>
       )}
@@ -295,7 +295,7 @@ export function TermsPage() {
           <p className="text-sm text-stuhub-text-secondary">Dönemler yükleniyor…</p>
         )}
         {state === 'ready' && terms.length === 0 && !showOnboarding && (
-          <div className="rounded-md border border-dashed border-stuhub-border bg-stuhub-surface p-12 text-center">
+          <div className="glass-panel-subtle border-dashed p-12 text-center">
             <p className="font-medium">Henüz dönem yok</p>
             <p className="mt-1 text-sm text-stuhub-text-secondary">
               İlk dönemini oluşturarak başla.

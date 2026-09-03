@@ -19,7 +19,7 @@ function StepIndicator({ current }: { current: Step }) {
         <span
           key={n}
           aria-hidden="true"
-          className={`h-2 w-2 rounded-full ${n === current ? 'bg-stuhub-accent' : 'bg-stuhub-border'}`}
+          className={`h-2 w-2 rounded-pill transition-colors duration-[var(--duration-micro)] ${n === current ? 'bg-stuhub-accent' : 'bg-stuhub-border'}`}
         />
       ))}
       <span className="text-xs text-stuhub-text-secondary">{current}/3</span>
@@ -93,10 +93,10 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   }
 
   const inputClass =
-    'w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-stuhub-accent'
+    'w-full rounded-control border border-stuhub-border bg-stuhub-bg px-3 py-2 text-sm outline-none transition-colors duration-[var(--duration-micro)] focus:border-stuhub-accent'
 
   return (
-    <div className="rounded-md border border-stuhub-border bg-stuhub-surface p-6">
+    <div className="glass-panel p-6">
       <div className="flex items-center justify-between gap-4">
         <h2 className="text-xl font-semibold">Dönemini kur</h2>
         <StepIndicator current={step} />
@@ -179,7 +179,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
           <button
             type="button"
             onClick={handleStep1Next}
-            className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
+            className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98]"
           >
             İleri
           </button>
@@ -189,14 +189,14 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
             <button
               type="button"
               onClick={() => setStep(1)}
-              className="rounded-sm px-4 py-2 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+              className="glass-panel-subtle glass-interactive rounded-control px-4 py-2 text-sm font-medium text-stuhub-text-secondary"
             >
               Geri
             </button>
             <button
               type="button"
               onClick={handleStep2Next}
-              className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
+              className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98]"
             >
               İleri
             </button>
@@ -207,7 +207,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
             <button
               type="button"
               onClick={() => setStep(2)}
-              className="rounded-sm px-4 py-2 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+              className="glass-panel-subtle glass-interactive rounded-control px-4 py-2 text-sm font-medium text-stuhub-text-secondary"
             >
               Geri
             </button>
@@ -215,7 +215,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
               type="button"
               onClick={() => void handleStart()}
               disabled={busy}
-              className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-60"
+              className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100"
             >
               {busy ? 'Kuruluyor…' : 'Başlat'}
             </button>
@@ -225,7 +225,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
           type="button"
           onClick={() => void handleSkip()}
           disabled={busy}
-          className="rounded-sm px-4 py-2 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+          className="glass-panel-subtle glass-interactive rounded-control px-4 py-2 text-sm font-medium text-stuhub-text-secondary"
         >
           Atla
         </button>

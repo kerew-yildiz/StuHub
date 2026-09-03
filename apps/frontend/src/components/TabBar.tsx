@@ -5,13 +5,13 @@ interface TabBarProps {
   ariaLabel: string
 }
 
-/** Yatay sekme çubuğu — pill mod değiştirici; mod değişimi rota değil (Şema 5). */
+/** Yatay sekme çubuğu — cam pill mod değiştirici; mod değişimi rota değil. */
 export function TabBar({ tabs, activeId, onSelect, ariaLabel }: TabBarProps) {
   return (
     <div
       role="tablist"
       aria-label={ariaLabel}
-      className="inline-flex max-w-full flex-wrap gap-1 rounded-md border border-stuhub-border bg-stuhub-surface p-1"
+      className="glass-panel-subtle inline-flex max-w-full flex-wrap gap-1 p-1"
     >
       {tabs.map((tab) => {
         const active = tab.id === activeId
@@ -22,10 +22,10 @@ export function TabBar({ tabs, activeId, onSelect, ariaLabel }: TabBarProps) {
             role="tab"
             aria-selected={active}
             onClick={() => onSelect(tab.id)}
-            className={`rounded-sm px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
+            className={`rounded-pill px-3.5 py-1.5 text-sm font-medium transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] active:scale-[0.98] ${
               active
-                ? 'bg-stuhub-accent/10 text-stuhub-accent'
-                : 'text-stuhub-text-secondary hover:bg-stuhub-surface-hover hover:text-stuhub-text'
+                ? 'bg-stuhub-accent-glass border border-stuhub-accent-glass-border text-stuhub-text shadow-sm'
+                : 'border border-transparent text-stuhub-text-secondary hover:text-stuhub-text'
             }`}
           >
             {tab.label}

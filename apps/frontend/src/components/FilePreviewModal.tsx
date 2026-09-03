@@ -1,3 +1,4 @@
+import { X } from '@phosphor-icons/react'
 import { useEffect, useRef } from 'react'
 
 interface FilePreviewModalProps {
@@ -28,7 +29,7 @@ export function FilePreviewModal({ url, title, onClose }: FilePreviewModalProps)
         role="dialog"
         aria-modal="true"
         aria-labelledby="file-preview-title"
-        className="flex max-h-[90vh] w-full max-w-4xl flex-col rounded-lg bg-stuhub-surface shadow-lg"
+        className="flex max-h-[90vh] w-full max-w-4xl flex-col glass-panel"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-stuhub-border px-5 py-3">
@@ -39,10 +40,10 @@ export function FilePreviewModal({ url, title, onClose }: FilePreviewModalProps)
             ref={closeRef}
             type="button"
             onClick={onClose}
-            className="rounded-sm px-2 py-1 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+            className="rounded-control p-1.5 text-stuhub-text-secondary transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-glass-1-hover hover:text-stuhub-text active:scale-[0.98]"
             aria-label="Kapat"
           >
-            ✕
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
         <iframe src={url} title={title} className="h-[75vh] w-full bg-white" />

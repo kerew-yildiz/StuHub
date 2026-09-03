@@ -15,7 +15,7 @@ interface GuideViewProps {
 function SummaryView({ guide }: { guide: SummaryGuide }) {
   const { summary_md, key_terms, exam_focus } = guide.content_json
   return (
-    <div className="rounded-md border border-stuhub-border bg-stuhub-surface p-5">
+    <div className="glass-panel p-5">
       <div className="text-sm leading-relaxed">
         <ReactMarkdown
           urlTransform={(url) => url}
@@ -38,7 +38,7 @@ function SummaryView({ guide }: { guide: SummaryGuide }) {
             {key_terms.map((term, index) => (
               <span
                 key={`${term}-${index}`}
-                className="rounded-sm bg-stuhub-accent/10 px-2 py-1 text-xs font-medium text-stuhub-accent"
+                className="glass-panel-subtle rounded-chip px-2 py-1 text-xs font-medium text-stuhub-accent"
               >
                 {term}
               </span>
@@ -155,7 +155,7 @@ function ConceptMapView({ guide }: { guide: ConceptMapGuide }) {
 
   if (nodes.length === 0) {
     return (
-      <div className="rounded-md border border-stuhub-border bg-stuhub-surface p-5">
+      <div className="glass-panel p-5">
         <p className="text-sm text-stuhub-text-secondary">Kavram haritası boş.</p>
       </div>
     )
@@ -165,7 +165,7 @@ function ConceptMapView({ guide }: { guide: ConceptMapGuide }) {
   const markerId = `cm-arrow-${guide.id}`
 
   return (
-    <div className="overflow-x-auto rounded-md border border-stuhub-border bg-stuhub-surface p-5">
+    <div className="overflow-x-auto glass-panel p-5">
       <svg
         viewBox={`0 0 ${width} ${height}`}
         className="w-full"

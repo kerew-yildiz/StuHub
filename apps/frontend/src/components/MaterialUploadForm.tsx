@@ -32,7 +32,7 @@ export function MaterialUploadForm({ onUpload }: MaterialUploadFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="glass-panel space-y-4 p-6">
       <div className="flex items-end gap-4">
         <div>
           <label htmlFor="material-type" className="mb-1 block text-sm font-medium">
@@ -42,7 +42,7 @@ export function MaterialUploadForm({ onUpload }: MaterialUploadFormProps) {
             id="material-type"
             value={type}
             onChange={(e) => setType(e.target.value as 'textbook' | 'slides')}
-            className="rounded-sm border border-stuhub-border bg-stuhub-bg px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-stuhub-accent"
+            className="rounded-control border border-stuhub-border bg-stuhub-glass-2 px-3 py-2 text-sm text-stuhub-text outline-none transition-colors duration-[var(--duration-micro)] focus:border-stuhub-accent"
           >
             <option value="textbook">Kitap (PDF)</option>
             <option value="slides">Sunum (PDF / PPTX)</option>
@@ -58,13 +58,13 @@ export function MaterialUploadForm({ onUpload }: MaterialUploadFormProps) {
             type="file"
             accept={type === 'textbook' ? '.pdf' : '.pdf,.pptx,.ppt'}
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="w-full text-sm"
+            className="w-full text-sm text-stuhub-text-secondary"
           />
         </div>
         <button
           type="submit"
           disabled={busy}
-          className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-60"
+          className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100"
         >
           {busy ? 'Yükleniyor…' : 'Yükle'}
         </button>

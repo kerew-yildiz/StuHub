@@ -14,7 +14,7 @@ function scoreTone(score: number): string {
 }
 
 const TEXTAREA_CLASS =
-  'w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-3 py-2 text-sm text-stuhub-text outline-none transition-colors duration-150 placeholder:text-stuhub-text-secondary focus:border-stuhub-accent'
+  'w-full rounded-control border border-stuhub-border bg-stuhub-glass-2 px-3 py-2 text-sm text-stuhub-text outline-none transition-colors duration-[var(--duration-micro)] placeholder:text-stuhub-text-secondary focus:border-stuhub-accent'
 
 /** Ödev değerlendirme formu — AI puanlama + geçmiş listesi (Faz V2.5). */
 export function EssayGraderForm({ courseId }: EssayGraderFormProps) {
@@ -63,7 +63,7 @@ export function EssayGraderForm({ courseId }: EssayGraderFormProps) {
 
   return (
     <div>
-      <form onSubmit={handleSubmit} className="rounded-md border border-stuhub-border bg-stuhub-surface p-6">
+      <form onSubmit={handleSubmit} className="glass-panel p-6">
         <div className="space-y-4">
           <div>
             <label htmlFor="essay-instructions" className="mb-1 block text-sm font-medium">
@@ -112,7 +112,7 @@ export function EssayGraderForm({ courseId }: EssayGraderFormProps) {
           <button
             type="submit"
             disabled={busy}
-            className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-50"
+            className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
           >
             {busy ? 'Değerlendiriliyor…' : 'Değerlendir'}
           </button>
@@ -120,7 +120,7 @@ export function EssayGraderForm({ courseId }: EssayGraderFormProps) {
       </form>
 
       {result && (
-        <div className="mt-6 rounded-md border border-stuhub-border bg-stuhub-surface p-6">
+        <div className="mt-6 glass-panel p-6">
           <div className="flex items-baseline gap-2">
             <span className={`text-4xl font-semibold ${scoreTone(result.score)}`}>
               {result.score}
@@ -181,7 +181,7 @@ export function EssayGraderForm({ courseId }: EssayGraderFormProps) {
               <h3 className="text-sm font-semibold text-stuhub-text-secondary">Alıntılar</h3>
               <div className="mt-2 space-y-3">
                 {result.quotes.map((quote, index) => (
-                  <div key={index} className="rounded-sm bg-stuhub-bg p-3">
+                  <div key={index} className="rounded-control bg-stuhub-glass-2 p-3">
                     <blockquote className="border-l-2 border-stuhub-accent pl-3 italic">
                       “{quote.text}”
                     </blockquote>
@@ -205,7 +205,7 @@ export function EssayGraderForm({ courseId }: EssayGraderFormProps) {
             {history.map((record) => (
               <li
                 key={record.id}
-                className="flex items-center justify-between rounded-sm border border-stuhub-border bg-stuhub-surface px-4 py-2 text-sm"
+                className="glass-panel-subtle flex items-center justify-between rounded-control px-4 py-2 text-sm"
               >
                 <span className="shrink-0 font-medium">{record.score} puan</span>
                 <span className="min-w-0 flex-1 truncate px-4 text-stuhub-text-secondary">

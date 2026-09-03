@@ -17,7 +17,7 @@ export function TermCard({ term, onDelete, onEdit }: TermCardProps) {
       : null
 
   return (
-    <article className="flex items-center justify-between rounded-md border border-stuhub-border bg-stuhub-surface p-6 transition-colors duration-150 hover:bg-stuhub-surface-hover">
+    <article className="glass-panel glass-interactive flex items-center justify-between p-6">
       <Link to={`/donemler/${term.id}`} className="min-w-0">
         <h2 className="text-lg font-semibold">{term.name}</h2>
         {range && <p className="mt-1 text-sm text-stuhub-text-secondary">{range}</p>}
@@ -26,7 +26,7 @@ export function TermCard({ term, onDelete, onEdit }: TermCardProps) {
         <button
           type="button"
           onClick={() => onEdit(term)}
-          className="rounded-sm px-3 py-1.5 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+          className="rounded-control px-3 py-1.5 text-sm font-medium text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-glass-2-hover"
           aria-label={`${term.name} dönemini düzenle`}
         >
           Düzenle
@@ -34,7 +34,7 @@ export function TermCard({ term, onDelete, onEdit }: TermCardProps) {
         <button
           type="button"
           onClick={() => onDelete(term.id)}
-          className="rounded-sm px-3 py-1.5 text-sm font-medium text-stuhub-error transition-colors duration-150 hover:bg-stuhub-surface-hover"
+          className="rounded-control px-3 py-1.5 text-sm font-medium text-stuhub-error transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10"
           aria-label={`${term.name} dönemini sil`}
         >
           Sil

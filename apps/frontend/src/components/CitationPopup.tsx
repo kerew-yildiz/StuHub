@@ -1,3 +1,4 @@
+import { X } from '@phosphor-icons/react'
 import { useEffect, useRef, useState } from 'react'
 
 import { resolveCitation, type Citation, type ResolvedChunk } from '../api/notes'
@@ -81,7 +82,7 @@ export function CitationPopup({ citation, onClose, preloadedText, sourceLabel }:
         role="dialog"
         aria-modal="true"
         aria-labelledby="citation-popup-title"
-        className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-lg bg-stuhub-surface p-6 shadow-lg"
+        className="max-h-[80vh] w-full max-w-lg overflow-y-auto glass-panel p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">
@@ -98,10 +99,10 @@ export function CitationPopup({ citation, onClose, preloadedText, sourceLabel }:
             ref={closeRef}
             type="button"
             onClick={onClose}
-            className="rounded-sm px-2 py-1 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+            className="rounded-control p-1.5 text-stuhub-text-secondary transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-glass-1-hover hover:text-stuhub-text active:scale-[0.98]"
             aria-label="Kapat"
           >
-            ✕
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
 

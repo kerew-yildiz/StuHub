@@ -1,3 +1,4 @@
+import { Flame } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 
 import { getStreakSummary, type StreakSummary } from '../api/streaks'
@@ -82,12 +83,15 @@ export function StreakRing() {
     : 0
 
   return (
-    <div className="rounded-md border border-stuhub-border bg-stuhub-surface p-5">
+    <div className="glass-panel p-5">
       {summary ? (
         <div className="flex items-center gap-5">
           <ProgressRing percent={summary.progress_percent} />
           <div className="min-w-0">
-            <p className="text-lg font-semibold">🔥 {summary.streak_days} gün streak</p>
+            <p className="flex items-center gap-1.5 text-lg font-semibold">
+              <Flame weight="fill" className="h-5 w-5 shrink-0 text-stuhub-warning" aria-hidden="true" />
+              {summary.streak_days} gün streak
+            </p>
             {todayTotal > 0 ? (
               <p className="mt-1 text-sm text-stuhub-text-secondary">
                 Bugün {todayTotal}/{summary.daily_goal} etkinlik

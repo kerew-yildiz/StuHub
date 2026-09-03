@@ -1,3 +1,4 @@
+import { Confetti } from '@phosphor-icons/react'
 import { useState } from 'react'
 
 import { submitReview, type DueCard, type Rating } from '../api/flashcards'
@@ -34,10 +35,10 @@ const RATING_LABELS: Record<Rating, string> = {
 
 const RATING_STYLES: Record<Rating, string> = {
   again:
-    'rounded-sm border border-stuhub-error bg-stuhub-error/10 px-2 py-2 text-sm font-medium text-stuhub-error transition-colors duration-150 hover:bg-stuhub-error/20',
-  hard: 'rounded-sm border border-stuhub-warning bg-stuhub-warning/10 px-2 py-2 text-sm font-medium text-stuhub-warning transition-colors duration-150 hover:bg-stuhub-warning/20',
-  good: 'rounded-sm border border-stuhub-accent bg-stuhub-accent/10 px-2 py-2 text-sm font-medium text-stuhub-accent transition-colors duration-150 hover:bg-stuhub-accent/20',
-  easy: 'rounded-sm border border-stuhub-success bg-stuhub-success/10 px-2 py-2 text-sm font-medium text-stuhub-success transition-colors duration-150 hover:bg-stuhub-success/20',
+    'rounded-control border border-stuhub-error bg-stuhub-error/10 px-2 py-2 text-sm font-medium text-stuhub-error transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-error/20 active:scale-[0.98]',
+  hard: 'rounded-control border border-stuhub-warning bg-stuhub-warning/10 px-2 py-2 text-sm font-medium text-stuhub-warning transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-warning/20 active:scale-[0.98]',
+  good: 'rounded-control border border-stuhub-accent-glass-border bg-stuhub-accent-glass px-2 py-2 text-sm font-medium text-stuhub-text transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-glass-1-hover active:scale-[0.98]',
+  easy: 'rounded-control border border-stuhub-success bg-stuhub-success/10 px-2 py-2 text-sm font-medium text-stuhub-success transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-success/20 active:scale-[0.98]',
 }
 
 const RATINGS: Rating[] = ['again', 'hard', 'good', 'easy']
@@ -57,7 +58,7 @@ export function FlashcardPlayer({
 
   if (dueCards.length === 0) {
     return (
-      <div className="rounded-md border border-stuhub-border bg-stuhub-surface p-6 text-center">
+      <div className="glass-panel p-6 text-center">
         <p className="text-sm text-stuhub-text-secondary">Tekrar bekleyen kart yok.</p>
       </div>
     )
@@ -65,15 +66,18 @@ export function FlashcardPlayer({
 
   if (finished) {
     return (
-      <div className="rounded-md border border-stuhub-border bg-stuhub-surface p-6 text-center">
-        <h3 className="text-xl font-semibold">Bugünlük tekrar tamamlandı 🎉</h3>
+      <div className="glass-panel p-6 text-center">
+        <h3 className="flex items-center justify-center gap-2 text-xl font-semibold">
+          <Confetti weight="fill" className="h-6 w-6 text-stuhub-warning" aria-hidden="true" />
+          Bugünlük tekrar tamamlandı
+        </h3>
         <p className="mt-2 text-sm text-stuhub-text-secondary">
           {dueCards.length} kart gözden geçirildi.
         </p>
         <button
           type="button"
           onClick={onFinished}
-          className="mt-5 rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
+          className="mt-5 rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98]"
         >
           Kapat
         </button>
@@ -103,7 +107,7 @@ export function FlashcardPlayer({
   }
 
   return (
-    <div className="rounded-md border border-stuhub-border bg-stuhub-surface p-6">
+    <div className="glass-panel p-6">
       <div className="flex items-center justify-between">
         <span className="text-sm text-stuhub-text-secondary">
           {index + 1} / {dueCards.length}
@@ -111,14 +115,14 @@ export function FlashcardPlayer({
         <button
           type="button"
           onClick={onExit}
-          className="rounded-sm px-2 py-1 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+          className="rounded-control px-2 py-1 text-sm font-medium text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-glass-2-hover"
         >
           Çık
         </button>
       </div>
-      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-stuhub-border">
+      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-pill bg-stuhub-border">
         <div
-          className="h-full rounded-full bg-stuhub-accent transition-[width] duration-150 ease-out"
+          className="h-full rounded-pill bg-stuhub-accent transition-[width] duration-[var(--duration-state)] ease-[var(--ease-out-expo)]"
           style={{ width: `${Math.max(progress, 2)}%` }}
         />
       </div>
@@ -126,18 +130,18 @@ export function FlashcardPlayer({
       {/* Kart — ön yüz tıklanınca arka yüze çevrilir */}
       <div className="mt-5 [perspective:1200px]">
         <div
-          className="relative min-h-72 w-full transition-transform duration-200 ease-out [transform-style:preserve-3d]"
+          className="relative min-h-72 w-full transition-transform duration-[var(--duration-state)] ease-[var(--ease-out-expo)] [transform-style:preserve-3d]"
           style={{ transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}
         >
           {!flipped ? (
             <button
               type="button"
               onClick={() => setFlipped(true)}
-              className="absolute inset-0 flex flex-col items-center justify-center rounded-md border border-t-4 border-stuhub-border bg-stuhub-bg p-6 text-center [backface-visibility:hidden]"
+              className="glass-panel-subtle absolute inset-0 flex flex-col items-center justify-center border-t-4 p-6 text-center [backface-visibility:hidden]"
               style={hueId ? { borderTopColor: hueColorVar(hueId) } : undefined}
             >
               <span
-                className="rounded-sm px-2 py-0.5 text-xs font-medium"
+                className="rounded-chip px-2 py-0.5 text-xs font-medium"
                 style={
                   hueId
                     ? { backgroundColor: hueSoftVar(hueId), color: hueTextVar(hueId) }
@@ -151,11 +155,11 @@ export function FlashcardPlayer({
             </button>
           ) : (
             <div
-              className="absolute inset-0 flex flex-col overflow-y-auto rounded-md border border-t-4 border-stuhub-border bg-stuhub-bg p-6 [backface-visibility:hidden] [transform:rotateY(180deg)]"
+              className="glass-panel absolute inset-0 flex flex-col overflow-y-auto border-t-4 p-6 [backface-visibility:hidden] [transform:rotateY(180deg)]"
               style={hueId ? { borderTopColor: hueColorVar(hueId) } : undefined}
             >
               <span
-                className="self-start rounded-sm px-2 py-0.5 text-xs font-medium"
+                className="self-start rounded-chip px-2 py-0.5 text-xs font-medium"
                 style={
                   hueId
                     ? { backgroundColor: hueSoftVar(hueId), color: hueTextVar(hueId) }
@@ -173,7 +177,7 @@ export function FlashcardPlayer({
                       key={citation.id}
                       type="button"
                       onClick={() => setActiveCitation(citation)}
-                      className="rounded-sm border border-stuhub-border px-2 py-1 text-xs font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                      className="glass-panel-subtle glass-interactive rounded-chip px-2 py-1 text-xs font-medium text-stuhub-text-secondary"
                     >
                       {citationLabel(citation)}
                     </button>
@@ -188,7 +192,7 @@ export function FlashcardPlayer({
                     type="button"
                     onClick={() => void handleRating(rating)}
                     disabled={submitting}
-                    className={`${RATING_STYLES[rating]} disabled:opacity-50`}
+                    className={`${RATING_STYLES[rating]} disabled:opacity-50 disabled:active:scale-100`}
                   >
                     {RATING_LABELS[rating]}
                   </button>

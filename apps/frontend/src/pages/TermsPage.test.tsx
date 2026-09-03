@@ -23,8 +23,9 @@ vi.mock('../api/terms', () => ({
 
 vi.mock('../api/settings', () => ({
   settingsApi: {
-    list: vi.fn(async () => ({ model: 'deepseek-chat', onboarding_done: '1' })),
+    list: vi.fn(async () => ({ onboarding_done: '1' })),
     set: vi.fn(async () => ({ ok: true })),
+    llmStatus: vi.fn(async () => []),
   },
 }))
 

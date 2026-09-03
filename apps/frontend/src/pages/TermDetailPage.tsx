@@ -45,7 +45,7 @@ function CourseEditForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-3 rounded-md border border-stuhub-border bg-stuhub-surface p-4"
+      className="glass-panel space-y-3 p-4"
     >
       <div>
         <label htmlFor={`course-edit-name-${course.id}`} className="mb-1 block text-sm font-medium">
@@ -56,7 +56,7 @@ function CourseEditForm({
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-stuhub-accent"
+          className="w-full rounded-control border border-stuhub-border bg-stuhub-glass-2 px-3 py-2 text-sm text-stuhub-text outline-none transition-colors duration-[var(--duration-micro)] placeholder:text-stuhub-text-secondary focus:border-stuhub-accent"
         />
       </div>
       <div>
@@ -71,7 +71,7 @@ function CourseEditForm({
           type="text"
           value={instructor}
           onChange={(e) => setInstructor(e.target.value)}
-          className="w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-stuhub-accent"
+          className="w-full rounded-control border border-stuhub-border bg-stuhub-glass-2 px-3 py-2 text-sm text-stuhub-text outline-none transition-colors duration-[var(--duration-micro)] placeholder:text-stuhub-text-secondary focus:border-stuhub-accent"
         />
       </div>
       {error && <p className="text-sm text-stuhub-error">{error}</p>}
@@ -79,14 +79,14 @@ function CourseEditForm({
         <button
           type="submit"
           disabled={busy}
-          className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-60"
+          className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100"
         >
           {busy ? 'Kaydediliyor…' : 'Kaydet'}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-sm px-4 py-2 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+          className="glass-panel-subtle glass-interactive rounded-control px-4 py-2 text-sm font-medium text-stuhub-text-secondary"
         >
           İptal
         </button>
@@ -145,7 +145,7 @@ export function TermDetailPage() {
     <section>
       <Link
         to="/"
-        className="text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:text-stuhub-text"
+        className="text-sm font-medium text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:text-stuhub-text"
       >
         ← Dönemler
       </Link>
@@ -168,7 +168,7 @@ export function TermDetailPage() {
           <button
             type="button"
             onClick={() => downloadFile(termArchiveUrl(numericId, includeFiles))}
-            className="rounded-sm border border-stuhub-border bg-stuhub-surface px-4 py-2 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+            className="glass-panel-subtle glass-interactive rounded-control px-4 py-2 text-sm font-medium text-stuhub-text-secondary"
           >
             Dönem Arşivi İndir (.zip)
           </button>
@@ -176,7 +176,7 @@ export function TermDetailPage() {
             <button
               type="button"
               onClick={() => setShowForm(true)}
-              className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
+              className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98]"
             >
               Yeni ders
             </button>
@@ -185,7 +185,7 @@ export function TermDetailPage() {
       </div>
 
       {error && (
-        <p role="alert" className="mt-4 rounded-sm bg-stuhub-error/10 px-4 py-2 text-sm text-stuhub-error">
+        <p role="alert" className="mt-4 rounded-control bg-stuhub-error/10 px-4 py-2 text-sm text-stuhub-error">
           {error}
         </p>
       )}
@@ -201,7 +201,7 @@ export function TermDetailPage() {
           <p className="text-sm text-stuhub-text-secondary">Dersler yükleniyor…</p>
         )}
         {state === 'ready' && courses.length === 0 && (
-          <div className="rounded-md border border-dashed border-stuhub-border bg-stuhub-surface p-12 text-center">
+          <div className="glass-panel-subtle border-dashed p-12 text-center">
             <p className="font-medium">Henüz ders yok</p>
             <p className="mt-1 text-sm text-stuhub-text-secondary">
               İlk dersini ekleyerek başla.
@@ -213,19 +213,19 @@ export function TermDetailPage() {
           return (
             <div key={course.id} className="space-y-3">
               <div
-                className="flex items-center justify-between gap-4 rounded-md border border-stuhub-border border-l-4 bg-stuhub-surface p-6 transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                className="glass-panel glass-interactive flex items-center justify-between gap-4 border-l-4 p-6"
                 style={{ borderLeftColor: hueColorVar(hue.id) }}
               >
                 <Link to={`/dersler/${course.id}`} className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span
                       aria-hidden="true"
-                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      className="h-2.5 w-2.5 shrink-0 rounded-pill"
                       style={{ backgroundColor: hueColorVar(hue.id) }}
                     />
                     <h2 className="text-lg font-semibold">{course.name}</h2>
                     <span
-                      className="rounded-full px-2 py-0.5 text-xs font-medium"
+                      className="rounded-chip px-2 py-0.5 text-xs font-medium"
                       style={{ backgroundColor: hueSoftVar(hue.id), color: hueTextVar(hue.id) }}
                     >
                       {hue.name}
@@ -238,7 +238,7 @@ export function TermDetailPage() {
                 <button
                   type="button"
                   onClick={() => setEditingCourse(course)}
-                  className="shrink-0 rounded-sm px-3 py-1.5 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                  className="shrink-0 rounded-control px-3 py-1.5 text-sm font-medium text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-glass-2-hover"
                   aria-label={`${course.name} dersini düzenle`}
                 >
                   Düzenle

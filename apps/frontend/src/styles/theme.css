@@ -1,77 +1,54 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
-
-/* ── Tema değişkenleri (YETENEKLER/07-stil-rehberi.md — tek otorite) ──
-   Şema 5 "Renkli Not Defteri": sıcak kağıt zemini + mürekkep metin +
-   ders başına renk kodu (6 tonlu hue paleti). Aydınlık/karanlık iki tema.
+/* ── Tema değişkenleri (🏰 300-Projects/StuHub/TASARIM-SISTEMI.md — tek otorite) ──
+   Monochrome Glassmorphic: zinc-950 zemin, iki kademe buzlu-cam yüzey, tek beyaz
+   aksan. Yalnızca koyu tema — açık mod yok, `.dark` sınıf mekanizması kaldırıldı.
    Bileşenlerde hardcoded renk YASAK — yalnızca bu tokenlar. */
 
 :root {
-  /* Zemin / yüzey — sıcak kağıt */
-  --stuhub-bg: #faf7f2;
-  --stuhub-surface: #ffffff;
-  --stuhub-surface-hover: #f3ede1;
-  --stuhub-border: #ece5d6;
-  --stuhub-text: #1f2937;
-  --stuhub-text-secondary: #6b7280;
+  /* Zemin — neredeyse siyah, sıcaklık yok */
+  --stuhub-bg: #09090b;
+  --stuhub-bg-elevated: #0f0f12;
+  --stuhub-text: #fafafa;
+  --stuhub-text-secondary: #a1a1aa;
+  --stuhub-text-muted: #71717a;
+  --stuhub-border: rgba(255, 255, 255, 0.08);
+  --stuhub-border-strong: rgba(255, 255, 255, 0.18);
 
-  /* Vurgu — ana eylemler mavi kalır */
-  --stuhub-accent: #2563eb;
-  --stuhub-accent-hover: #1d4ed8;
-  --stuhub-on-accent: #ffffff;
+  /* Cam yüzey katmanları — kart/panel her zaman saydam, düz renk değil */
+  --stuhub-glass-1: rgba(255, 255, 255, 0.035);
+  --stuhub-glass-1-hover: rgba(255, 255, 255, 0.07);
+  --stuhub-glass-2: rgba(255, 255, 255, 0.02);
+  --stuhub-glass-2-hover: rgba(255, 255, 255, 0.05);
+  --blur-glass-1: 24px;
+  --blur-glass-2: 14px;
+  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.45);
 
-  /* Semantik */
-  --stuhub-success: #15803d;
-  --stuhub-error: #dc2626;
-  --stuhub-on-error: #ffffff;
-  --stuhub-warning: #b45309;
-  --stuhub-info: #0e7490;
+  /* Geriye dönük eşleme: eski `bg-stuhub-surface` kullanan bileşenler kırılmasın
+     diye yüzey rengi cam-1'e eşitlendi (backdrop-blur olmadan da makul görünür). */
+  --stuhub-surface: var(--stuhub-glass-1);
+  --stuhub-surface-hover: var(--stuhub-glass-1-hover);
 
-  /* Anahtar terim kutusu (notlarda) */
-  --stuhub-callout-bg: rgba(217, 119, 6, 0.07);
-  --stuhub-callout-border: rgba(217, 119, 6, 0.35);
+  /* Tek aksan — beyaz. Renkli aksan yok, vurgu yoğunlukla yapılır. */
+  --stuhub-accent: #ffffff;
+  --stuhub-accent-hover: #e4e4e7;
+  --stuhub-on-accent: #09090b;
+  --stuhub-accent-glass: rgba(255, 255, 255, 0.1);
+  --stuhub-accent-glass-border: rgba(255, 255, 255, 0.2);
 
-  /* Ders renk paleti (hue) — Sidebar noktası, şeritler, sekme vurguları.
-     -text: WCAG AA güvenli metin varyantı; -soft: yüzey üstü yumuşak zemin. */
-  --stuhub-hue-indigo: #4f46e5;
-  --stuhub-hue-indigo-text: #4338ca;
-  --stuhub-hue-indigo-soft: rgba(79, 70, 229, 0.08);
-  --stuhub-hue-pine: #15803d;
-  --stuhub-hue-pine-text: #166534;
-  --stuhub-hue-pine-soft: rgba(21, 128, 61, 0.08);
-  --stuhub-hue-burgundy: #b91c1c;
-  --stuhub-hue-burgundy-text: #991b1b;
-  --stuhub-hue-burgundy-soft: rgba(185, 28, 28, 0.08);
-  --stuhub-hue-amber: #d97706;
-  --stuhub-hue-amber-text: #92400e;
-  --stuhub-hue-amber-soft: rgba(217, 119, 6, 0.08);
-  --stuhub-hue-teal: #0e7490;
-  --stuhub-hue-teal-text: #155e75;
-  --stuhub-hue-teal-soft: rgba(14, 116, 144, 0.08);
-  --stuhub-hue-plum: #9333ea;
-  --stuhub-hue-plum-text: #6b21a8;
-  --stuhub-hue-plum-soft: rgba(147, 51, 234, 0.08);
-}
-
-.dark {
-  --stuhub-bg: #1c1917;
-  --stuhub-surface: #292524;
-  --stuhub-surface-hover: #33302d;
-  --stuhub-border: #44403c;
-  --stuhub-text: #fafaf9;
-  --stuhub-text-secondary: #a8a29e;
-  --stuhub-accent: #60a5fa;
-  --stuhub-accent-hover: #3b82f6;
-  --stuhub-on-accent: #0f172a;
+  /* Semantik — yalnızca ikon/metinle birlikte, renk tek başına anlam taşımaz */
   --stuhub-success: #4ade80;
   --stuhub-error: #f87171;
   --stuhub-on-error: #18181b;
   --stuhub-warning: #fbbf24;
   --stuhub-info: #22d3ee;
-  --stuhub-callout-bg: rgba(251, 191, 36, 0.10);
+
+  /* Anahtar terim kutusu (notlarda) */
+  --stuhub-callout-bg: rgba(251, 191, 36, 0.1);
   --stuhub-callout-border: rgba(251, 191, 36, 0.35);
 
+  /* Ders renk paleti (hue) — Sidebar noktası, şerit, sekme vurgusu.
+     Artık zemin değil: ince şerit/nokta/tint. -soft cam üstü %14 tint. */
   --stuhub-hue-indigo: #818cf8;
   --stuhub-hue-indigo-text: #a5b4fc;
   --stuhub-hue-indigo-soft: rgba(129, 140, 248, 0.14);
@@ -90,19 +67,35 @@
   --stuhub-hue-plum: #c084fc;
   --stuhub-hue-plum-text: #d8b4fe;
   --stuhub-hue-plum-soft: rgba(192, 132, 252, 0.14);
+
+  /* Hareket — geri bildirim sistemi (TASARIM-SISTEMI.md §4) */
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-micro: 120ms;
+  --duration-state: 200ms;
+  --duration-entrance: 320ms;
 }
 
 @theme {
-  /* Renkler — Tailwind utility'leri: bg-stuhub-surface, text-stuhub-text, … */
+  /* Renkler — Tailwind utility'leri: bg-stuhub-glass-1, text-stuhub-text, … */
   --color-stuhub-bg: var(--stuhub-bg);
+  --color-stuhub-bg-elevated: var(--stuhub-bg-elevated);
   --color-stuhub-surface: var(--stuhub-surface);
   --color-stuhub-surface-hover: var(--stuhub-surface-hover);
+  --color-stuhub-glass-1: var(--stuhub-glass-1);
+  --color-stuhub-glass-1-hover: var(--stuhub-glass-1-hover);
+  --color-stuhub-glass-2: var(--stuhub-glass-2);
+  --color-stuhub-glass-2-hover: var(--stuhub-glass-2-hover);
   --color-stuhub-border: var(--stuhub-border);
+  --color-stuhub-border-strong: var(--stuhub-border-strong);
   --color-stuhub-text: var(--stuhub-text);
   --color-stuhub-text-secondary: var(--stuhub-text-secondary);
+  --color-stuhub-text-muted: var(--stuhub-text-muted);
   --color-stuhub-accent: var(--stuhub-accent);
   --color-stuhub-accent-hover: var(--stuhub-accent-hover);
   --color-stuhub-on-accent: var(--stuhub-on-accent);
+  --color-stuhub-accent-glass: var(--stuhub-accent-glass);
+  --color-stuhub-accent-glass-border: var(--stuhub-accent-glass-border);
   --color-stuhub-success: var(--stuhub-success);
   --color-stuhub-error: var(--stuhub-error);
   --color-stuhub-on-error: var(--stuhub-on-error);
@@ -121,18 +114,77 @@
   --text-3xl: 30px;
   --text-4xl: 36px;
 
-  /* Radius: 10/14/16 px (Şema 5 — yumuşak "defter" köşeleri) */
-  --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 16px;
+  /* Font aileleri */
+  --font-sans: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
 
-  /* Geçiş: 150–200ms, ease-out */
-  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  /* Radius kilidi — dört seviye, TASARIM-SISTEMI.md §3. Eski sm/md/lg de eşlendi
+     ki henüz göç etmemiş sınıflar kırılmasın. */
+  --radius-chip: 10px;
+  --radius-control: 14px;
+  --radius-panel: 20px;
+  --radius-pill: 9999px;
+  --radius-sm: var(--radius-chip);
+  --radius-md: var(--radius-control);
+  --radius-lg: var(--radius-panel);
+}
+
+@layer components {
+  /* Birincil cam yüzey — kart, panel, modal */
+  .glass-panel {
+    background-color: var(--stuhub-glass-1);
+    backdrop-filter: blur(var(--blur-glass-1));
+    -webkit-backdrop-filter: blur(var(--blur-glass-1));
+    border: 1px solid var(--stuhub-border);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-glass);
+  }
+
+  /* İkincil cam yüzey — pasif/subtle panel, rozet zemini */
+  .glass-panel-subtle {
+    background-color: var(--stuhub-glass-2);
+    backdrop-filter: blur(var(--blur-glass-2));
+    -webkit-backdrop-filter: blur(var(--blur-glass-2));
+    border: 1px solid var(--stuhub-border);
+    border-radius: var(--radius-panel);
+  }
+
+  /* Etkileşim katmanı — glass-panel/-subtle ile birlikte kullanılır */
+  .glass-interactive {
+    transition:
+      background-color var(--duration-micro) var(--ease-out-expo),
+      border-color var(--duration-micro) var(--ease-out-expo),
+      transform var(--duration-micro) var(--ease-out-expo);
+    cursor: pointer;
+  }
+  .glass-interactive:hover {
+    background-color: var(--stuhub-glass-1-hover);
+    border-color: var(--stuhub-border-strong);
+    transform: translateY(-1px);
+  }
+  .glass-interactive:active {
+    transform: scale(0.98);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .glass-interactive,
+    .glass-interactive:hover,
+    .glass-interactive:active {
+      transform: none;
+      transition-duration: 1ms;
+    }
+  }
 }
 
 html {
-  color-scheme: light dark;
-  font-family:
-    Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
-    Arial, sans-serif;
+  color-scheme: dark;
+  background-color: var(--stuhub-bg);
+  font-family: var(--font-sans);
+}
+
+body {
+  min-height: 100dvh;
+}
+
+::selection {
+  background-color: rgba(255, 255, 255, 0.18);
 }

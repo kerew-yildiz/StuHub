@@ -8,10 +8,10 @@ import { getCourseHue, hueColorVar } from '../lib/courseColors'
 
 /** Aktif rota vurgusu — tam eşleşme ya da ön ek eşleşmesi. */
 function linkClass(active: boolean): string {
-  return `block rounded-sm px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
+  return `glass-interactive block rounded-control border px-3 py-1.5 text-sm font-medium ${
     active
-      ? 'bg-stuhub-surface-hover text-stuhub-accent'
-      : 'text-stuhub-text-secondary hover:bg-stuhub-surface-hover hover:text-stuhub-text'
+      ? 'border-stuhub-accent-glass-border bg-stuhub-accent-glass text-stuhub-text'
+      : 'border-transparent text-stuhub-text-secondary hover:text-stuhub-text'
   }`
 }
 
@@ -90,37 +90,18 @@ export function Sidebar() {
       {/* Dar ekran — üstte daraltılmış yatay bar */}
       <nav
         aria-label="Ana gezinme"
-        className="sticky top-0 z-30 flex items-center gap-1 overflow-x-auto border-b border-stuhub-border bg-stuhub-surface px-4 py-2 md:hidden"
+        className="sticky top-0 z-30 flex items-center gap-1 overflow-x-auto border-b border-stuhub-border bg-stuhub-bg/70 px-4 py-2 backdrop-blur-2xl md:hidden"
       >
-        <NavLink
-          to="/"
-          end
-          className={({ isActive }) =>
-            `rounded-sm px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
-              isActive
-                ? 'bg-stuhub-surface-hover text-stuhub-accent'
-                : 'text-stuhub-text-secondary hover:text-stuhub-text'
-            }`
-          }
-        >
+        <NavLink to="/" end className={({ isActive }) => linkClass(isActive)}>
           Dönemler
         </NavLink>
-        <NavLink
-          to="/ayarlar"
-          className={({ isActive }) =>
-            `rounded-sm px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
-              isActive
-                ? 'bg-stuhub-surface-hover text-stuhub-accent'
-                : 'text-stuhub-text-secondary hover:text-stuhub-text'
-            }`
-          }
-        >
+        <NavLink to="/ayarlar" className={({ isActive }) => linkClass(isActive)}>
           Ayarlar
         </NavLink>
       </nav>
 
       {/* Geniş ekran — sol dikey sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-stuhub-border bg-stuhub-surface md:flex">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-stuhub-border bg-stuhub-bg/70 backdrop-blur-2xl md:flex">
         <nav className="flex-1 space-y-1 overflow-y-auto p-3" aria-label="Dönem ağacı">
           <NavLink
             to="/"
@@ -141,7 +122,7 @@ export function Sidebar() {
                     onClick={() => void toggleTerm(term.id)}
                     aria-expanded={expanded}
                     aria-label={`${term.name} dönemini ${expanded ? 'daralt' : 'genişlet'}`}
-                    className="shrink-0 rounded-sm px-1 py-1.5 text-stuhub-text-secondary transition-colors duration-150 hover:text-stuhub-text"
+                    className="shrink-0 rounded-control px-1 py-1.5 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:text-stuhub-text"
                   >
                     {expanded ? '▾' : '▸'}
                   </button>
@@ -168,7 +149,7 @@ export function Sidebar() {
                               onClick={() => void toggleCourse(course.id)}
                               aria-expanded={courseExpanded}
                               aria-label={`${course.name} dersini ${courseExpanded ? 'daralt' : 'genişlet'}`}
-                              className="shrink-0 rounded-sm px-1 py-1.5 text-stuhub-text-secondary transition-colors duration-150 hover:text-stuhub-text"
+                              className="shrink-0 rounded-control px-1 py-1.5 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:text-stuhub-text"
                             >
                               {courseExpanded ? '▾' : '▸'}
                             </button>

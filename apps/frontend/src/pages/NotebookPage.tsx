@@ -218,7 +218,7 @@ export function NotebookPage() {
     <section>
       <Link
         to={`/dersler/${courseId ?? ''}`}
-        className="text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:text-stuhub-text"
+        className="text-sm font-medium text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:text-stuhub-text"
       >
         ← Derse dön
       </Link>
@@ -227,7 +227,7 @@ export function NotebookPage() {
       </div>
 
       {error && (
-        <p role="alert" className="mt-4 rounded-sm bg-stuhub-error/10 px-4 py-2 text-sm text-stuhub-error">
+        <p role="alert" className="mt-4 rounded-control bg-stuhub-error/10 px-4 py-2 text-sm text-stuhub-error">
           {error}
         </p>
       )}
@@ -260,28 +260,28 @@ export function NotebookPage() {
             type="button"
             onClick={() => setSlidesFormOpen((v) => !v)}
             aria-expanded={slidesFormOpen}
-            className="shrink-0 rounded-sm border border-stuhub-border bg-stuhub-surface px-3 py-1.5 text-sm font-medium text-stuhub-accent transition-colors duration-150 hover:bg-stuhub-surface-hover"
+            className="shrink-0 glass-panel-subtle glass-interactive rounded-control px-3 py-1.5 text-sm font-medium text-stuhub-accent"
           >
             {slidesFormOpen ? 'Gizle' : 'Yeni sunum ekle +'}
           </button>
         </div>
 
         {slidesFormOpen && (
-          <div className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface p-5">
+          <div className="glass-panel mt-4 p-5">
             <GuideSlidesForm onUpload={handleUpload} />
           </div>
         )}
 
         {slidesPdfUrl ? (
-          <div className="mt-5 overflow-hidden rounded-md border border-stuhub-border bg-stuhub-surface">
-            <div className="flex items-center justify-between border-b border-stuhub-border bg-stuhub-bg px-4 py-2">
+          <div className="glass-panel mt-5 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-stuhub-border px-4 py-2">
               <span className="text-sm font-medium">
                 Orijinal sunum · {slides.length} slayt
               </span>
               <button
                 type="button"
                 onClick={() => setPdfPreview(slidesPdfUrl)}
-                className="rounded-sm bg-stuhub-accent px-3 py-1 text-xs font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
+                className="rounded-control bg-stuhub-accent px-3 py-1 text-xs font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98]"
               >
                 Tam ekran aç
               </button>
@@ -309,14 +309,14 @@ export function NotebookPage() {
                 <button
                   type="button"
                   onClick={() => downloadFile(noteMarkdownUrl(note.id))}
-                  className="rounded-sm border border-stuhub-border bg-stuhub-surface px-4 py-2 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                  className="glass-panel-subtle glass-interactive rounded-control px-4 py-2 text-sm font-medium text-stuhub-text-secondary"
                 >
                   MD İndir
                 </button>
                 <button
                   type="button"
                   onClick={() => void handleExportPdf()}
-                  className="rounded-sm border border-stuhub-border bg-stuhub-surface px-4 py-2 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                  className="glass-panel-subtle glass-interactive rounded-control px-4 py-2 text-sm font-medium text-stuhub-text-secondary"
                 >
                   PDF İndir
                 </button>
@@ -326,7 +326,7 @@ export function NotebookPage() {
               type="button"
               onClick={() => void handleGenerate()}
               disabled={generatingNote || !canGenerate}
-              className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-50"
+              className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
               title={canGenerate ? '' : 'Önce guide slides yükle'}
             >
               {generatingNote ? 'Üretiliyor…' : 'Not Oluştur'}
@@ -335,17 +335,17 @@ export function NotebookPage() {
         </div>
 
         {generatingNote && (
-          <div className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface p-5">
+          <div className="glass-panel mt-4 p-5">
             <p className="text-sm font-medium">{noteJob?.message}</p>
-            <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-stuhub-border">
+            <div className="mt-3 h-2 w-full overflow-hidden rounded-pill bg-stuhub-border">
               <div
-                className="h-full rounded-full bg-stuhub-accent transition-[width] duration-150 ease-out"
+                className="h-full rounded-pill bg-stuhub-accent transition-[width] duration-[var(--duration-state)] ease-[var(--ease-out-expo)]"
                 style={{ width: `${Math.max(noteProgress, 2)}%` }}
               />
             </div>
             <p className="mt-2 text-xs text-stuhub-text-secondary">%{Math.round(noteProgress)} tamamlandı</p>
             {noteJob?.liveContent && (
-              <pre className="mt-4 max-h-64 overflow-y-auto whitespace-pre-wrap rounded-sm bg-stuhub-bg p-3 text-sm text-stuhub-text-secondary">
+              <pre className="mt-4 max-h-64 overflow-y-auto whitespace-pre-wrap rounded-control bg-stuhub-glass-2 p-3 text-sm text-stuhub-text-secondary">
                 {noteJob.liveContent}
               </pre>
             )}
@@ -353,12 +353,7 @@ export function NotebookPage() {
         )}
 
         {!generatingNote && note && (
-          <div
-            className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface px-6 py-5"
-            style={
-              courseHueId ? { borderLeft: `4px solid ${hueColorVar(courseHueId)}` } : undefined
-            }
-          >
+          <div className="mt-4">
             <NoteViewer note={note} hueId={courseHueId} />
           </div>
         )}
@@ -381,7 +376,7 @@ export function NotebookPage() {
             type="button"
             onClick={() => void handleGenerateFlashcards()}
             disabled={generatingFlashcards || generatingNote || !note}
-            className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-50"
+            className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
             title={note ? '' : 'Önce not oluştur'}
           >
             {generatingFlashcards ? 'Üretiliyor…' : 'Kart Oluştur'}
@@ -403,11 +398,11 @@ export function NotebookPage() {
         ) : (
           <>
             {generatingFlashcards && (
-              <div className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface p-5">
+              <div className="glass-panel mt-4 p-5">
                 <p className="text-sm font-medium">{flashcardJob?.message}</p>
-                <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-stuhub-border">
+                <div className="mt-3 h-2 w-full overflow-hidden rounded-pill bg-stuhub-border">
                   <div
-                    className="h-full rounded-full bg-stuhub-accent transition-[width] duration-150 ease-out"
+                    className="h-full rounded-pill bg-stuhub-accent transition-[width] duration-[var(--duration-state)] ease-[var(--ease-out-expo)]"
                     style={{ width: `${Math.max(flashcardProgress, 2)}%` }}
                   />
                 </div>
@@ -426,7 +421,7 @@ export function NotebookPage() {
               {flashcardSets.map((set, setIndex) => (
                 <div
                   key={set.id}
-                  className="flex items-center justify-between rounded-md border border-stuhub-border border-l-4 bg-stuhub-surface px-5 py-4"
+                  className="glass-panel flex items-center justify-between border-l-4 px-5 py-4"
                   style={
                     courseHueId ? { borderLeftColor: hueColorVar(courseHueId) } : undefined
                   }
@@ -446,7 +441,7 @@ export function NotebookPage() {
                     <button
                       type="button"
                       onClick={() => downloadFile(flashcardSetExportUrl(set.id, 'apkg'))}
-                      className="rounded-sm border border-stuhub-border px-2 py-1 text-xs font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                      className="glass-panel-subtle glass-interactive rounded-control px-2 py-1 text-xs font-medium text-stuhub-text-secondary"
                       title="Anki'ye aktar (.apkg)"
                     >
                       Anki
@@ -454,7 +449,7 @@ export function NotebookPage() {
                     <button
                       type="button"
                       onClick={() => downloadFile(flashcardSetExportUrl(set.id, 'csv'))}
-                      className="rounded-sm border border-stuhub-border px-2 py-1 text-xs font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                      className="glass-panel-subtle glass-interactive rounded-control px-2 py-1 text-xs font-medium text-stuhub-text-secondary"
                       title="CSV indir"
                     >
                       CSV
@@ -462,14 +457,14 @@ export function NotebookPage() {
                     <button
                       type="button"
                       onClick={() => handleStudySet(set)}
-                      className="rounded-sm bg-stuhub-accent px-3 py-1 text-xs font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
+                      className="rounded-control bg-stuhub-accent px-3 py-1 text-xs font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98]"
                     >
                       Çalış
                     </button>
                     <button
                       type="button"
                       onClick={() => void handleDeleteFlashcardSet(set.id)}
-                      className="rounded-sm px-2 py-1 text-sm text-stuhub-error transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                      className="rounded-control px-2 py-1 text-sm text-stuhub-error transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10"
                       aria-label="Kart setini sil"
                     >
                       Sil
@@ -494,7 +489,7 @@ export function NotebookPage() {
             type="button"
             onClick={() => void handleGenerateQuiz()}
             disabled={generatingQuiz || generatingNote || !note}
-            className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-50"
+            className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
             title={note ? '' : 'Önce not oluştur'}
           >
             {generatingQuiz ? 'Üretiliyor…' : 'Yeni Quiz Oluştur'}
@@ -502,11 +497,11 @@ export function NotebookPage() {
         </div>
 
         {generatingQuiz && (
-          <div className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface p-5">
+          <div className="glass-panel mt-4 p-5">
             <p className="text-sm font-medium">{quizJob?.message}</p>
-            <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-stuhub-border">
+            <div className="mt-3 h-2 w-full overflow-hidden rounded-pill bg-stuhub-border">
               <div
-                className="h-full rounded-full bg-stuhub-accent transition-[width] duration-150 ease-out"
+                className="h-full rounded-pill bg-stuhub-accent transition-[width] duration-[var(--duration-state)] ease-[var(--ease-out-expo)]"
                 style={{ width: `${Math.max(quizProgress, 2)}%` }}
               />
             </div>
@@ -523,7 +518,7 @@ export function NotebookPage() {
           {quizzes.map((quiz, index) => (
             <details key={quiz.id} open={index === 0}>
               <summary
-                className="flex cursor-pointer items-center justify-between rounded-md border border-stuhub-border border-l-4 bg-stuhub-surface px-5 py-3 font-medium"
+                className="glass-panel flex cursor-pointer items-center justify-between border-l-4 px-5 py-3 font-medium"
                 style={
                   courseHueId ? { borderLeftColor: hueColorVar(courseHueId) } : undefined
                 }
@@ -543,7 +538,7 @@ export function NotebookPage() {
                     e.preventDefault()
                     void handleDeleteQuiz(quiz.id)
                   }}
-                  className="rounded-sm px-2 py-1 text-sm text-stuhub-error transition-colors duration-150 hover:bg-stuhub-surface-hover"
+                  className="rounded-control px-2 py-1 text-sm text-stuhub-error transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10"
                   aria-label="Quiz'i sil"
                 >
                   Sil

@@ -43,7 +43,7 @@ export function CourseForm({ onSubmit, onCancel }: CourseFormProps) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-4 rounded-md border border-stuhub-border bg-stuhub-surface p-6"
+      className="glass-panel space-y-4 p-6"
     >
       <div>
         <label htmlFor="course-name" className="mb-1 block text-sm font-medium">
@@ -55,7 +55,7 @@ export function CourseForm({ onSubmit, onCancel }: CourseFormProps) {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Örn. Veri Yapıları"
-          className="w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-stuhub-accent"
+          className="w-full rounded-control border border-stuhub-border bg-stuhub-glass-2 px-3 py-2 text-sm text-stuhub-text outline-none transition-colors duration-[var(--duration-micro)] placeholder:text-stuhub-text-secondary focus:border-stuhub-accent"
         />
       </div>
       <div>
@@ -68,7 +68,7 @@ export function CourseForm({ onSubmit, onCancel }: CourseFormProps) {
           value={instructor}
           onChange={(e) => setInstructor(e.target.value)}
           placeholder="Örn. Dr. A. Yılmaz"
-          className="w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-stuhub-accent"
+          className="w-full rounded-control border border-stuhub-border bg-stuhub-glass-2 px-3 py-2 text-sm text-stuhub-text outline-none transition-colors duration-[var(--duration-micro)] placeholder:text-stuhub-text-secondary focus:border-stuhub-accent"
         />
       </div>
       <div>
@@ -90,14 +90,14 @@ export function CourseForm({ onSubmit, onCancel }: CourseFormProps) {
                 aria-label={hue.name}
                 title={hue.name}
                 onClick={() => setHueId(hue.id)}
-                className={`flex h-8 w-8 items-center justify-center rounded-full border-2 transition-transform duration-150 ${
+                className={`flex h-8 w-8 items-center justify-center rounded-full border-2 transition-transform duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] active:scale-95 ${
                   selected
-                    ? 'scale-110 border-stuhub-text'
+                    ? 'scale-110 border-stuhub-accent'
                     : 'border-transparent hover:scale-105'
                 }`}
                 style={{ backgroundColor: hueColorVar(hue.id) }}
               >
-                {selected && <span className="h-2 w-2 rounded-full bg-stuhub-surface" />}
+                {selected && <span className="h-2 w-2 rounded-full bg-stuhub-bg" />}
               </button>
             )
           })}
@@ -108,14 +108,14 @@ export function CourseForm({ onSubmit, onCancel }: CourseFormProps) {
         <button
           type="submit"
           disabled={busy}
-          className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-60"
+          className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100"
         >
           {busy ? 'Kaydediliyor…' : 'Kaydet'}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-sm px-4 py-2 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+          className="glass-panel-subtle glass-interactive rounded-control px-4 py-2 text-sm font-medium text-stuhub-text-secondary"
         >
           Vazgeç
         </button>

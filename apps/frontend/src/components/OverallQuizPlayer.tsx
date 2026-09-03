@@ -86,7 +86,7 @@ export function OverallQuizPlayer({ quiz, onDelete }: OverallQuizPlayerProps) {
 
   if (phase === 'finished' && outcome) {
     return (
-      <div className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface p-6">
+      <div className="glass-panel mt-4 p-6">
         <h3 className="text-xl font-semibold">Genel quiz tamamlandı</h3>
         <p className="mt-2 text-3xl font-semibold text-stuhub-accent">{outcome.score} / 100</p>
         <p className="mt-1 text-sm text-stuhub-text-secondary">
@@ -97,14 +97,14 @@ export function OverallQuizPlayer({ quiz, onDelete }: OverallQuizPlayerProps) {
           <button
             type="button"
             onClick={startFresh}
-            className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover"
+            className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98]"
           >
             Yeniden çöz
           </button>
           <button
             type="button"
             onClick={() => void handleDeleteAnswers()}
-            className="rounded-sm border border-stuhub-border px-4 py-2 text-sm font-medium text-stuhub-text-secondary transition-colors duration-150 hover:bg-stuhub-surface-hover"
+            className="glass-panel-subtle glass-interactive rounded-control px-4 py-2 text-sm font-medium text-stuhub-text-secondary"
           >
             Cevapları sil
           </button>
@@ -112,7 +112,7 @@ export function OverallQuizPlayer({ quiz, onDelete }: OverallQuizPlayerProps) {
             <button
               type="button"
               onClick={() => onDelete(quiz.id)}
-              className="rounded-sm px-4 py-2 text-sm font-medium text-stuhub-error transition-colors duration-150 hover:bg-stuhub-surface-hover"
+              className="rounded-control px-4 py-2 text-sm font-medium text-stuhub-error transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10"
             >
               Genel quiz'i sil
             </button>
@@ -121,15 +121,15 @@ export function OverallQuizPlayer({ quiz, onDelete }: OverallQuizPlayerProps) {
 
         {/* Açılır kapanır tam soru önizleme (madde 3: soru + seçenekler + cevap + feedback) */}
         <div className="mt-5 space-y-3">
-          <details open className="rounded-md border border-stuhub-border">
-            <summary className="cursor-pointer select-none bg-stuhub-bg px-4 py-2.5 text-sm font-medium">
+          <details open className="glass-panel-subtle overflow-hidden">
+            <summary className="cursor-pointer select-none px-4 py-2.5 text-sm font-medium">
               Sorular ve cevaplar ({outcome.results.length})
             </summary>
             <div className="space-y-4 p-4">
               {outcome.results.map((result) => (
                 <div
                   key={result.qid}
-                  className="rounded-md border border-stuhub-border bg-stuhub-bg p-4"
+                  className="rounded-control border border-stuhub-border bg-stuhub-glass-2 p-4"
                 >
                   <p className="text-sm font-medium leading-relaxed">{result.question}</p>
 
@@ -139,13 +139,13 @@ export function OverallQuizPlayer({ quiz, onDelete }: OverallQuizPlayerProps) {
                         const isCorrect = index === result.correct_index
                         const isSelected = index === result.selected_index
                         let className =
-                          'rounded-sm border border-stuhub-border px-3 py-1.5 text-stuhub-text-secondary'
+                          'rounded-chip border border-stuhub-border px-3 py-1.5 text-stuhub-text-secondary'
                         if (isCorrect) {
                           className =
-                            'rounded-sm border border-stuhub-success bg-stuhub-success/10 px-3 py-1.5 text-stuhub-success'
+                            'rounded-chip border border-stuhub-success bg-stuhub-success/10 px-3 py-1.5 text-stuhub-success'
                         } else if (isSelected) {
                           className =
-                            'rounded-sm border border-stuhub-error bg-stuhub-error/10 px-3 py-1.5 text-stuhub-error'
+                            'rounded-chip border border-stuhub-error bg-stuhub-error/10 px-3 py-1.5 text-stuhub-error'
                         }
                         return (
                           <div key={index} className={className}>
@@ -159,7 +159,7 @@ export function OverallQuizPlayer({ quiz, onDelete }: OverallQuizPlayerProps) {
                   )}
 
                   {result.type === 'tf' && result.statement != null && (
-                    <div className="mt-2 rounded-sm border border-stuhub-border px-3 py-2 text-stuhub-text-secondary">
+                    <div className="mt-2 rounded-control border border-stuhub-border px-3 py-2 text-stuhub-text-secondary">
                       Senin cevabın: <b>{result.selected_tf === 1 ? 'Doğru' : 'Yanlış'}</b>
                       {result.selected_tf !== (result.answer ? 1 : 0) && (
                         <>
@@ -171,7 +171,7 @@ export function OverallQuizPlayer({ quiz, onDelete }: OverallQuizPlayerProps) {
                   )}
 
                   {result.type === 'fib' && (
-                    <div className="mt-2 rounded-sm border border-stuhub-border px-3 py-2 text-stuhub-text-secondary">
+                    <div className="mt-2 rounded-control border border-stuhub-border px-3 py-2 text-stuhub-text-secondary">
                       Senin cevabın: “{result.user_answer}”
                       {!result.correct && (
                         <>
@@ -185,13 +185,13 @@ export function OverallQuizPlayer({ quiz, onDelete }: OverallQuizPlayerProps) {
                   )}
 
                   {result.type === 'open' && (
-                    <div className="mt-2 rounded-sm border border-stuhub-border px-3 py-2 text-stuhub-text-secondary">
+                    <div className="mt-2 rounded-control border border-stuhub-border px-3 py-2 text-stuhub-text-secondary">
                       Senin cevabın: “{(result.user_answer ?? '').slice(0, 160)}”
                     </div>
                   )}
 
                   <div
-                    className={`mt-2 rounded-sm px-3 py-2 text-sm leading-relaxed ${
+                    className={`mt-2 rounded-control px-3 py-2 text-sm leading-relaxed ${
                       result.type === 'open'
                         ? 'bg-stuhub-info/10 text-stuhub-text'
                         : result.correct
@@ -231,7 +231,7 @@ export function OverallQuizPlayer({ quiz, onDelete }: OverallQuizPlayerProps) {
                       </p>
                       <p className="mt-1">{result.grade.explanation}</p>
                       {result.grade.ideal_answer && (
-                        <div className="mt-2 rounded-sm bg-stuhub-surface p-3">
+                        <div className="mt-2 rounded-control bg-stuhub-glass-2 p-3">
                           <p className="font-medium">İdeal cevap:</p>
                           <p className="mt-1">{result.grade.ideal_answer}</p>
                         </div>
@@ -306,16 +306,16 @@ export function OverallQuizPlayer({ quiz, onDelete }: OverallQuizPlayerProps) {
         : local !== null
 
   return (
-    <div className="mt-4 rounded-md border border-stuhub-border bg-stuhub-surface p-6">
+    <div className="glass-panel mt-4 p-6">
       <div className="flex items-center justify-between text-sm text-stuhub-text-secondary">
         <span>
           Soru {current + 1} / {questions.length} · {TYPE_LABELS[question.type]}
         </span>
         <span>{Math.round((current / questions.length) * 100)}%</span>
       </div>
-      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-stuhub-border">
+      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-pill bg-stuhub-border">
         <div
-          className="h-full rounded-full bg-stuhub-accent transition-[width] duration-150 ease-out"
+          className="h-full rounded-pill bg-stuhub-accent transition-[width] duration-[var(--duration-state)] ease-[var(--ease-out-expo)]"
           style={{ width: `${Math.max((current / questions.length) * 100, 2)}%` }}
         />
       </div>
@@ -335,9 +335,9 @@ export function OverallQuizPlayer({ quiz, onDelete }: OverallQuizPlayerProps) {
           <div className="mt-4 space-y-2">
             {(question.options ?? []).map((option, index) => {
               let className =
-                'w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-4 py-2.5 text-left text-sm transition-colors duration-150'
+                'w-full rounded-control border border-stuhub-border bg-stuhub-glass-2 px-4 py-2.5 text-left text-sm transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)]'
               if (!local) {
-                className += ' hover:border-stuhub-accent'
+                className += ' hover:border-stuhub-border-strong hover:bg-stuhub-glass-2-hover active:scale-[0.98]'
               } else if (index === question.correct_index) {
                 className += ' border-stuhub-success bg-stuhub-success/10 text-stuhub-success'
               } else if (index === (answers.find((a) => a.qid === current)?.value as number) && !local.correct) {
@@ -368,9 +368,9 @@ export function OverallQuizPlayer({ quiz, onDelete }: OverallQuizPlayerProps) {
             ].map((option) => {
               const selectedValue = answers.find((a) => a.qid === current)?.value as number
               let className =
-                'rounded-sm border border-stuhub-border bg-stuhub-bg px-4 py-2.5 text-sm font-medium transition-colors duration-150'
+                'rounded-control border border-stuhub-border bg-stuhub-glass-2 px-4 py-2.5 text-sm font-medium transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)]'
               if (!local) {
-                className += ' hover:border-stuhub-accent'
+                className += ' hover:border-stuhub-border-strong hover:bg-stuhub-glass-2-hover active:scale-[0.98]'
               } else if (option.value === (question.answer ? 1 : 0)) {
                 className += ' border-stuhub-success bg-stuhub-success/10 text-stuhub-success'
               } else if (option.value === selectedValue && !local.correct) {
@@ -400,7 +400,7 @@ export function OverallQuizPlayer({ quiz, onDelete }: OverallQuizPlayerProps) {
             onChange={(e) => handleFibChange(e.target.value)}
             disabled={local !== null}
             placeholder="Cevabını yaz…"
-            className="mt-4 w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-4 py-2.5 text-sm outline-none transition-colors duration-150 focus:border-stuhub-accent"
+            className="mt-4 w-full rounded-control border border-stuhub-border bg-stuhub-glass-2 px-4 py-2.5 text-sm text-stuhub-text outline-none transition-colors duration-[var(--duration-micro)] placeholder:text-stuhub-text-secondary focus:border-stuhub-accent"
           />
         )}
 
@@ -410,14 +410,14 @@ export function OverallQuizPlayer({ quiz, onDelete }: OverallQuizPlayerProps) {
             onChange={(e) => handleOpenChange(e.target.value)}
             rows={5}
             placeholder="Cevabını yaz… (değerlendirme quiz sonunda yapılır)"
-            className="mt-4 w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-4 py-2.5 text-sm outline-none transition-colors duration-150 focus:border-stuhub-accent"
+            className="mt-4 w-full rounded-control border border-stuhub-border bg-stuhub-glass-2 px-4 py-2.5 text-sm text-stuhub-text outline-none transition-colors duration-[var(--duration-micro)] placeholder:text-stuhub-text-secondary focus:border-stuhub-accent"
           />
         )}
       </div>
 
       {local && (
         <div
-          className={`mt-4 rounded-sm px-4 py-3 text-sm leading-relaxed ${
+          className={`mt-4 rounded-control px-4 py-3 text-sm leading-relaxed transition-opacity duration-[var(--duration-state)] ${
             local.correct
               ? 'bg-stuhub-success/10 text-stuhub-success'
               : 'bg-stuhub-error/10 text-stuhub-error'
@@ -434,7 +434,7 @@ export function OverallQuizPlayer({ quiz, onDelete }: OverallQuizPlayerProps) {
           type="button"
           onClick={() => void handleNext()}
           disabled={!canNext || submitting || !answered}
-          className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-50"
+          className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
         >
           {submitting ? 'Değerlendiriliyor…' : isLast ? 'Quiz\'i Bitir' : 'Sonraki soru'}
         </button>

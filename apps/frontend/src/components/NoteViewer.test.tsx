@@ -48,7 +48,7 @@ const note: SavedNote = {
   },
   topics_json: [],
   generated_at: '2026-08-14',
-  model_used: 'deepseek-chat',
+  model_used: 'gemini-2.5-flash',
 }
 
 describe('NoteViewer', () => {
@@ -104,7 +104,7 @@ describe('NoteViewer', () => {
       },
       topics_json: [],
       generated_at: '2026-08-14',
-      model_used: 'deepseek-chat',
+      model_used: 'gemini-2.5-flash',
     }
 
     render(<NoteViewer note={webNote} />)
