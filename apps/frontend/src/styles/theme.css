@@ -183,6 +183,25 @@ html {
 
 body {
   min-height: 100dvh;
+  position: relative;
+}
+
+/* Arkaplan dekoru — ders çalışma ilerlemesini çağrıştıran çizgi grafikler.
+   Amaç: düz renk zeminle cam panellerin (backdrop-blur) ayırt edilebilir olması —
+   flat renk üstünde blur görünmez, bu desen sayesinde blur gerçekten belli olur.
+   Tek renk ailesi (beyaz, düşük opaklık) — monochrome ilkesi bozulmaz, zeminden
+   (--stuhub-bg) daha açık. `fixed` — scroll ile kaymaz, tüm sayfalarda sabit kalır. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-color: var(--stuhub-bg);
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%201600%20900%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22rgba%28255%2C255%2C255%2C0.035%29%22%20stroke-width%3D%221%22%3E%3Cline%20x1%3D%220%22%20y1%3D%22150%22%20x2%3D%221600%22%20y2%3D%22150%22/%3E%3Cline%20x1%3D%220%22%20y1%3D%22300%22%20x2%3D%221600%22%20y2%3D%22300%22/%3E%3Cline%20x1%3D%220%22%20y1%3D%22450%22%20x2%3D%221600%22%20y2%3D%22450%22/%3E%3Cline%20x1%3D%220%22%20y1%3D%22600%22%20x2%3D%221600%22%20y2%3D%22600%22/%3E%3Cline%20x1%3D%220%22%20y1%3D%22750%22%20x2%3D%221600%22%20y2%3D%22750%22/%3E%3C/g%3E%3Cpolyline%20points%3D%22-20%2C830%20180%2C800%20340%2C760%20500%2C780%20660%2C690%20830%2C720%20990%2C610%201160%2C640%201330%2C520%201500%2C560%201660%2C470%22%20fill%3D%22none%22%20stroke%3D%22rgba%28255%2C255%2C255%2C0.05%29%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3Cpolyline%20points%3D%22-20%2C700%20160%2C730%20330%2C650%20500%2C670%20670%2C560%20840%2C600%201010%2C470%201180%2C510%201350%2C380%201520%2C420%201660%2C330%22%20fill%3D%22none%22%20stroke%3D%22rgba%28255%2C255%2C255%2C0.065%29%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3Cpolyline%20points%3D%22-20%2C560%20150%2C590%20320%2C470%20490%2C510%20660%2C370%20830%2C410%201000%2C270%201170%2C310%201340%2C190%201510%2C230%201660%2C150%22%20fill%3D%22none%22%20stroke%3D%22rgba%28255%2C255%2C255%2C0.09%29%22%20stroke-width%3D%222.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3Cg%20fill%3D%22rgba%28255%2C255%2C255%2C0.12%29%22%3E%3Ccircle%20cx%3D%22150%22%20cy%3D%22590%22%20r%3D%224%22/%3E%3Ccircle%20cx%3D%22490%22%20cy%3D%22510%22%20r%3D%224%22/%3E%3Ccircle%20cx%3D%22830%22%20cy%3D%22410%22%20r%3D%224%22/%3E%3Ccircle%20cx%3D%221170%22%20cy%3D%22310%22%20r%3D%224%22/%3E%3Ccircle%20cx%3D%221510%22%20cy%3D%22230%22%20r%3D%224%22/%3E%3C/g%3E%3C/svg%3E");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  pointer-events: none;
 }
 
 ::selection {
