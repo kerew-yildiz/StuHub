@@ -6,9 +6,9 @@
    Bileşenlerde hardcoded renk YASAK — yalnızca bu tokenlar. */
 
 :root {
-  /* Zemin — neredeyse siyah, sıcaklık yok */
-  --stuhub-bg: #09090b;
-  --stuhub-bg-elevated: #0f0f12;
+  /* Zemin — granit grisi, saf siyah değil */
+  --stuhub-bg: #1c1c1e;
+  --stuhub-bg-elevated: #242427;
   --stuhub-text: #fafafa;
   --stuhub-text-secondary: #a1a1aa;
   --stuhub-text-muted: #71717a;
@@ -32,7 +32,7 @@
   /* Tek aksan — beyaz. Renkli aksan yok, vurgu yoğunlukla yapılır. */
   --stuhub-accent: #ffffff;
   --stuhub-accent-hover: #e4e4e7;
-  --stuhub-on-accent: #09090b;
+  --stuhub-on-accent: #1c1c1e;
   --stuhub-accent-glass: rgba(255, 255, 255, 0.1);
   --stuhub-accent-glass-border: rgba(255, 255, 255, 0.2);
 
