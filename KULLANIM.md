@@ -54,7 +54,7 @@ Tarayıcıda **http://localhost:5173** açılır. Backend kapalıysa üstte uyar
      (yerel vektör veritabanı kurulur; ilerleme çubuğu gösterilir).
    - **Chapter ekleyin** (örn. "Bağlı Listeler").
 4. **Chapter sayfası:**
-   - **Guide Slides**'a hocanın sunumunu yükleyin (PDF/PPTX) — slide'lar otomatik çıkarılır.
+   - **Guide Slides**'a hocanın sunumunu yükleyin (PDF/PPTX/PPT — eski .ppt otomatik çevrilir) — slide'lar otomatik çıkarılır.
    - **Not Oluştur** — sunumdaki konuları rehber alıp kitaptan atıflı not üretir (canlı akış).
    - Notta **`[1]`, `[2]`** atıfları tıklanabilir; kaynak parça pop-up'ta açılır.
    - **Quiz Oluştur** — her konu için 5 çoktan seçmeli soru; cevap verince anında açıklamalı geri bildirim.

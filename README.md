@@ -17,7 +17,7 @@
 ## Özellikler
 
 - **Dönem/Ders/Chapter yönetimi** — dönem klasörleri, ders notebook'ları, chapter'lar; 3 adımlı Türkçe onboarding
-- **Materyal yükleme** — kitap PDF'leri + sunumlar (PDF/PPTX) + **v2: YouTube, ses kaydı, DOCX, EPUB, görsel (OCR), metin yapıştırma**; yerel vektör indeksleme (LanceDB + bge-m3); ses/youtube için yerel transkripsiyon (faster-whisper)
+- **Materyal yükleme** — kitap PDF'leri + sunumlar (PDF/PPTX/PPT) + **v2: YouTube, ses kaydı, DOCX, EPUB, görsel (OCR), metin yapıştırma**; yerel vektör indeksleme (LanceDB + bge-m3); ses/youtube için yerel transkripsiyon (faster-whisper)
 - **Atıflı not üretimi** — guide slides rehberli, kitap taramalı, konu başına map-reduce üretim; tıklanabilir atıflar; çok dilli üretim (tr/en/auto)
 - **Bölüm quizi** — her konu için 5 çoktan seçmeli soru; anında açıklamalı geri bildirim
 - **Genel quiz** — 55 soru (20 MCQ + 15 D/Y + 15 boşluk + 5 açık uçlu); açık uçlular otomatik puanlanır

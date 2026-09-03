@@ -39,7 +39,7 @@ def _extract_textbook(path: str) -> tuple[list[dict], str]:
 
 def _extract_slides(path: str) -> tuple[list[dict], str]:
     ext = Path(path).suffix.lower()
-    if ext == ".pptx":
+    if ext in (".pptx", ".ppt"):
         return slides_service.extract_pptx_slides(path), "slides"
     pages = pdf_service.extract_pdf_pages(path)
     return [{"slide": p["page"], "text": p["text"]} for p in pages], "slides"

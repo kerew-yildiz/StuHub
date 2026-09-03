@@ -1,6 +1,7 @@
 """Guide slides router testleri (Faz 2.1)."""
 
 import io
+from pathlib import Path
 
 from pptx import Presentation
 from pptx.util import Inches
@@ -8,6 +9,8 @@ from pptx.util import Inches
 PPTX_MIME = (
     "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 )
+PPT_MIME = "application/vnd.ms-powerpoint"
+LEGACY_PPT_PATH = Path(__file__).parent / "fixtures" / "legacy_presentation.ppt"
 
 
 def _make_pptx_bytes() -> bytes:
@@ -122,3 +125,18 @@ async def test_delete_slide(client):
     assert resp.status_code == 204
     resp = await client.get(f"/api/chapters/{chapter_id}/slides")
     assert resp.json() == []
+
+
+async def test_upload_legacy_ppt_slides(client):
+    """Eski ikili .ppt, ppt2pptx ile .pptx'e çevrilip aynı yoldan okunmalı (bkz.
+    services/slides_service.py `_ensure_pptx`)."""
+    chapter_id = await _make_course_with_chapter(client)
+    resp = await client.post(
+        f"/api/chapters/{chapter_id}/slides",
+        files={"file": ("eski_sunum.ppt", LEGACY_PPT_PATH.read_bytes(), PPT_MIME)},
+    )
+    assert resp.status_code == 201
+    slides = resp.json()
+    assert len(slides) == 2
+    assert "ppt2pptx visual fixture" in slides[0]["content_text"]
+    assert "second slide" in slides[1]["content_text"]

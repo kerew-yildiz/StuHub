@@ -1,6 +1,9 @@
-"""PPTX metin çıkarımı + isteğe bağlı LibreOffice render (Yetenek 01).
+"""PPTX/eski PPT metin çıkarımı + isteğe bağlı LibreOffice render (Yetenek 01).
 
-LibreOffice yoksa render kopyası üretilmez; pop-up metin alıntısı fallback'i kullanılır.
+Eski ikili `.ppt` (PowerPoint 97-2003) `ppt2pptx` (saf Python, MIT, dış süreç gerekmez)
+ile `.pptx`'e çevrilip aynı `python-pptx` yolundan okunur. LibreOffice yalnızca pop-up
+önizlemesi için PDF render kopyası üretiminde kullanılır (isteğe bağlı, yoksa metin
+alıntısı fallback'i kullanılır).
 """
 
 from __future__ import annotations
@@ -10,6 +13,8 @@ import subprocess  # nosec B404 — LibreOffice headless dönüşümü (argv lis
 from contextlib import suppress
 from pathlib import Path
 
+from ppt2pptx import convert as ppt2pptx_convert
+from ppt2pptx.errors import Ppt2PptxError
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 
@@ -41,11 +46,33 @@ def _collect_shape_lines(shape, lines: list[str]) -> None:
             _collect_shape_lines(child, lines)
 
 
+def _ensure_pptx(path: str) -> str:
+    """Eski ikili `.ppt` biçimini `ppt2pptx` (saf Python, dış süreç/LibreOffice gerekmez)
+    ile `.pptx`'e çevirir; `python-pptx` yalnızca OOXML (`.pptx`) paketini açabilir, eski
+    `.ppt`'yi doğrudan okuyamaz — sessizce "dosya bozuk" hatası verirdi. `.pptx` zaten ise
+    dokunmadan olduğu gibi döner."""
+    if Path(path).suffix.lower() != ".ppt":
+        return path
+    out_dir = Path(path).parent / "converted"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    converted = out_dir / f"{Path(path).stem}.pptx"
+    try:
+        ppt2pptx_convert(path, str(converted))
+    except Ppt2PptxError as exc:
+        raise SlidesError(
+            "Eski .ppt dosyası okunamadı (bozuk ya da PowerPoint 95 öncesi bir sürüm "
+            "olabilir). PowerPoint'te 'Farklı Kaydet' ile .pptx formatına çevirip tekrar "
+            "yükleyin."
+        ) from exc
+    return str(converted)
+
+
 def extract_pptx_slides(path: str) -> list[dict]:
     """Slide bazlı metin çıkarır: [{"slide": 1, "text": "..."}, ...].
 
     Başlık + gövde + tablolar + gruplar + konuşmacı notları toplanır.
     """
+    path = _ensure_pptx(path)
     try:
         prs = Presentation(path)
     except Exception as exc:
