@@ -19,6 +19,7 @@ import { OverallQuizPlayer } from '../components/OverallQuizPlayer'
 import { TabBar } from '../components/TabBar'
 import { useAnimatedProgress } from '../lib/useAnimatedProgress'
 import { getCourseHue, hueColorVar, hueSoftVar, hueTextVar } from '../lib/courseColors'
+import { confirmDialog } from '../stores/confirmStore'
 import { useGenerationStore } from '../stores/generationStore'
 
 type LoadState = 'loading' | 'ready' | 'error'
@@ -193,7 +194,7 @@ export function CoursePage() {
   }
 
   const handleDeleteOverallQuiz = async (quizId: number) => {
-    if (!window.confirm('Bu genel quiz ve denemeleri silinecek. Emin misin?')) return
+    if (!(await confirmDialog('Bu genel quiz ve denemeleri silinecek. Emin misin?'))) return
     try {
       await removeOverallQuiz(quizId)
       setOverallQuizzes((prev) => prev.filter((q) => q.id !== quizId))
@@ -237,7 +238,7 @@ export function CoursePage() {
   }
 
   const handleDeleteChapter = async (id: number) => {
-    if (!window.confirm('Bu chapter silinecek. Emin misin?')) return
+    if (!(await confirmDialog('Bu chapter silinecek. Emin misin?'))) return
     try {
       await chaptersApi.remove(id)
       setChapters((prev) => prev.filter((c) => c.id !== id))
@@ -252,7 +253,7 @@ export function CoursePage() {
   }
 
   const handleDeleteMaterial = async (id: number) => {
-    if (!window.confirm('Bu materyal silinecek. Emin misin?')) return
+    if (!(await confirmDialog('Bu materyal silinecek. Emin misin?'))) return
     try {
       await materialsApi.remove(id)
       setMaterials((prev) => prev.filter((m) => m.id !== id))

@@ -19,6 +19,7 @@ import { SlidePreview } from '../components/SlidePreview'
 import { TabBar } from '../components/TabBar'
 import { getCourseHue, hueColorVar } from '../lib/courseColors'
 import { useAnimatedProgress } from '../lib/useAnimatedProgress'
+import { confirmDialog } from '../stores/confirmStore'
 import { useGenerationStore } from '../stores/generationStore'
 
 type LoadState = 'loading' | 'ready' | 'error'
@@ -124,7 +125,7 @@ export function NotebookPage() {
   }
 
   const handleDeleteSlide = async (slideId: number) => {
-    if (!window.confirm('Bu slide silinecek. Emin misin?')) return
+    if (!(await confirmDialog('Bu slide silinecek. Emin misin?'))) return
     try {
       await slidesApi.remove(slideId)
       setSlides((prev) => prev.filter((s) => s.id !== slideId))
@@ -154,7 +155,7 @@ export function NotebookPage() {
   }
 
   const handleDeleteQuiz = async (quizId: number) => {
-    if (!window.confirm('Bu quiz ve denemeleri silinecek. Emin misin?')) return
+    if (!(await confirmDialog('Bu quiz ve denemeleri silinecek. Emin misin?'))) return
     try {
       await removeQuiz(quizId)
       setQuizzes((prev) => prev.filter((q) => q.id !== quizId))
@@ -191,7 +192,7 @@ export function NotebookPage() {
   }
 
   const handleDeleteFlashcardSet = async (setId: number) => {
-    if (!window.confirm('Bu kart seti silinecek. Emin misin?')) return
+    if (!(await confirmDialog('Bu kart seti silinecek. Emin misin?'))) return
     try {
       await deleteFlashcardSet(setId)
       setFlashcardSets((prev) => prev.filter((s) => s.id !== setId))

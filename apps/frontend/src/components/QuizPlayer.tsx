@@ -8,6 +8,7 @@ import {
   type AttemptOutcome,
   type Quiz,
 } from '../api/quizzes'
+import { confirmDialog } from '../stores/confirmStore'
 
 interface QuizPlayerProps {
   quiz: Quiz
@@ -70,7 +71,7 @@ export function QuizPlayer({ quiz, onDelete }: QuizPlayerProps) {
   }
 
   const handleDeleteAnswers = async () => {
-    if (savedAttemptId == null || !window.confirm('Kayıtlı cevaplar silinecek. Emin misin?')) return
+    if (savedAttemptId == null || !(await confirmDialog('Kayıtlı cevaplar silinecek. Emin misin?'))) return
     try {
       await removeAttempt(savedAttemptId)
       startFresh()

@@ -7,6 +7,7 @@ import { OnboardingWizard } from '../components/OnboardingWizard'
 import { StreakRing } from '../components/StreakRing'
 import { TermCard } from '../components/TermCard'
 import { TermForm } from '../components/TermForm'
+import { confirmDialog } from '../stores/confirmStore'
 
 type LoadState = 'loading' | 'ready' | 'error'
 
@@ -172,7 +173,7 @@ export function TermsPage() {
   const handleDelete = async (id: number) => {
     const term = terms.find((t) => t.id === id)
     if (!term) return
-    if (!window.confirm(`"${term.name}" dönemi ve içindeki dersler silinecek. Emin misin?`)) {
+    if (!(await confirmDialog(`"${term.name}" dönemi ve içindeki dersler silinecek. Emin misin?`))) {
       return
     }
     try {

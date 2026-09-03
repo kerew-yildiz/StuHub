@@ -10,6 +10,7 @@ import {
   type ChatMode,
 } from '../api/chat'
 import type { Citation } from '../api/notes'
+import { confirmDialog } from '../stores/confirmStore'
 import { CitationPopup } from './CitationPopup'
 
 interface ChatPanelProps {
@@ -193,7 +194,7 @@ export function ChatPanel({ courseId }: ChatPanelProps) {
   }
 
   const handleClear = async () => {
-    if (!window.confirm('Sohbet geçmişi silinecek. Emin misin?')) return
+    if (!(await confirmDialog('Sohbet geçmişi silinecek. Emin misin?'))) return
     try {
       await clearChat(courseId)
       setMessages([])
