@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 
 import type { Term } from '../api/terms'
 import { formatDate } from '../lib/utils'
@@ -9,20 +9,32 @@ interface TermCardProps {
   onEdit: (term: Term) => void
 }
 
-/** Dönem kartı — ad + tarih aralığı; hover'da hafif yüzey değişimi (stil rehberi). */
+/** Dönem kartı — tüm bar tıklanabilir/gezinilebilir, ad + tarih aralığı (stil rehberi). */
 export function TermCard({ term, onDelete, onEdit }: TermCardProps) {
+  const navigate = useNavigate()
   const range =
     term.start_date || term.end_date
       ? `${term.start_date ? formatDate(term.start_date) : '?'} – ${term.end_date ? formatDate(term.end_date) : '?'}`
       : null
 
   return (
-    <article className="glass-panel glass-interactive flex items-center justify-between p-6">
-      <Link to={`/donemler/${term.id}`} className="min-w-0">
+    <article
+      role="link"
+      tabIndex={0}
+      onClick={() => navigate(`/donemler/${term.id}`)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          navigate(`/donemler/${term.id}`)
+        }
+      }}
+      className="glass-panel glass-interactive flex cursor-pointer items-center justify-between p-6"
+    >
+      <div className="min-w-0">
         <h2 className="text-lg font-semibold">{term.name}</h2>
         {range && <p className="mt-1 text-sm text-stuhub-text-secondary">{range}</p>}
-      </Link>
-      <div className="flex shrink-0 items-center gap-2">
+      </div>
+      <div className="flex shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
         <button
           type="button"
           onClick={() => onEdit(term)}

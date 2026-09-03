@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { coursesApi, type Course, type CourseInput } from '../api/courses'
 import { downloadFile, termArchiveUrl } from '../api/exports'
@@ -97,6 +97,7 @@ function CourseEditForm({
 /** Dönem detay sayfası — ders listesi + yeni ders (Faz 1.2). */
 export function TermDetailPage() {
   const { termId } = useParams<{ termId: string }>()
+  const navigate = useNavigate()
   const numericId = Number(termId)
 
   const [term, setTerm] = useState<Term | null>(null)
@@ -209,16 +210,30 @@ export function TermDetailPage() {
         )}
         {courses.map((course) => (
           <div key={course.id} className="space-y-3">
-            <div className="glass-panel glass-interactive flex items-center justify-between gap-4 p-6">
-              <Link to={`/dersler/${course.id}`} className="min-w-0">
+            <div
+              role="link"
+              tabIndex={0}
+              onClick={() => navigate(`/dersler/${course.id}`)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  navigate(`/dersler/${course.id}`)
+                }
+              }}
+              className="glass-panel glass-interactive flex cursor-pointer items-center justify-between gap-4 p-6"
+            >
+              <div className="min-w-0">
                 <h2 className="text-lg font-semibold">{course.name}</h2>
                 {course.instructor && (
                   <p className="mt-1 text-sm text-stuhub-text-secondary">{course.instructor}</p>
                 )}
-              </Link>
+              </div>
               <button
                 type="button"
-                onClick={() => setEditingCourse(course)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setEditingCourse(course)
+                }}
                 className="shrink-0 rounded-control px-3 py-1.5 text-sm font-medium text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-glass-2-hover"
                 aria-label={`${course.name} dersini düzenle`}
               >

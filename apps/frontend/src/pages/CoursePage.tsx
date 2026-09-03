@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { chaptersApi, type Chapter } from '../api/chapters'
 import { coursesApi, type Course } from '../api/courses'
@@ -123,6 +123,7 @@ function ChapterEditForm({
 /** Ders defteri (notebook) landing sayfası — chapter + materyaller + genel quiz (Faz 1.3/2.2/5). */
 export function CoursePage() {
   const { courseId } = useParams<{ courseId: string }>()
+  const navigate = useNavigate()
   const numericId = Number(courseId)
 
   const [course, setCourse] = useState<Course | null>(null)
@@ -340,14 +341,23 @@ export function CoursePage() {
           )}
           {chapters.map((chapter) => (
             <div key={chapter.id} className="space-y-2">
-              <div className="glass-panel flex items-center justify-between px-5 py-4">
-                <Link
-                  to={`/dersler/${numericId}/defter/${chapter.id}`}
-                  className="font-medium transition-colors duration-[var(--duration-micro)] hover:text-stuhub-accent"
+              <div
+                role="link"
+                tabIndex={0}
+                onClick={() => navigate(`/dersler/${numericId}/defter/${chapter.id}`)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    navigate(`/dersler/${numericId}/defter/${chapter.id}`)
+                  }
+                }}
+                className="glass-panel glass-interactive flex cursor-pointer items-center justify-between px-5 py-4"
+              >
+                <span className="font-medium">{chapter.title}</span>
+                <span
+                  className="flex shrink-0 items-center gap-2"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  {chapter.title}
-                </Link>
-                <span className="flex shrink-0 items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setEditingChapter(chapter)}
