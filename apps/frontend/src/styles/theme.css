@@ -15,15 +15,15 @@
   --stuhub-border: rgba(255, 255, 255, 0.12);
   --stuhub-border-strong: rgba(255, 255, 255, 0.24);
 
-  /* Cam yüzey katmanları — kart/panel her zaman saydam, düz renk değil. Dolgu +
-     blur birlikte "buzlu cam" hissini kurar: dolgu çok düşükse (aşırı saydam) blur
-     zemin dokusunu tamamen eritip paneli görünmez kılar — ikisi dengeli olmalı. */
+  /* Cam yüzey katmanları — kart/panel her zaman saydam, düz renk değil. Net cam hissi
+     istendi (buzlu/frosted DEĞİL) — blur bilinçli olarak düşük, zemin deseni panel
+     arkasında az bozulmuş şekilde net seçilir; kimlik dolgu + kenarlıkla kurulur. */
   --stuhub-glass-1: rgba(255, 255, 255, 0.07);
   --stuhub-glass-1-hover: rgba(255, 255, 255, 0.11);
   --stuhub-glass-2: rgba(255, 255, 255, 0.04);
   --stuhub-glass-2-hover: rgba(255, 255, 255, 0.075);
-  --blur-glass-1: 26px;
-  --blur-glass-2: 16px;
+  --blur-glass-1: 6px;
+  --blur-glass-2: 3px;
   --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.45);
 
   /* Geriye dönük eşleme: eski `bg-stuhub-surface` kullanan bileşenler kırılmasın
