@@ -50,7 +50,7 @@ export function ConfirmDialog() {
             type="button"
             autoFocus
             onClick={() => respond(true)}
-            className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98]"
+            className="btn-primary"
           >
             Onayla
           </button>

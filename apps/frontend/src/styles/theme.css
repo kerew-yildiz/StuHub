@@ -175,6 +175,45 @@
       transition-duration: 1ms;
     }
   }
+
+  /* Birincil eylem butonu — dolu beyaz aksan (TASARIM-SISTEMI.md §4 geri bildirim
+     döngüsü). `disabled` durumu opacity-fade DEĞİL: gerçek bir pasif cam yüzeye
+     (`--stuhub-glass-2`) düşer — "tıklanabilir gibi görünüp tıklanamıyor" hissini
+     önler (Kerem geri bildirimi, 2026-09-04). Sistem geneli TEK buton kalıbı; her
+     bileşen bunu kullanır, kendi disabled stilini icat etmez. */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-control);
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    background-color: var(--stuhub-accent);
+    color: var(--stuhub-on-accent);
+    transition:
+      background-color var(--duration-micro) var(--ease-out-expo),
+      color var(--duration-micro) var(--ease-out-expo),
+      transform var(--duration-micro) var(--ease-out-expo);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background-color: var(--stuhub-accent-hover);
+  }
+  .btn-primary:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+  .btn-primary:disabled {
+    background-color: var(--stuhub-glass-2);
+    color: var(--stuhub-text-muted);
+    cursor: not-allowed;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .btn-primary,
+    .btn-primary:active:not(:disabled) {
+      transform: none;
+      transition-duration: 1ms;
+    }
+  }
 }
 
 html {

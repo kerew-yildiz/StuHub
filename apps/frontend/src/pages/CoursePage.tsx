@@ -110,7 +110,7 @@ function ChapterEditForm({
         <button
           type="submit"
           disabled={busy}
-          className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100"
+          className="btn-primary"
         >
           {busy ? 'Kaydediliyor…' : 'Kaydet'}
         </button>
@@ -334,7 +334,7 @@ export function CoursePage() {
             <button
               type="button"
               onClick={() => setShowChapterForm(true)}
-              className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98]"
+              className="btn-primary"
             >
               Yeni Chapter Ekle
             </button>
@@ -442,13 +442,7 @@ export function CoursePage() {
                     )}
                     {active && <JobProgressBar target={job.progress} />}
                     {!job && (
-                      <button
-                        type="button"
-                        onClick={() => void handleIndex(material.id)}
-                        className="rounded-control bg-stuhub-accent px-3 py-1 text-xs font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98]"
-                      >
-                        İndeksle
-                      </button>
+                      <span className="text-stuhub-text-secondary">Kuyruğa alınıyor…</span>
                     )}
                     {job?.status === 'failed' && (
                       <button
@@ -526,7 +520,7 @@ export function CoursePage() {
             type="button"
             onClick={() => void handleGenerateOverallQuiz()}
             disabled={overallJob?.status === 'running'}
-            className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
+            className="btn-primary"
           >
             {overallJob?.status === 'running' ? 'Üretiliyor…' : 'Yeni Genel Quiz Oluştur'}
           </button>
@@ -629,7 +623,7 @@ export function CoursePage() {
             <button
               type="button"
               onClick={() => setPlayingDue(dueCards)}
-              className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98]"
+              className="btn-primary"
             >
               Çalış
             </button>

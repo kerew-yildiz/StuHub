@@ -86,7 +86,7 @@ export function TermForm({ onSubmit, onCancel }: TermFormProps) {
         <button
           type="submit"
           disabled={busy}
-          className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100"
+          className="btn-primary"
         >
           {busy ? 'Kaydediliyor…' : 'Kaydet'}
         </button>

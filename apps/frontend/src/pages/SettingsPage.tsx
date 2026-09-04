@@ -187,7 +187,7 @@ export function SettingsPage() {
         <button
           type="submit"
           disabled={saveState === 'saving'}
-          className="rounded-sm bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-colors duration-150 hover:bg-stuhub-accent-hover disabled:opacity-60"
+          className="btn-primary"
         >
           {saveState === 'saving' ? 'Kaydediliyor…' : 'Kaydet'}
         </button>

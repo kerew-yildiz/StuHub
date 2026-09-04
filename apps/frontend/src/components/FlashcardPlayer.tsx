@@ -73,7 +73,7 @@ export function FlashcardPlayer({
         <button
           type="button"
           onClick={onFinished}
-          className="mt-5 rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98]"
+          className="btn-primary mt-5"
         >
           Kapat
         </button>

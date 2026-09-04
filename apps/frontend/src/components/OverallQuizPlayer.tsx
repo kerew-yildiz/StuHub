@@ -98,7 +98,7 @@ export function OverallQuizPlayer({ quiz, onDelete }: OverallQuizPlayerProps) {
           <button
             type="button"
             onClick={startFresh}
-            className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98]"
+            className="btn-primary"
           >
             Yeniden çöz
           </button>
@@ -435,7 +435,7 @@ export function OverallQuizPlayer({ quiz, onDelete }: OverallQuizPlayerProps) {
           type="button"
           onClick={() => void handleNext()}
           disabled={!canNext || submitting || !answered}
-          className="rounded-control bg-stuhub-accent px-4 py-2 text-sm font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
+          className="btn-primary"
         >
           {submitting ? 'Değerlendiriliyor…' : isLast ? 'Quiz\'i Bitir' : 'Sonraki soru'}
         </button>
