@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 
+import { alertDialog } from '../stores/alertStore'
+
 import {
   generateGuide,
   getGuide,
@@ -60,8 +62,10 @@ export function GuidePanel({ scope, scopeId }: GuidePanelProps) {
       }
       if (guide.kind === 'summary') setSummary(guide)
       else setConceptMap(guide)
-    } catch {
-      setError('Rehber üretilemedi. Lütfen tekrar deneyin.')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Rehber üretilemedi. Lütfen tekrar deneyin.'
+      setError(message)
+      void alertDialog(message)
     } finally {
       setGenerating(null)
     }

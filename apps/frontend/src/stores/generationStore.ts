@@ -4,6 +4,7 @@ import { streamFlashcardGeneration, type FlashcardSet } from '../api/flashcards'
 import { streamNoteGeneration, type SavedNote } from '../api/notes'
 import { streamOverallQuizGeneration, type OverallQuiz } from '../api/overall'
 import { streamQuizGeneration, type Quiz } from '../api/quizzes'
+import { alertDialog } from './alertStore'
 
 export type GenerationKind = 'note' | 'quiz' | 'overall' | 'flashcards'
 
@@ -59,6 +60,11 @@ export const useGenerationStore = create<GenerationState>((set, get) => {
 
   const finishJob = (kind: GenerationKind, targetId: number, status: 'done' | 'error', error?: string) => {
     update(kind, targetId, { status, error: error ?? null, message: status === 'done' ? 'Tamamlandı.' : (error ?? 'Hata') })
+    if (status === 'error' && error) {
+      // Küçük panel satırı gözden kaçabilir — ön koşul hataları ("önce not oluştur" gibi)
+      // özellikle net görülmeli, o yüzden ayrıca tema uyumlu bir bilgi diyaloğu da gösterilir.
+      void alertDialog(error)
+    }
     window.setTimeout(() => {
       set((state) => ({ jobs: state.jobs.filter((j) => !(j.kind === kind && j.targetId === targetId && (j.status === 'done' || j.status === 'error'))) }))
     }, DONE_JOB_TTL_MS)

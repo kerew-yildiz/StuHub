@@ -63,6 +63,17 @@ function scopeBase(scope: GuideScope, id: number): string {
   return scope === 'chapter' ? `chapters/${id}` : `courses/${id}`
 }
 
+/** 422 hata gövdesinden Türkçe `detail` mesajını çıkarır. */
+async function readErrorDetail(response: Response, fallback: string): Promise<string> {
+  try {
+    const body = (await response.json()) as { detail?: string }
+    if (body.detail) return body.detail
+  } catch {
+    // gövde JSON değilse fallback mesajı kullan
+  }
+  return fallback
+}
+
 /** Rehber üretimini tetikler (POST …/guide?kind=…; LLM çağrısı senkrondur). */
 export async function generateGuide(
   scope: GuideScope,
@@ -73,7 +84,7 @@ export async function generateGuide(
     method: 'POST',
   })
   if (!response.ok) {
-    throw new Error('Rehber üretilemedi. Lütfen tekrar deneyin.')
+    throw new Error(await readErrorDetail(response, 'Rehber üretilemedi. Lütfen tekrar deneyin.'))
   }
   return (await response.json()) as GenerateGuideResult
 }

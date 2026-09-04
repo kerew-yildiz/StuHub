@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Link, Route, Routes } from 'react-router-dom'
 
+import { AlertDialog } from './components/AlertDialog'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { GlobalGenerationPanel } from './components/GlobalGenerationPanel'
 import { HealthBanner } from './components/HealthBanner'
@@ -69,6 +70,7 @@ export default function App() {
         </main>
       </div>
       <ConfirmDialog />
+      <AlertDialog />
     </div>
   )
 }
