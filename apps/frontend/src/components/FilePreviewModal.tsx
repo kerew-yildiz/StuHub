@@ -1,15 +1,23 @@
 import { X } from '@phosphor-icons/react'
 import { useEffect, useRef } from 'react'
 
+import { useAuthedFileUrl } from '../lib/useAuthedFileUrl'
+
 interface FilePreviewModalProps {
-  url: string
+  /** `authFetch` kuralına uygun `/api` ÖNEKSİZ yol (örn. `/materials/5/file`). */
+  path: string
   title: string
   onClose: () => void
 }
 
-/** Dosya önizleme penceresi — PDF'leri tarayıcı görüntüleyicisiyle açar (Faz iyileştirme). */
-export function FilePreviewModal({ url, title, onClose }: FilePreviewModalProps) {
+/** Dosya önizleme penceresi — PDF'leri tarayıcı görüntüleyicisiyle açar (Faz iyileştirme).
+ *
+ * SaaS modda `Authorization` başlığı gerektiği için (`<iframe src>` başlık taşıyamaz)
+ * dosya önce `authFetch` ile blob olarak indirilir, sonra `blob:` URL'i iframe'e verilir
+ * (bkz. `lib/useAuthedFileUrl.ts`). */
+export function FilePreviewModal({ path, title, onClose }: FilePreviewModalProps) {
   const closeRef = useRef<HTMLButtonElement>(null)
+  const { blobUrl, loading, error } = useAuthedFileUrl(path)
 
   useEffect(() => {
     closeRef.current?.focus()
@@ -46,7 +54,17 @@ export function FilePreviewModal({ url, title, onClose }: FilePreviewModalProps)
             <X size={18} aria-hidden="true" />
           </button>
         </div>
-        <iframe src={url} title={title} className="h-[75vh] w-full bg-white" />
+        {error ? (
+          <p className="flex h-[75vh] w-full items-center justify-center text-sm text-stuhub-text-secondary">
+            Dosya yüklenemedi. Lütfen tekrar deneyin.
+          </p>
+        ) : loading || !blobUrl ? (
+          <p className="flex h-[75vh] w-full items-center justify-center text-sm text-stuhub-text-secondary">
+            Yükleniyor…
+          </p>
+        ) : (
+          <iframe src={blobUrl} title={title} className="h-[75vh] w-full bg-white" />
+        )}
       </div>
     </div>
   )

@@ -18,6 +18,7 @@ import { QuizPlayer } from '../components/QuizPlayer'
 import { SlidePreview } from '../components/SlidePreview'
 import { TabBar } from '../components/TabBar'
 import { useAnimatedProgress } from '../lib/useAnimatedProgress'
+import { useAuthedFileUrl } from '../lib/useAuthedFileUrl'
 import { confirmDialog } from '../stores/confirmStore'
 import { useGenerationStore } from '../stores/generationStore'
 
@@ -50,6 +51,7 @@ export function NotebookPage() {
   const [tab, setTab] = useState<NotebookTab>('notes')
   // Guide slides formu — liste doluysa kapalı, boşsa açık başlar (çoklu sunum)
   const [slidesFormOpen, setSlidesFormOpen] = useState(true)
+  const { blobUrl: slidesPdfBlobUrl } = useAuthedFileUrl(slidesPdfUrl)
 
   // Küresel üretim deposu — sayfa değişse bile üretim sürer (madde 2)
   const noteJob = useGenerationStore((s) =>
@@ -88,7 +90,7 @@ export function NotebookPage() {
       if (withMaterial?.material_id != null) {
         const material = await materialsApi.get(withMaterial.material_id)
         if (material.filepath.toLowerCase().endsWith('.pdf')) {
-          setSlidesPdfUrl(`/api/materials/${material.id}/file`)
+          setSlidesPdfUrl(`/materials/${material.id}/file`)
         } else {
           setSlidesPdfUrl(null)
         }
@@ -274,11 +276,17 @@ export function NotebookPage() {
                 Tam ekran aç
               </button>
             </div>
-            <iframe
-              src={slidesPdfUrl}
-              title="Sunum önizleme"
-              className="h-[65vh] w-full bg-white"
-            />
+            {slidesPdfBlobUrl ? (
+              <iframe
+                src={slidesPdfBlobUrl}
+                title="Sunum önizleme"
+                className="h-[65vh] w-full bg-white"
+              />
+            ) : (
+              <p className="flex h-[65vh] w-full items-center justify-center text-sm text-stuhub-text-secondary">
+                Yükleniyor…
+              </p>
+            )}
           </div>
         ) : (
           <div className="mt-5">
@@ -545,7 +553,7 @@ export function NotebookPage() {
 
       {pdfPreview && (
         <FilePreviewModal
-          url={pdfPreview}
+          path={pdfPreview}
           title="Sunum Önizleme"
           onClose={() => setPdfPreview(null)}
         />

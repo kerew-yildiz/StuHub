@@ -476,7 +476,7 @@ export function CoursePage() {
 
       {previewMaterial && (
         <FilePreviewModal
-          url={`/api/materials/${previewMaterial.id}/file`}
+          path={`/materials/${previewMaterial.id}/file`}
           title={previewMaterial.display_name}
           onClose={() => setPreviewMaterial(null)}
         />
