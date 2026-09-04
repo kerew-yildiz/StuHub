@@ -4,8 +4,11 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { coursesApi, type Course, type CourseInput } from '../api/courses'
 import { downloadFile, termArchiveUrl } from '../api/exports'
+import { materialsApi } from '../api/materials'
 import { termsApi, type Term } from '../api/terms'
 import { CourseForm } from '../components/CourseForm'
+import { MaterialUploadForm } from '../components/MaterialUploadForm'
+import { PostCreatePrompt } from '../components/PostCreatePrompt'
 
 type LoadState = 'loading' | 'ready' | 'error'
 
@@ -108,6 +111,7 @@ export function TermDetailPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingCourse, setEditingCourse] = useState<Course | null>(null)
   const [includeFiles, setIncludeFiles] = useState(false)
+  const [newCourse, setNewCourse] = useState<Course | null>(null)
 
   const load = useCallback(async () => {
     if (!numericId) return
@@ -131,8 +135,9 @@ export function TermDetailPage() {
   }, [load])
 
   const handleCreate = async (input: CourseInput) => {
-    await coursesApi.create(numericId, input)
+    const created = await coursesApi.create(numericId, input)
     setShowForm(false)
+    setNewCourse(created)
     await load()
   }
 
@@ -252,6 +257,22 @@ export function TermDetailPage() {
           </div>
         ))}
       </div>
+
+      {newCourse && (
+        <PostCreatePrompt
+          title="Ders kitabını yükle"
+          description={`"${newCourse.name}" eklendi. Şimdi kitap PDF'ini yükleyip indeksleyebilirsin — istersen sonra da yapabilirsin.`}
+          onClose={() => setNewCourse(null)}
+        >
+          <MaterialUploadForm
+            fixedType="textbook"
+            onUpload={async (type, file) => {
+              await materialsApi.upload(newCourse.id, type, file)
+              setNewCourse(null)
+            }}
+          />
+        </PostCreatePrompt>
+      )}
     </section>
   )
 }

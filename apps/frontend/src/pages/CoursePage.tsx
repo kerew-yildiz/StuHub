@@ -9,14 +9,17 @@ import { fetchDueCards, type DueCard } from '../api/flashcards'
 import { indexingApi, type IndexingJob } from '../api/indexing'
 import { materialsApi, type Material } from '../api/materials'
 import { listOverallQuizzes, removeOverallQuiz, type OverallQuiz } from '../api/overall'
+import { slidesApi } from '../api/slides'
 import { ChapterForm } from '../components/ChapterForm'
 import { ChatPanel } from '../components/ChatPanel'
 import { EssayGraderForm } from '../components/EssayGraderForm'
 import { FilePreviewModal } from '../components/FilePreviewModal'
 import { FlashcardPlayer } from '../components/FlashcardPlayer'
 import { GuidePanel } from '../components/GuidePanel'
+import { GuideSlidesForm } from '../components/GuideSlidesForm'
 import { MaterialUploadForm } from '../components/MaterialUploadForm'
 import { OverallQuizPlayer } from '../components/OverallQuizPlayer'
+import { PostCreatePrompt } from '../components/PostCreatePrompt'
 import { TabBar } from '../components/TabBar'
 import { useAnimatedProgress } from '../lib/useAnimatedProgress'
 import { confirmDialog } from '../stores/confirmStore'
@@ -136,6 +139,7 @@ export function CoursePage() {
   const [showChapterForm, setShowChapterForm] = useState(false)
   const [editingChapter, setEditingChapter] = useState<Chapter | null>(null)
   const [previewMaterial, setPreviewMaterial] = useState<Material | null>(null)
+  const [newChapter, setNewChapter] = useState<Chapter | null>(null)
   const [tab, setTab] = useState<CourseTab>('overview')
 
   // genel quiz durumu — küresel üretim deposu (madde 2)
@@ -227,8 +231,9 @@ export function CoursePage() {
   }, [hasActiveJobs, refreshJobs])
 
   const handleCreateChapter = async (title: string) => {
-    await chaptersApi.create(numericId, title)
+    const created = await chaptersApi.create(numericId, title)
     setShowChapterForm(false)
+    setNewChapter(created)
     await load()
   }
 
@@ -480,6 +485,21 @@ export function CoursePage() {
           title={previewMaterial.display_name}
           onClose={() => setPreviewMaterial(null)}
         />
+      )}
+
+      {newChapter && (
+        <PostCreatePrompt
+          title="Chapter sunumunu yükle"
+          description={`"${newChapter.title}" eklendi. Şimdi hocanın sunumunu (guide slides) yükleyebilirsin — bu, not üretiminin rehberi olur. İstersen sonra da yapabilirsin.`}
+          onClose={() => setNewChapter(null)}
+        >
+          <GuideSlidesForm
+            onUpload={async (file) => {
+              await slidesApi.upload(newChapter.id, file)
+              setNewChapter(null)
+            }}
+          />
+        </PostCreatePrompt>
       )}
 
       {tab === 'quiz' && (
