@@ -1,4 +1,4 @@
-import { BASE_URL } from './client'
+import { authFetch } from './client'
 
 /** Ödev değerlendirme ölçütü (backend ile birebir). */
 export interface EssayCriterion {
@@ -59,7 +59,7 @@ export async function gradeEssay(
   const trimmedRubric = rubric.trim()
   if (trimmedRubric) body.rubric = trimmedRubric
 
-  const response = await fetch(`${BASE_URL}/courses/${courseId}/essays/grade`, {
+  const response = await authFetch(`/courses/${courseId}/essays/grade`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -74,7 +74,7 @@ export async function gradeEssay(
 
 /** Dersin ödev değerlendirme geçmişi (yeniden eskiye). */
 export async function listEssays(courseId: number): Promise<EssayRecord[]> {
-  const response = await fetch(`${BASE_URL}/courses/${courseId}/essays`)
+  const response = await authFetch(`/courses/${courseId}/essays`)
   if (!response.ok) return []
   return (await response.json()) as EssayRecord[]
 }

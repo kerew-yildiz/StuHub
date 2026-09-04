@@ -1,4 +1,4 @@
-import { BASE_URL } from './client'
+import { authFetch } from './client'
 
 /** İçe aktarılan ders eşlemesi (eski id → yeni id). */
 export interface ImportedCourse {
@@ -24,7 +24,7 @@ export async function importArchive(
   form.append('file', file)
   form.append('include_files', includeFiles ? 'true' : 'false')
 
-  const response = await fetch(`${BASE_URL}/archive/import`, {
+  const response = await authFetch(`/archive/import`, {
     method: 'POST',
     body: form,
   })

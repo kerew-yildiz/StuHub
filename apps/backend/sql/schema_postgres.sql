@@ -290,17 +290,20 @@ BEGIN
     ]
     LOOP
         EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
+        EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);
         EXECUTE format(
-            'CREATE POLICY IF NOT EXISTS tenant_isolation ON %I '
+            'CREATE POLICY tenant_isolation ON %I '
             'USING (tenant_id = auth.uid()) WITH CHECK (tenant_id = auth.uid())', t
         );
     END LOOP;
 END $$;
 
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS own_profile ON profiles
+DROP POLICY IF EXISTS own_profile ON profiles;
+CREATE POLICY own_profile ON profiles
     USING (id = auth.uid()) WITH CHECK (id = auth.uid());
 
 ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS own_subscriptions ON subscriptions
+DROP POLICY IF EXISTS own_subscriptions ON subscriptions;
+CREATE POLICY own_subscriptions ON subscriptions
     USING (tenant_id = auth.uid());

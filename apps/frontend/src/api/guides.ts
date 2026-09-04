@@ -1,4 +1,4 @@
-import { BASE_URL } from './client'
+import { authFetch } from './client'
 
 /** Rehber türü (backend `kind` parametresi ile birebir). */
 export type GuideKind = 'summary' | 'concept_map'
@@ -69,7 +69,7 @@ export async function generateGuide(
   id: number,
   kind: GuideKind,
 ): Promise<GenerateGuideResult> {
-  const response = await fetch(`${BASE_URL}/${scopeBase(scope, id)}/guide?kind=${kind}`, {
+  const response = await authFetch(`/${scopeBase(scope, id)}/guide?kind=${kind}`, {
     method: 'POST',
   })
   if (!response.ok) {
@@ -85,7 +85,7 @@ export async function getGuide(
   kind: GuideKind,
 ): Promise<Guide | null> {
   try {
-    const response = await fetch(`${BASE_URL}/${scopeBase(scope, id)}/guides?kind=${kind}`)
+    const response = await authFetch(`/${scopeBase(scope, id)}/guides?kind=${kind}`)
     if (!response.ok) return null
     return (await response.json()) as Guide
   } catch {

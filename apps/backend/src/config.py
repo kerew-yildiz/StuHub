@@ -52,7 +52,12 @@ class Settings(BaseSettings):
     # Boşsa yerel/test modu: aiosqlite + auth yok (mevcut davranış korunur).
     # Doluysa (postgresql://...) SaaS modu: asyncpg + Supabase Auth zorunlu.
     database_url: str = Field(default="", alias="DATABASE_URL")
-    # Supabase proje ayarları → JWT Settings → JWT Secret (HS256 paylaşılan sır).
+    # Supabase proje URL'i — JWKS uç noktası (`{url}/auth/v1/.well-known/jwks.json`)
+    # buradan türetilir (yeni asimetrik imzalama, ES256). Frontend'le aynı env adını
+    # paylaşır (VITE_SUPABASE_URL) — tek değer, tek kaynak.
+    supabase_url: str = Field(default="", alias="VITE_SUPABASE_URL")
+    # Eski (Legacy) HS256 paylaşılan sır — yalnızca JWKS'i olmayan eski projeler için
+    # geriye dönük uyumluluk yedeği (bkz. src/auth.py).
     supabase_jwt_secret: str = Field(default="", alias="SUPABASE_JWT_SECRET")
     # Lemon Squeezy (sandbox modunda test_mode=true) — ücretli plan checkout + webhook.
     lemonsqueezy_api_key: str = Field(default="", alias="LEMONSQUEEZY_API_KEY")

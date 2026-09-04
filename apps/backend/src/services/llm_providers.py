@@ -12,9 +12,10 @@ güvenilirliği, uzun materyal bağlamı, atıflı akıl yürütme):
 
 1. Google Gemini 2.5 Flash — en iyi genel yetenek: 1M token bağlam (RAG için
    kritik), güçlü Türkçe, native JSON modu, günlük 1500 istek (en geniş kota).
-2. OpenRouter ücretsiz havuzu (DeepSeek R1 free) — güçlü akıl yürütme (ödev
-   değerlendirme, quiz mantığı) ama günlük kota çok dar (50-1000) ve ücretsiz
-   model listesi haftalık değişebilir.
+2. OpenRouter ücretsiz havuzu (Nvidia Nemotron 3 Ultra 550B) — güçlü akıl yürütme
+   (ödev değerlendirme, quiz mantığı), 1M token bağlam; ücretsiz model listesi
+   haftalık değişebilir (2026-09-03: DeepSeek R1 free slug kaldırılmış, canlı API
+   ile doğrulanıp bu modelle değiştirildi — bkz. Backlog.md).
 3. Groq (Llama 3.3 70B) — en hızlı ve en geniş kota (günlük 14.400 istek),
    yetenek olarak ilk ikisinin gerisinde ama sistemi ayakta tutan hacim çapası.
    YETENEKLER/08-ucretsiz-arac-envanteri.md ile uyumlu (zaten onaylı araç).
@@ -55,11 +56,11 @@ PROVIDER_CHAIN: list[LLMProvider] = [
     ),
     LLMProvider(
         name="openrouter",
-        label="OpenRouter — DeepSeek R1 (ücretsiz)",
+        label="OpenRouter — Nemotron 3 Ultra 550B (ücretsiz)",
         base_url="https://openrouter.ai/api/v1",
-        model="deepseek/deepseek-r1:free",
+        model="nvidia/nemotron-3-ultra-550b-a55b:free",
         api_key_setting="openrouter_api_key",
-        max_context_tokens=64_000,
+        max_context_tokens=1_000_000,
     ),
     LLMProvider(
         name="groq",

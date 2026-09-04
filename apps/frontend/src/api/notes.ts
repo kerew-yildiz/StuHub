@@ -1,4 +1,4 @@
-import { BASE_URL } from './client'
+import { authFetch } from './client'
 
 /** Kayıtlı not (backend NoteOut ile birebir). */
 export interface Citation {
@@ -44,7 +44,7 @@ export async function streamNoteGeneration(
 ): Promise<void> {
   let response: Response
   try {
-    response = await fetch(`${BASE_URL}/chapters/${chapterId}/notes`, { method: 'POST' })
+    response = await authFetch(`/chapters/${chapterId}/notes`, { method: 'POST' })
   } catch {
     handlers.onError?.('Not üretimi başlatılamadı. Lütfen tekrar deneyin.')
     return
@@ -98,14 +98,14 @@ export async function streamNoteGeneration(
 
 /** Chapter'ın en güncel kayıtlı notu. */
 export async function getNote(chapterId: number): Promise<SavedNote | null> {
-  const response = await fetch(`${BASE_URL}/chapters/${chapterId}/notes`)
+  const response = await authFetch(`/chapters/${chapterId}/notes`)
   if (!response.ok) return null
   return (await response.json()) as SavedNote
 }
 
 /** Notu PDF olarak indirir (Türkçe karakter destekli). */
 export async function exportNotePdf(noteId: number): Promise<void> {
-  const response = await fetch(`${BASE_URL}/notes/${noteId}/export`)
+  const response = await authFetch(`/notes/${noteId}/export`)
   if (!response.ok) {
     throw new Error('PDF oluşturulamadı. Lütfen tekrar deneyin.')
   }
@@ -132,7 +132,7 @@ export interface ResolvedChunk {
 
 export async function resolveCitation(chunkId: string): Promise<ResolvedChunk | null> {
   try {
-    const response = await fetch(`${BASE_URL}/citations/${encodeURIComponent(chunkId)}`)
+    const response = await authFetch(`/citations/${encodeURIComponent(chunkId)}`)
     if (!response.ok) return null
     return (await response.json()) as ResolvedChunk
   } catch {

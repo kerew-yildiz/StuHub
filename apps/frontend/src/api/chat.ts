@@ -1,4 +1,4 @@
-import { BASE_URL } from './client'
+import { authFetch } from './client'
 
 /** Sohbet modu (backend sözleşmesi: direct | socratic | quiz). */
 export type ChatMode = 'direct' | 'socratic' | 'quiz'
@@ -47,7 +47,7 @@ export async function streamChat(
 ): Promise<void> {
   let response: Response
   try {
-    response = await fetch(`${BASE_URL}/courses/${courseId}/chat`, {
+    response = await authFetch(`/courses/${courseId}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message, mode }),
@@ -106,7 +106,7 @@ export async function streamChat(
 /** Dersin sohbet geçmişini döndürür (kronolojik, son 100). */
 export async function listChat(courseId: number): Promise<ChatMessage[]> {
   try {
-    const response = await fetch(`${BASE_URL}/courses/${courseId}/chat`)
+    const response = await authFetch(`/courses/${courseId}/chat`)
     if (!response.ok) return []
     const body = (await response.json()) as { messages?: ChatMessage[] }
     return body.messages ?? []
@@ -117,7 +117,7 @@ export async function listChat(courseId: number): Promise<ChatMessage[]> {
 
 /** Dersin sohbet geçmişini temizler (DELETE → 204). */
 export async function clearChat(courseId: number): Promise<void> {
-  const response = await fetch(`${BASE_URL}/courses/${courseId}/chat`, { method: 'DELETE' })
+  const response = await authFetch(`/courses/${courseId}/chat`, { method: 'DELETE' })
   if (!response.ok) {
     throw new Error('Sohbet geçmişi silinemedi.')
   }

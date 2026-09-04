@@ -25,12 +25,51 @@ from __future__ import annotations
 
 import re
 from collections.abc import Awaitable, Callable
+from datetime import date, datetime
 
 import asyncpg
 
 _INSERT_RE = re.compile(r"^\s*INSERT\s+INTO", re.IGNORECASE)
 _RETURNING_RE = re.compile(r"\bRETURNING\b", re.IGNORECASE)
 _STATUS_TAG_RE = re.compile(r"^(\w+)\s*(\d+)?", re.IGNORECASE)
+
+
+class _Row:
+    """asyncpg.Record'a benzer, ama `datetime`/`date` değerleri ISO string'e çevrilmiş satır.
+
+    SQLite'ta (aiosqlite) `TIMESTAMP` kolonları zaten TEXT olarak saklanır/dönülür —
+    Pydantic modelleri (`TermOut.created_at: str` gibi) bunu varsayar. Postgres/asyncpg
+    ise gerçek `datetime`/`date` nesnesi döner; dönüştürülmezse `pydantic.ValidationError`
+    fırlar (bkz. routers/terms.py `TermOut`).
+
+    Router/servis kodu hem `dict(row)` / `row["kolon"]` (mapping) hem de `for a, b in row`
+    (sıralı sequence — `aiosqlite.Row` ve `asyncpg.Record`'un ortak, tuple'a benzer
+    davranışı, bkz. routers/settings.py `for key, value in rows`) kalıplarını kullanıyor.
+    Düz `dict`'e çevirmek ikincisini kırar (dict iterasyonu anahtar döner, değer değil) —
+    bu sınıf ikisini de doğru destekler.
+    """
+
+    __slots__ = ("_keys", "_values")
+
+    def __init__(self, record: asyncpg.Record) -> None:
+        self._keys = list(record.keys())
+        self._values = tuple(
+            v.isoformat() if isinstance(v, datetime | date) else v for v in record.values()
+        )
+
+    def keys(self) -> list[str]:
+        return self._keys
+
+    def __getitem__(self, key: str | int):
+        if isinstance(key, str):
+            return self._values[self._keys.index(key)]
+        return self._values[key]
+
+    def __iter__(self):
+        return iter(self._values)
+
+    def __len__(self) -> int:
+        return len(self._values)
 
 
 def _translate_placeholders(sql: str) -> str:
@@ -66,17 +105,17 @@ class PgCursor:
         self.rowcount = rowcount
         self.lastrowid = lastrowid
 
-    async def fetchone(self) -> asyncpg.Record | None:
+    async def fetchone(self) -> _Row | None:
         if self._pos >= len(self._rows):
             return None
         row = self._rows[self._pos]
         self._pos += 1
-        return row
+        return _Row(row)
 
-    async def fetchall(self) -> list[asyncpg.Record]:
+    async def fetchall(self) -> list[_Row]:
         rows = self._rows[self._pos :]
         self._pos = len(self._rows)
-        return rows
+        return [_Row(r) for r in rows]
 
 
 class PgConnection:
@@ -97,8 +136,16 @@ class PgConnection:
         has_returning = _RETURNING_RE.search(translated) is not None
 
         if is_insert and not has_returning:
-            translated = translated.rstrip().rstrip(";") + " RETURNING id"
-            row = await self._raw.fetchrow(translated, *params)
+            attempt = translated.rstrip().rstrip(";") + " RETURNING id"
+            try:
+                row = await self._raw.fetchrow(attempt, *params)
+            except asyncpg.exceptions.UndefinedColumnError:
+                # Hedef tablonun `id` kolonu yok (ör. `settings`: PK `key`) — lastrowid
+                # zaten kullanılmayacak, düz INSERT/UPSERT olarak çalıştır.
+                status = await self._raw.execute(translated, *params)
+                match = _STATUS_TAG_RE.match(status or "")
+                rowcount = int(match.group(2)) if match and match.group(2) else 0
+                return PgCursor(rows=[], rowcount=rowcount, lastrowid=None)
             lastrowid = row["id"] if row else None
             return PgCursor(rows=[row] if row else [], rowcount=1 if row else 0, lastrowid=lastrowid)
 

@@ -1,4 +1,4 @@
-import { BASE_URL } from './client'
+import { authFetch } from './client'
 import type { Citation } from './notes'
 
 /** Flashcard (backend kart şeması ile birebir — YETENEKLER/09). */
@@ -61,7 +61,7 @@ export async function streamFlashcardGeneration(
 ): Promise<void> {
   let response: Response
   try {
-    response = await fetch(`${BASE_URL}/chapters/${chapterId}/flashcards`, { method: 'POST' })
+    response = await authFetch(`/chapters/${chapterId}/flashcards`, { method: 'POST' })
   } catch {
     handlers.onError?.('Kart üretimi başlatılamadı. Lütfen tekrar deneyin.')
     return
@@ -122,28 +122,28 @@ export async function streamFlashcardGeneration(
 
 /** Chapter'ın TÜM flashcard setleri (yeniden eskiye). */
 export async function listFlashcardSets(chapterId: number): Promise<FlashcardSet[]> {
-  const response = await fetch(`${BASE_URL}/chapters/${chapterId}/flashcard-sets`)
+  const response = await authFetch(`/chapters/${chapterId}/flashcard-sets`)
   if (!response.ok) return []
   return (await response.json()) as FlashcardSet[]
 }
 
 /** Tek flashcard seti (404 ise null). */
 export async function getFlashcardSet(setId: number): Promise<FlashcardSet | null> {
-  const response = await fetch(`${BASE_URL}/flashcard-sets/${setId}`)
+  const response = await authFetch(`/flashcard-sets/${setId}`)
   if (!response.ok) return null
   return (await response.json()) as FlashcardSet
 }
 
 /** Flashcard setini kalıcı olarak siler (204). */
 export async function deleteFlashcardSet(setId: number): Promise<void> {
-  await fetch(`${BASE_URL}/flashcard-sets/${setId}`, { method: 'DELETE' })
+  await authFetch(`/flashcard-sets/${setId}`, { method: 'DELETE' })
 }
 
 /** Dersin bugünkü due kartları (kurs bazlı; vadesi geçen önce). */
 export async function fetchDueCards(courseId: number, limit = 20): Promise<DueCard[]> {
   try {
-    const response = await fetch(
-      `${BASE_URL}/courses/${courseId}/flashcards/due?limit=${limit}`,
+    const response = await authFetch(
+      `/courses/${courseId}/flashcards/due?limit=${limit}`,
     )
     if (!response.ok) return []
     return (await response.json()) as DueCard[]
@@ -158,7 +158,7 @@ export async function submitReview(
   cardIndex: number,
   rating: Rating,
 ): Promise<ReviewResult> {
-  const response = await fetch(`${BASE_URL}/flashcard-sets/${setId}/reviews`, {
+  const response = await authFetch(`/flashcard-sets/${setId}/reviews`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ card_index: cardIndex, rating }),

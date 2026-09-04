@@ -5,11 +5,15 @@ sabit `LOCAL_TENANT_ID` kullanılır, bugünkü tek-kullanıcı davranışı bir
 (KARAR-SAAS-GECISI.md soru 1/7 — yerel sürüm auth'suz kalır).
 
 SaaS modunda her istek `Authorization: Bearer <supabase-access-token>` taşımak
-zorundadır. İmza `SUPABASE_JWT_SECRET` (Supabase proje ayarları → JWT Settings →
-Legacy JWT Secret, HS256) ile doğrulanır; `sub` claim'i `tenant_id` (Supabase
-`auth.users.id`, uuid) olarak kullanılır. İlk geçerli istekte `profiles` tablosuna
-otomatik bir satır açılır (auto-provision) — Supabase Auth kullanıcı kaydını
-kendi yönetir, uygulama yalnızca profil/plan satırını senkron tutar.
+zorundadır. İmza doğrulaması iki yolu destekler:
+- **Yeni projeler (varsayılan, ES256/JWKS):** Supabase artık access token'ları asimetrik
+  anahtarla imzalıyor; `SUPABASE_URL`den türetilen `{url}/auth/v1/.well-known/jwks.json`
+  uç noktasından açık anahtar çekilir (`jwt.PyJWKClient`, önbellekli).
+- **Eski projeler (Legacy JWT Secret, HS256):** `SUPABASE_JWT_SECRET` ayarlıysa ve JWKS
+  yoksa/başarısızsa buna düşülür.
+`sub` claim'i `tenant_id` (Supabase `auth.users.id`, uuid) olarak kullanılır. İlk geçerli
+istekte `profiles` tablosuna otomatik bir satır açılır (auto-provision) — Supabase Auth
+kullanıcı kaydını kendi yönetir, uygulama yalnızca profil/plan satırını senkron tutar.
 
 `require_admin`: `/api/settings` gibi kiracıya özel OLMAYAN, operatör-seviyeli
 uçlar için (bkz. schema_postgres.sql `settings` tablosu yorumu). Yerel modda
@@ -29,15 +33,44 @@ LOCAL_TENANT_ID = "local"
 # Supabase access token'ları bu audience ile imzalanır (GoTrue varsayılanı).
 _JWT_AUDIENCE = "authenticated"
 
+_jwk_client: jwt.PyJWKClient | None = None
+
 
 class AuthError(HTTPException):
     def __init__(self, detail: str, status_code: int = 401) -> None:
         super().__init__(status_code=status_code, detail=detail)
 
 
+def _get_jwk_client() -> jwt.PyJWKClient | None:
+    global _jwk_client
+    if not settings.supabase_url:
+        return None
+    if _jwk_client is None:
+        jwks_url = settings.supabase_url.rstrip("/") + "/auth/v1/.well-known/jwks.json"
+        _jwk_client = jwt.PyJWKClient(jwks_url, cache_keys=True, lifespan=3600)
+    return _jwk_client
+
+
 def _decode_token(token: str) -> dict:
+    jwk_client = _get_jwk_client()
+    if jwk_client is not None:
+        try:
+            signing_key = jwk_client.get_signing_key_from_jwt(token)
+            return jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=["ES256", "RS256"],
+                audience=_JWT_AUDIENCE,
+            )
+        except jwt.PyJWTError as exc:
+            if not settings.supabase_jwt_secret:
+                raise AuthError("Oturum geçersiz veya süresi dolmuş.") from exc
+            # JWKS başarısız (ör. eski proje, henüz asimetrik anahtara geçmemiş) —
+            # Legacy HS256 sırra düş.
     if not settings.supabase_jwt_secret:
-        raise AuthError("Sunucu SaaS auth için yapılandırılmamış (SUPABASE_JWT_SECRET eksik).")
+        raise AuthError(
+            "Sunucu SaaS auth için yapılandırılmamış (VITE_SUPABASE_URL/SUPABASE_JWT_SECRET eksik)."
+        )
     try:
         return jwt.decode(
             token,

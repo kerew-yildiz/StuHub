@@ -1,4 +1,4 @@
-import { BASE_URL } from './client'
+import { authFetch } from './client'
 
 /** Quiz veri modelleri (backend ile birebir). */
 export interface QuizCitation {
@@ -78,7 +78,7 @@ export async function streamQuizGeneration(
 ): Promise<void> {
   let response: Response
   try {
-    response = await fetch(`${BASE_URL}/chapters/${chapterId}/quiz`, { method: 'POST' })
+    response = await authFetch(`/chapters/${chapterId}/quiz`, { method: 'POST' })
   } catch {
     handlers.onError?.('Quiz üretimi başlatılamadı. Lütfen tekrar deneyin.')
     return
@@ -124,21 +124,21 @@ export async function streamQuizGeneration(
 
 /** Chapter'ın en güncel quizi. */
 export async function getQuiz(chapterId: number): Promise<Quiz | null> {
-  const response = await fetch(`${BASE_URL}/chapters/${chapterId}/quiz`)
+  const response = await authFetch(`/chapters/${chapterId}/quiz`)
   if (!response.ok) return null
   return (await response.json()) as Quiz
 }
 
 /** Chapter'ın TÜM quizleri (yeniden eskiye) — geçmiş korunur. */
 export async function listQuizzes(chapterId: number): Promise<Quiz[]> {
-  const response = await fetch(`${BASE_URL}/chapters/${chapterId}/quizzes`)
+  const response = await authFetch(`/chapters/${chapterId}/quizzes`)
   if (!response.ok) return []
   return (await response.json()) as Quiz[]
 }
 
 /** Quiz'i kalıcı olarak siler. */
 export async function removeQuiz(quizId: number): Promise<void> {
-  await fetch(`${BASE_URL}/quizzes/${quizId}`, { method: 'DELETE' })
+  await authFetch(`/quizzes/${quizId}`, { method: 'DELETE' })
 }
 
 /** Kayıtlı deneme (cevaplar kalıcıdır). */
@@ -151,13 +151,13 @@ export interface SavedAttempt {
 }
 
 export async function listAttempts(quizId: number): Promise<SavedAttempt[]> {
-  const response = await fetch(`${BASE_URL}/quizzes/${quizId}/attempts`)
+  const response = await authFetch(`/quizzes/${quizId}/attempts`)
   if (!response.ok) return []
   return (await response.json()) as SavedAttempt[]
 }
 
 export async function removeAttempt(attemptId: number): Promise<void> {
-  await fetch(`${BASE_URL}/quiz-attempts/${attemptId}`, { method: 'DELETE' })
+  await authFetch(`/quiz-attempts/${attemptId}`, { method: 'DELETE' })
 }
 
 /** Cevapları gönderir; anında feedback döner (backend'de LLM çağrısı yok). */
@@ -165,7 +165,7 @@ export async function submitAttempt(
   quizId: number,
   answers: Array<{ qid: string; selected_index: number }>,
 ): Promise<AttemptOutcome> {
-  const response = await fetch(`${BASE_URL}/quizzes/${quizId}/attempts`, {
+  const response = await authFetch(`/quizzes/${quizId}/attempts`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ answers }),

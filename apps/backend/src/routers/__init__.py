@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from . import (
+    billing,
     chapters,
     chat,
     courses,
@@ -36,3 +37,4 @@ api_router.include_router(overall.router)
 api_router.include_router(exports.router)
 api_router.include_router(v2_tools.router)
 api_router.include_router(settings_router.router)
+api_router.include_router(billing.router)

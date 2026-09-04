@@ -1,4 +1,4 @@
-import { BASE_URL } from './client'
+import { authFetch } from './client'
 
 /** Genel quiz veri modelleri (backend ile birebir; answer_key'ler frontend'e gelmez). */
 export interface OverallCitation {
@@ -87,7 +87,7 @@ export async function streamOverallQuizGeneration(
 ): Promise<void> {
   let response: Response
   try {
-    response = await fetch(`${BASE_URL}/courses/${courseId}/overall-quiz`, { method: 'POST' })
+    response = await authFetch(`/courses/${courseId}/overall-quiz`, { method: 'POST' })
   } catch {
     handlers.onError?.('Genel quiz üretimi başlatılamadı. Lütfen tekrar deneyin.')
     return
@@ -133,21 +133,21 @@ export async function streamOverallQuizGeneration(
 
 /** Dersin en güncel genel quizi (answer_key'siz). */
 export async function getOverallQuiz(courseId: number): Promise<OverallQuiz | null> {
-  const response = await fetch(`${BASE_URL}/courses/${courseId}/overall-quiz`)
+  const response = await authFetch(`/courses/${courseId}/overall-quiz`)
   if (!response.ok) return null
   return (await response.json()) as OverallQuiz
 }
 
 /** Dersin TÜM genel quizleri (yeniden eskiye) — geçmiş korunur. */
 export async function listOverallQuizzes(courseId: number): Promise<OverallQuiz[]> {
-  const response = await fetch(`${BASE_URL}/courses/${courseId}/overall-quizzes`)
+  const response = await authFetch(`/courses/${courseId}/overall-quizzes`)
   if (!response.ok) return []
   return (await response.json()) as OverallQuiz[]
 }
 
 /** Genel quiz'i kalıcı olarak siler. */
 export async function removeOverallQuiz(quizId: number): Promise<void> {
-  await fetch(`${BASE_URL}/overall-quizzes/${quizId}`, { method: 'DELETE' })
+  await authFetch(`/overall-quizzes/${quizId}`, { method: 'DELETE' })
 }
 
 /** Kayıtlı genel quiz denemesi. */
@@ -159,13 +159,13 @@ export interface SavedOverallAttempt {
 }
 
 export async function listOverallAttempts(quizId: number): Promise<SavedOverallAttempt[]> {
-  const response = await fetch(`${BASE_URL}/overall-quizzes/${quizId}/attempts`)
+  const response = await authFetch(`/overall-quizzes/${quizId}/attempts`)
   if (!response.ok) return []
   return (await response.json()) as SavedOverallAttempt[]
 }
 
 export async function removeOverallAttempt(attemptId: number): Promise<void> {
-  await fetch(`${BASE_URL}/overall-attempts/${attemptId}`, { method: 'DELETE' })
+  await authFetch(`/overall-attempts/${attemptId}`, { method: 'DELETE' })
 }
 
 /** Tüm cevapları gönderir; kapalı sorular anında, açık uçlular Essay Grader ile puanlanır. */
@@ -173,9 +173,8 @@ export async function submitOverallAttempt(
   quizId: number,
   answers: Array<{ qid: number; value: number | string }>,
 ): Promise<OverallOutcome> {
-  const response = await fetch(`${BASE_URL}/overall-quizzes/${quizId}/attempts`, {
+  const response = await authFetch(`/overall-quizzes/${quizId}/attempts`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ answers }),
   })
   if (!response.ok) {

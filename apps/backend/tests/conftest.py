@@ -14,9 +14,15 @@ from src.services.llm_providers import PROVIDER_CHAIN
 
 
 @pytest.fixture(autouse=True)
-def _reset_llm_provider_keys():
+def _reset_llm_provider_keys(monkeypatch):
     """`llm_service._apply_table_config` global `settings` nesnesini doğrudan mutasyona uğratır
-    (monkeypatch takibi dışında) — testler arası sızıntıyı önlemek için her testte sıfırlanır."""
+    (monkeypatch takibi dışında) — testler arası sızıntıyı önlemek için her testte sıfırlanır.
+
+    `database_url` de burada sıfırlanır: `.env`'de gerçek bir SaaS `DATABASE_URL` tanımlıysa
+    (geliştirici makinesinde SaaS test ediliyorsa) testler yine de her zaman yerel/SQLite modda
+    (`saas_mode=False`) çalışmalı — aksi halde tüm test paketi gerçek Postgres'e bağlanmaya
+    çalışır, ağ üzerinden yavaşlar/asılır ve gerçek veritabanına test verisi yazar."""
+    monkeypatch.setattr(settings, "database_url", "")
     for provider in PROVIDER_CHAIN:
         setattr(settings, provider.api_key_setting, "")
     yield

@@ -33,9 +33,13 @@ class QuotaExceededError(AuthError):
         )
 
 
-def _month_start_iso() -> str:
+def _month_start() -> datetime:
+    """Bu ayın başlangıcı (UTC). Not: bu fonksiyon yalnızca SaaS/Postgres yolunda
+    çağrılır (`enforce_quota` yerel modda erken döner) — asyncpg, `TIMESTAMPTZ`
+    sütunuyla karşılaştırılan parametrenin string değil gerçek `datetime` olmasını
+    şart koşar (SQLite'ın aksine, tip zorlaması yapmaz)."""
     now = datetime.now(timezone.utc)
-    return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+    return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
 
 async def _plan_and_quota(tenant_id: str) -> tuple[str, int | None]:
@@ -62,7 +66,7 @@ async def _usage_this_month(tenant_id: str) -> int:
     try:
         cursor = await db.execute(
             "SELECT COUNT(*) AS n FROM generation_logs WHERE tenant_id = ? AND created_at >= ?",
-            (tenant_id, _month_start_iso()),
+            (tenant_id, _month_start()),
         )
         row = await cursor.fetchone()
     finally:
