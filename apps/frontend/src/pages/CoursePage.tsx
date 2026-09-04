@@ -1,6 +1,6 @@
 import { PencilSimple, X } from '@phosphor-icons/react'
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 
 import { chaptersApi, type Chapter } from '../api/chapters'
 import { coursesApi, type Course } from '../api/courses'
@@ -10,6 +10,8 @@ import { indexingApi, type IndexingJob } from '../api/indexing'
 import { materialsApi, type Material } from '../api/materials'
 import { listOverallQuizzes, removeOverallQuiz, type OverallQuiz } from '../api/overall'
 import { slidesApi } from '../api/slides'
+import { termsApi } from '../api/terms'
+import { Breadcrumb } from '../components/Breadcrumb'
 import { ChapterForm } from '../components/ChapterForm'
 import { ChatPanel } from '../components/ChatPanel'
 import { EssayGraderForm } from '../components/EssayGraderForm'
@@ -131,6 +133,7 @@ export function CoursePage() {
   const numericId = Number(courseId)
 
   const [course, setCourse] = useState<Course | null>(null)
+  const [termName, setTermName] = useState<string | null>(null)
   const [chapters, setChapters] = useState<Chapter[]>([])
   const [materials, setMaterials] = useState<Material[]>([])
   const [jobs, setJobs] = useState<IndexingJob[]>([])
@@ -183,6 +186,10 @@ export function CoursePage() {
       setOverallQuizzes(quizList)
       setDueCards(dueCardList)
       setState('ready')
+      termsApi
+        .get(courseData.term_id)
+        .then((term) => setTermName(term.name))
+        .catch(() => setTermName(null))
     } catch {
       setState('error')
       setError('Ders yüklenemedi. Lütfen tekrar deneyin.')
@@ -282,12 +289,13 @@ export function CoursePage() {
 
   return (
     <section>
-      <Link
-        to={`/donemler/${course?.term_id ?? ''}`}
-        className="text-sm font-medium text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:text-stuhub-text"
-      >
-        ← Döneme dön
-      </Link>
+      <Breadcrumb
+        items={[
+          { label: 'Dönemler', to: '/' },
+          { label: termName ?? 'Dönem', to: `/donemler/${course?.term_id ?? ''}` },
+          { label: course?.name ?? 'Ders' },
+        ]}
+      />
       <div className="mt-2">
         <div className="flex items-center gap-3">
           <h1 className="text-3xl font-semibold">{course?.name ?? 'Ders'}</h1>

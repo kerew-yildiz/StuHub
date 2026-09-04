@@ -1,14 +1,17 @@
 import { X } from '@phosphor-icons/react'
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 
 import { chaptersApi, type Chapter } from '../api/chapters'
+import { coursesApi } from '../api/courses'
 import { downloadFile, flashcardSetExportUrl, noteMarkdownUrl } from '../api/exports'
 import { deleteFlashcardSet, listFlashcardSets, type DueCard, type FlashcardSet } from '../api/flashcards'
 import { materialsApi } from '../api/materials'
 import { exportNotePdf, getNote, type SavedNote } from '../api/notes'
 import { listQuizzes, removeQuiz, type Quiz } from '../api/quizzes'
 import { slidesApi, type Slide } from '../api/slides'
+import { termsApi } from '../api/terms'
+import { Breadcrumb } from '../components/Breadcrumb'
 import { FilePreviewModal } from '../components/FilePreviewModal'
 import { FlashcardPlayer } from '../components/FlashcardPlayer'
 import { GuidePanel } from '../components/GuidePanel'
@@ -39,6 +42,9 @@ export function NotebookPage() {
   const numericChapterId = Number(chapterId)
 
   const [chapter, setChapter] = useState<Chapter | null>(null)
+  const [courseName, setCourseName] = useState<string | null>(null)
+  const [termId, setTermId] = useState<number | null>(null)
+  const [termName, setTermName] = useState<string | null>(null)
   const [slides, setSlides] = useState<Slide[]>([])
   const [slidesPdfUrl, setSlidesPdfUrl] = useState<string | null>(null)
   const [note, setNote] = useState<SavedNote | null>(null)
@@ -79,6 +85,21 @@ export function NotebookPage() {
         listFlashcardSets(numericChapterId),
       ])
       setChapter(chapterData)
+      coursesApi
+        .get(chapterData.course_id)
+        .then((course) => {
+          setCourseName(course.name)
+          return termsApi.get(course.term_id)
+        })
+        .then((term) => {
+          setTermId(term.id)
+          setTermName(term.name)
+        })
+        .catch(() => {
+          setCourseName(null)
+          setTermId(null)
+          setTermName(null)
+        })
       setSlides(slideList)
       // Liste boşsa yükleme formunu açık, doluysa kapalı tut (çoklu sunum eklenebilir)
       setSlidesFormOpen(slideList.length === 0)
@@ -206,12 +227,14 @@ export function NotebookPage() {
 
   return (
     <section>
-      <Link
-        to={`/dersler/${courseId ?? ''}`}
-        className="text-sm font-medium text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:text-stuhub-text"
-      >
-        ← Derse dön
-      </Link>
+      <Breadcrumb
+        items={[
+          { label: 'Dönemler', to: '/' },
+          { label: termName ?? 'Dönem', to: `/donemler/${termId ?? ''}` },
+          { label: courseName ?? 'Ders', to: `/dersler/${courseId ?? ''}` },
+          { label: chapter?.title ?? 'Chapter' },
+        ]}
+      />
       <div className="mt-2">
         <h1 className="text-3xl font-semibold">{chapter?.title ?? 'Chapter'}</h1>
       </div>

@@ -1,14 +1,16 @@
-import { PencilSimple } from '@phosphor-icons/react'
+import { PencilSimple, X } from '@phosphor-icons/react'
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 
 import { coursesApi, type Course, type CourseInput } from '../api/courses'
 import { downloadFile, termArchiveUrl } from '../api/exports'
 import { materialsApi } from '../api/materials'
 import { termsApi, type Term } from '../api/terms'
+import { Breadcrumb } from '../components/Breadcrumb'
 import { CourseForm } from '../components/CourseForm'
 import { MaterialUploadForm } from '../components/MaterialUploadForm'
 import { PostCreatePrompt } from '../components/PostCreatePrompt'
+import { confirmDialog } from '../stores/confirmStore'
 
 type LoadState = 'loading' | 'ready' | 'error'
 
@@ -147,14 +149,19 @@ export function TermDetailPage() {
     await load()
   }
 
+  const handleDeleteCourse = async (course: Course) => {
+    if (!(await confirmDialog(`"${course.name}" dersi silinecek. Emin misin?`))) return
+    try {
+      await coursesApi.remove(course.id)
+      setCourses((prev) => prev.filter((c) => c.id !== course.id))
+    } catch {
+      setError('Ders silinemedi. Lütfen tekrar deneyin.')
+    }
+  }
+
   return (
     <section>
-      <Link
-        to="/"
-        className="text-sm font-medium text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:text-stuhub-text"
-      >
-        ← Dönemler
-      </Link>
+      <Breadcrumb items={[{ label: 'Dönemler', to: '/' }, { label: term?.name ?? 'Dönem' }]} />
       <div className="mt-2 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-semibold">{term?.name ?? 'Dönem'}</h1>
@@ -234,18 +241,29 @@ export function TermDetailPage() {
                   <p className="mt-1 text-sm text-stuhub-text-secondary">{course.instructor}</p>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setEditingCourse(course)
-                }}
-                className="shrink-0 rounded-control p-2 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-glass-2-hover"
-                title="Düzenle"
-                aria-label={`${course.name} dersini düzenle`}
+              <span
+                className="flex shrink-0 items-center gap-2"
+                onClick={(e) => e.stopPropagation()}
               >
-                <PencilSimple className="h-4 w-4" aria-hidden="true" />
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingCourse(course)}
+                  className="rounded-control p-2 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-glass-2-hover"
+                  title="Düzenle"
+                  aria-label={`${course.name} dersini düzenle`}
+                >
+                  <PencilSimple className="h-4 w-4" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteCourse(course)}
+                  className="rounded-control p-2 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10 hover:text-stuhub-error"
+                  title="Sil"
+                  aria-label={`${course.name} dersini sil`}
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </span>
             </div>
             {editingCourse?.id === course.id && (
               <CourseEditForm
