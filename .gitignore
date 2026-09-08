@@ -18,6 +18,7 @@ Demo/
 __pycache__/
 *.py[cod]
 .venv/
+.venv-win/
 venv/
 *.egg-info/
 .pytest_cache/
@@ -41,3 +42,14 @@ dist/
 .DS_Store
 Thumbs.db
 *.log
+
+# ── Ajan/araç artıkları (depo içinde birikiyor, kod değil) ────────────
+# .claude/worktrees/ altında tam bir depo kopyası oluşabiliyor (2026-09-08'de
+# 2.13 GB'lık kayıtlı bir worktree bulundu); .impeccable/ yerel kritik önbelleği.
+.claude/
+.impeccable/
+
+# ── Geliştirici scratch dosyaları ─────────────────────────────────────
+# Commit edilirse CI'daki `ruff check .` düşer (5 lint hatası taşıyor).
+apps/backend/_stream_test3.py
+apps/backend/_uvicorn_native.log
