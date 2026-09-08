@@ -51,6 +51,14 @@ Railway → servis → **Variables → Volumes → Add Volume**, mount path: `/d
 > Object storage'a taşıma (Supabase Storage) yol haritasının "ölçekten bağımsız"
 > maddesi; volume o zamana kadarki geçici çözümdür.
 
+**İzinler — `RAILWAY_RUN_UID` ayarlamayın.** Railway volume'u root olarak mount
+ediyor ([docs](https://docs.railway.com/volumes) → "Permissions"); non-root başlayan
+bir konteyner `/data`'ya hiç yazamaz. Railway'in önerdiği çözüm `RAILWAY_RUN_UID=0`,
+yani her şeyi root çalıştırmak. Bu depo bunun yerine konteyneri root başlatıp
+`docker-entrypoint.sh` içinde yalnızca `/data`'yı uygulama kullanıcısına (uid 10001)
+devrediyor ve ayrıcalığı hemen bırakıyor. Yani ekstra bir değişken gerekmiyor;
+`RAILWAY_RUN_UID` girilirse uygulama gereksiz yere root çalışır.
+
 ### 2.3 Ortam değişkenleri
 
 Railway → servis → **Variables**. `.env`'deki değerleri buraya girin (dosyayı

@@ -70,7 +70,10 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Root olmayan kullanıcı.
+# Uygulamanın çalıştığı ayrıcalıksız kullanıcı. `USER` ile SABİTLENMEZ: Railway
+# kalıcı volume'u root olarak mount ettiği için konteynerin root başlaması,
+# /data'yı bu kullanıcıya devretmesi ve ayrıcalığı sonra bırakması gerekiyor
+# (bkz. docker-entrypoint.sh). Aksi halde uygulama volume'a hiç yazamaz.
 RUN useradd --create-home --uid 10001 stuhub
 
 WORKDIR /app
@@ -92,7 +95,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
     # Kod varsayılanı 4.3 GB'lık bge-m3; imaja gömülen modelle aynı olmalı.
     STUHUB_EMBED_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
 
-USER stuhub
+# USER yok — ayrıcalık bırakma entrypoint'te (yukarıdaki gerekçe).
 WORKDIR /app/apps/backend
 EXPOSE 8000
 

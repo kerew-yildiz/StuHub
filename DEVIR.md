@@ -16,9 +16,10 @@ kaydeder. **Önce bunu, sonra `DEPLOY.md`'yi, sonra yol haritasını oku.**
 
 ## 1. Tek cümlelik durum
 
-Yol haritasının **Aşama 0'ı (lansman öncesi kod blokajları) tamamlandı** ve Railway
-deploy dosyaları yazıldı; **hiçbir şey commit edilmedi** ve Docker imajı hiç
-derlenmedi — sıradaki iş bu ikisi.
+Yol haritasının **Aşama 0'ı (lansman öncesi kod blokajları) tamamlandı**, Railway
+deploy dosyaları yazıldı ve **her şey commit edilip `origin/main`'e push edildi**
+(2026-09-08, `8644a7b..af371d8`, 6 commit). Docker imajı hâlâ hiç derlenmedi —
+sıradaki iş ilk Railway deploy'u.
 
 Doğrulama durumu: **backend 334 test, frontend 64 test, ikisi de 0 başarısız**;
 ruff/pyright/bandit/pip-audit temiz.
@@ -30,22 +31,16 @@ ruff/pyright/bandit/pip-audit temiz.
 
 ## 2. ⛔ Devam etmeden önce bilinmesi ZORUNLU olan iki şey
 
-### 2.1 Depo ile çalışma ağacı ayrışmış — deploy'u bloklar
+### 2.1 ~~Depo ile çalışma ağacı ayrışmış~~ — ÇÖZÜLDÜ (2026-09-08)
 
-```
-101 izlenmeyen (untracked) dosya
- 67 değişmiş izlenen dosya
-```
+169 dosya altı commit'te toplanıp push edildi; çalışma ağacı temiz, `origin/main`
+ile senkron. Bölme: depo hijyeni → özellik seti → Aşama 0 düzeltmeleri → deploy
+altyapısı → satır sonu sabitleme.
 
-İzlenmeyenler arasında **uygulamanın çalışması için gereken kod** var:
-`src/routers/exams.py`, `src/routers/feed.py`, `src/services/feed_service.py`,
-`src/workers/feed_topup.py`, 20+ frontend bileşeni, 20+ test dosyası.
-
-Railway GitHub'dan deploy ettiği için, bu haliyle push edilirse **imaj eksik kodla
-derlenir ve uygulama ayağa kalkmaz.** Deploy'dan önce bunlar commit edilmeli.
-
-Bu iş kullanıcı onayı beklediği için bilerek yapılmadı. `.env` ve `data/`
-`.gitignore`'da, yani sır sızma riski yok.
+Bu sırada iki artık temizlendi: `.claude/worktrees/` altında **2.13 GB'lık kayıtlı
+bir git worktree** (main ile aynı commit, kendine ait commit'i yok) ve `.impeccable/`
+önbelleği — ikisi de artık `.gitignore`'da. `apps/backend/_stream_test3.py` de yok
+sayılıyor (commit edilseydi CI'daki `ruff check .` düşerdi).
 
 ### 2.2 Bu ortamda doğrulanamayan iki şey
 
@@ -133,6 +128,23 @@ SQL'e giren metin ya `?` içeren modül sabiti ya da bir sayıdan üretilen `?, 
 dizisi; kullanıcı verisi her zaman parametreyle geçiyor. Gerekçeli `# nosec B608`
 eklendi. **Gerçek bir enjeksiyon bulunsaydı susturulmaz, düzeltilirdi.**
 
+### Devralma turu (2026-09-08, ikinci oturum)
+
+Temel çizgi bağımsız olarak doğrulandı — **334 test, ruff temiz, pyright 0, bandit
+exit 0** — ve devralınan kararlar kodla karşılaştırıldı. Doğru çıkanlar: `pg_compat`
+transaction katmanı, `/api/citations` kiracı sahipliği kontrolü, koşullu CORS,
+ucuz `/health`. Üç gerçek sorun bulundu ve düzeltildi:
+
+| # | Bulgu | Düzeltme |
+|---|---|---|
+| 1 | **`USER stuhub` + Railway volume = deploy'da yazma hatası.** Railway volume'u root olarak mount ediyor; non-root başlayan konteyner `/data`'ya hiç yazamaz (materyal, SQLite, LanceDB). İlk deploy'da ölürdü. | Konteyner root başlıyor, entrypoint yalnızca `/data`'yı uid 10001'e devredip `setpriv` ile ayrıcalığı bırakıyor. `setpriv` yoksa uyarıp root devam ediyor (boot kırılmıyor). `USER` direktifi kaldırıldı. |
+| 2 | `railway.json`'daki `startCommand` ENTRYPOINT'i exec form'da eziyordu (aynı komut olduğu için zararsızdı, ama ENTRYPOINT değişirse sessizce ayrışırdı). | Kaldırıldı; ENTRYPOINT tek otorite. |
+| 3 | Git for Windows **system** seviyesinde `core.autocrlf=true`; taze bir Windows klonunda `docker-entrypoint.sh` CRLF olur ve imaj shebang hatasıyla açılmaz. | `.gitattributes` ile `.sh`/Dockerfile LF'e sabitlendi. (Depodaki mevcut blob'lar zaten LF'ti, `git ls-files --eol` ile doğrulandı.) |
+
+Entrypoint mantığı (root tespiti → devir → ayrıcalık bırakma → rol seçimi) stub'lu
+bir harness ile 5 senaryoda davranışsal olarak doğrulandı. **Gerçek `chown`/`setpriv`
+semantiği değil, kontrol akışı doğrulandı** — Docker hâlâ yok.
+
 ---
 
 ## 5. Yeni ajanın bilmesi gereken tuzaklar
@@ -174,11 +186,11 @@ Tek seferlik bir başarısızlık gördüğünde **önce tekrar çalıştır**. 
 kalıcı çözüm Mermaid'i test ortamında mock'lamak ya da vitest `testTimeout`'unu global
 olarak yükseltmektir. Şu anki doğrulanmış durum: **64 test, 0 başarısız.**
 
-### 5.4 `_stream_test3.py`
+### 5.4 ~~`_stream_test3.py`~~ — ÇÖZÜLDÜ (2026-09-08)
 
-`apps/backend/_stream_test3.py` kullanıcının debug scratch dosyası; 5 lint hatası var.
-Şu an untracked olduğu için CI görmüyor, ama **commit edilirse `ruff check .` düşer.**
-Silinmeli ya da `.gitignore`'a eklenmeli. Dosya sahibinin kararı, dokunulmadı.
+Kullanıcının debug scratch dosyası (5 lint hatası) `.gitignore`'a alındı — dosya
+diskte duruyor ama izlenmiyor. Ruff varsayılan olarak `.gitignore`'a saygı
+duyduğu için CI'ın çalıştırdığı `ruff check .` artık temiz geçiyor (doğrulandı).
 
 ### 5.5 Bekleyen soru — model kimlikleri
 
@@ -200,14 +212,14 @@ doldurulabilir, ücretli modeller sonra config'den takılır.
 
 ## 6. Sıradaki iş (öncelik sırasıyla)
 
-1. **Commit + push** (§2.1). Deploy'u bloklayan tek şey.
-2. **İlk Railway deploy'u** — `DEPLOY.md` adım adım anlatıyor. Kritik noktalar:
-   `/data` volume'u, `STUHUB_EMBED_MODEL`, `VITE_*` build argümanları, EU-West bölgesi.
-   Deploy sonrası 7 adımlık doğrulama listesi `DEPLOY.md` §3'te.
-3. **Postgres migration runner** (yol haritası "ölçekten bağımsız" madde 1) — Postgres
+1. **İlk Railway deploy'u** — `DEPLOY.md` adım adım anlatıyor. Kritik noktalar:
+   `/data` volume'u (izinler için §2.2), `STUHUB_EMBED_MODEL`, `VITE_*` build
+   argümanları, EU-West bölgesi. Deploy sonrası 7 adımlık doğrulama listesi
+   `DEPLOY.md` §3'te. Bu aynı zamanda Dockerfile'ın ve `pg_compat`'in ilk gerçek testi.
+2. **Postgres migration runner** (yol haritası "ölçekten bağımsız" madde 1) — Postgres
    şeması hâlâ elle uygulanıyor; `0011` migration'ının SQL karşılığı `DEPLOY.md` §2.5'te.
-4. **Sentry + object storage** (aynı bölüm, madde 2-3).
-5. **Aşama 2** — pgvector (ANN indeksi + SQL-tarafı top-k; port değil yeniden yazım),
+3. **Sentry + object storage** (aynı bölüm, madde 2-3).
+4. **Aşama 2** — pgvector (ANN indeksi + SQL-tarafı top-k; port değil yeniden yazım),
    Redis + Arq kuyruğu, ücretli LLM kademelendirmesi (§5.5), rate limiting.
    Bu iş bittiğinde §3.1'deki imaj ayrımı da mümkün hale gelir.
 
