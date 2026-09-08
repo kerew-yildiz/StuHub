@@ -167,6 +167,16 @@
   .glass-interactive:active {
     transform: scale(0.98);
   }
+
+  /* Görünür kaydırma çubuğu olmadan kaydırma — TikTok/Reels tarzı tam ekran feed'ler
+   * (QuizFeed) için: içerik yine kaydırılabilir, kalın gri çubuk sadece gizlenir. */
+  .no-scrollbar {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* eski Edge */
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none; /* Chrome/Safari/yeni Edge */
+  }
   @media (prefers-reduced-motion: reduce) {
     .glass-interactive,
     .glass-interactive:hover,
@@ -227,21 +237,21 @@ body {
   position: relative;
 }
 
-/* Arkaplan dekoru — ders çalışma temalı doodle deseni (ampul, atom, kitap, DNA, deney
-   tüpü, kalem, mezuniyet kepi, hedef, iletki, çiçek/molekül, kıvılcım, +/=).
-   Amaç: düz renk zeminle cam panellerin (backdrop-blur) ayırt edilebilir olması —
-   flat renk üstünde blur görünmez, bu desen sayesinde blur gerçekten belli olur.
-   Tek renk ailesi (beyaz, düşük opaklık) — monochrome ilkesi bozulmaz, zeminden
-   (--stuhub-bg) daha açık. 520px kare karo, sonsuz `repeat` — her ekran boyutunda
-   dikişsiz. `fixed` — scroll ile kaymaz, tüm sayfalarda sabit kalır. */
+/* Arkaplan dekoru — StuHub'a özgü motif: jenerik "eğitim clipart"ı (ampul/atom/DNA/
+   deney tüpü) yerine ürünün kendi görsel dilinden 4 öğe kullanır: streak alevi (Ana
+   Sayfa'daki 🔥 halkasıyla aynı form), üretilen not sayfası, quiz doğru işareti,
+   flashcard destesi (2026-09-08 kritik incelemede "jenerik AI-SaaS" bulgusu üzerine
+   değiştirildi — bkz. impeccable critique). Amaç hâlâ aynı: düz renk zeminle cam
+   panellerin (backdrop-blur) ayırt edilebilir olması. Tek renk ailesi (beyaz, düşük
+   opaklık), 640px kare karo, sonsuz `repeat`, `fixed` — scroll ile kaymaz. */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: -1;
   background-color: var(--stuhub-bg);
-  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20520%20520%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22rgba%28255%2C255%2C255%2C0.12%29%22%20stroke-width%3D%222.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2270%22%20cy%3D%2270%22%20r%3D%2222%22/%3E%3Cpath%20d%3D%22M60%2C92%20L80%2C92%20M63%2C100%20L77%2C100%20M67%2C108%20L73%2C108%22/%3E%3Cpath%20d%3D%22M70%2C30%20L70%2C40%20M40%2C48%20L48%2C54%20M100%2C48%20L92%2C54%22/%3E%3Cellipse%20cx%3D%22260%22%20cy%3D%2290%22%20rx%3D%2238%22%20ry%3D%2215%22/%3E%3Cellipse%20cx%3D%22260%22%20cy%3D%2290%22%20rx%3D%2238%22%20ry%3D%2215%22%20transform%3D%22rotate%2860%20260%2090%29%22/%3E%3Cellipse%20cx%3D%22260%22%20cy%3D%2290%22%20rx%3D%2238%22%20ry%3D%2215%22%20transform%3D%22rotate%28120%20260%2090%29%22/%3E%3Cpath%20d%3D%22M400%2C60%20C385%2C50%20365%2C50%20355%2C58%20L355%2C110%20C365%2C102%20385%2C102%20400%2C110%20C415%2C102%20435%2C102%20445%2C110%20L445%2C58%20C435%2C50%20415%2C50%20400%2C60%20Z%22/%3E%3Cpath%20d%3D%22M400%2C60%20L400%2C110%22/%3E%3Cpath%20d%3D%22M60%2C190%20C80%2C210%2080%2C230%2060%2C250%20C40%2C270%2040%2C290%2060%2C310%22/%3E%3Cpath%20d%3D%22M100%2C190%20C80%2C210%2080%2C230%20100%2C250%20C120%2C270%20120%2C290%20100%2C310%22/%3E%3Cpath%20d%3D%22M63%2C205%20L97%2C205%20M62%2C230%20L98%2C230%20M63%2C255%20L97%2C255%20M62%2C280%20L98%2C280%20M63%2C300%20L97%2C300%22/%3E%3Cpath%20d%3D%22M245%2C180%20L245%2C210%20L220%2C255%20C215%2C265%20222%2C275%20235%2C275%20L275%2C275%20C288%2C275%20295%2C265%20290%2C255%20L265%2C210%20L265%2C180%22/%3E%3Cpath%20d%3D%22M240%2C180%20L270%2C180%22/%3E%3Cpath%20d%3D%22M370%2C190%20L430%2C250%22/%3E%3Cpath%20d%3D%22M370%2C190%20L360%2C180%20L380%2C200%20Z%22/%3E%3Cpath%20d%3D%22M420%2C240%20L430%2C250%20L420%2C260%20Z%22/%3E%3Cpath%20d%3D%22M60%2C360%20L100%2C344%20L140%2C360%20L100%2C376%20Z%22/%3E%3Cpath%20d%3D%22M80%2C368%20L80%2C388%20C80%2C396%20120%2C396%20120%2C388%20L120%2C368%22/%3E%3Cpath%20d%3D%22M140%2C360%20L140%2C382%20C140%2C386%20145%2C388%20145%2C392%22/%3E%3Ccircle%20cx%3D%22145%22%20cy%3D%22393%22%20r%3D%223%22/%3E%3Ccircle%20cx%3D%22440%22%20cy%3D%22360%22%20r%3D%2230%22/%3E%3Ccircle%20cx%3D%22440%22%20cy%3D%22360%22%20r%3D%2218%22/%3E%3Cpath%20d%3D%22M220%2C430%20A60%2C60%200%200%2C1%20340%2C430%22/%3E%3Cpath%20d%3D%22M235%2C430%20L235%2C418%20M260%2C430%20L260%2C412%20M280%2C430%20L280%2C418%20M300%2C430%20L300%2C412%20M325%2C430%20L325%2C418%22/%3E%3Ccircle%20cx%3D%2260%22%20cy%3D%22450%22%20r%3D%226%22/%3E%3Ccircle%20cx%3D%2260%22%20cy%3D%22432%22%20r%3D%228%22/%3E%3Ccircle%20cx%3D%2278%22%20cy%3D%22450%22%20r%3D%228%22/%3E%3Ccircle%20cx%3D%2260%22%20cy%3D%22468%22%20r%3D%228%22/%3E%3Ccircle%20cx%3D%2242%22%20cy%3D%22450%22%20r%3D%228%22/%3E%3Cpath%20d%3D%22M330%2C90%20L336%2C108%20L354%2C114%20L336%2C120%20L330%2C138%20L324%2C120%20L306%2C114%20L324%2C108%20Z%22/%3E%3Cpath%20d%3D%22M400%2C340%20L400%2C370%20M385%2C355%20L415%2C355%22/%3E%3Cpath%20d%3D%22M330%2C440%20L360%2C440%22/%3E%3Cpath%20d%3D%22M330%2C455%20L360%2C455%22/%3E%3C/g%3E%3Cg%20fill%3D%22rgba%28255%2C255%2C255%2C0.18%29%22%3E%3Ccircle%20cx%3D%22245%22%20cy%3D%22255%22%20r%3D%223%22/%3E%3Ccircle%20cx%3D%22262%22%20cy%3D%22265%22%20r%3D%222.5%22/%3E%3Ccircle%20cx%3D%22440%22%20cy%3D%22360%22%20r%3D%225%22/%3E%3C/g%3E%3C/svg%3E");
-  background-size: 520px 520px;
+  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NDAgNjQwIj4KICA8ZyBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoMjU1LDI1NSwyNTUsMC4xMikiIHN0cm9rZS13aWR0aD0iMyIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj4KICAgIDwhLS0gU3RyZWFrIGFsZXZpIChTdHVIdWInxLFuIGtlbmRpIHN0cmVhayBoYWxrYXPEsSBtb3RpZmluZGVuKSAtLT4KICAgIDxwYXRoIGQ9Ik0xMjAsNjAgQzk1LDk1IDg1LDEyMCAxMDAsMTUwIEMxMDgsMTY2IDEyOCwxNzIgMTQwLDE2MCBDMTQ4LDE3OCAxMzIsMTk2IDExMiwxOTYgQzgwLDE5NiA1OCwxNzAgNTgsMTQwIEM1OCwxMDggODIsODAgMTA4LDU4IEMxMTIsNzIgMTE2LDg0IDEyMCw2MCBaIi8+CiAgICA8IS0tIE5vdCBzYXlmYXPEsSArIMO8cmV0aWxlbiBpw6dlcmlrIHNhdMSxcmxhcsSxICjDvHLDvG7DvG4gYW5hIMOnxLFrdMSxc8SxKSAtLT4KICAgIDxwYXRoIGQ9Ik00MjAsNjAgTDUwMCw2MCBMNTIwLDgwIEw1MjAsMTgwIEw0MjAsMTgwIFoiLz4KICAgIDxwYXRoIGQ9Ik01MDAsNjAgTDUwMCw4MCBMNTIwLDgwIi8+CiAgICA8cGF0aCBkPSJNNDM2LDEwNCBMNTA0LDEwNCBNNDM2LDEyNCBMNTA0LDEyNCBNNDM2LDE0NCBMNDgwLDE0NCIvPgogICAgPCEtLSBRdWl6IGRvxJ9ydSBpxZ9hcmV0aSAoZGFpcmVkZSB0aWspIC0tPgogICAgPGNpcmNsZSBjeD0iMjAwIiBjeT0iNDIwIiByPSIzNCIvPgogICAgPHBhdGggZD0iTTE4Niw0MjAgTDE5Nyw0MzIgTDIxNiw0MDYiLz4KICAgIDwhLS0gRmxhc2hjYXJkIChrYXJ0IGRlc3Rlc2kpIC0tPgogICAgPHBhdGggZD0iTTQ2MCw0MDAgTDU1Niw0MDAgTDU1Niw0NjQgTDQ2MCw0NjQgWiIvPgogICAgPHBhdGggZD0iTTQ0OCw0MTIgTDQ0OCw0NzYgTDU0NCw0NzYiLz4KICA8L2c+Cjwvc3ZnPgo=");
+  background-size: 640px 640px;
   background-repeat: repeat;
   pointer-events: none;
 }

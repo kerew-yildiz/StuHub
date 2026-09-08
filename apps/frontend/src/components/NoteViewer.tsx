@@ -127,18 +127,20 @@ export function NoteViewer({ note }: NoteViewerProps) {
                     onOpenCitation={setActive}
                   />
                 ),
+                /* Sol-kenar-vurgu çizgisi kaldırıldı — en tanınabilir "AI-üretimi arayüz"
+                   izlerinden biri (2026-09-08 kritik incelemede deterministik tarayıcı
+                   tarafından da işaretlendi). Hiyerarşi artık boşluk + ağırlık + ince bir
+                   alt çizgiyle (yalnızca h1) kuruluyor. */
                 h1: ({ children }) => (
-                  <h1 className="mt-0 mb-3 border-l-4 border-stuhub-accent pl-3 text-2xl font-semibold">
+                  <h1 className="mt-0 mb-3 border-b border-stuhub-border pb-2 text-2xl font-semibold tracking-tight">
                     {children}
                   </h1>
                 ),
                 h2: ({ children }) => (
-                  <h2 className="mt-6 mb-2 border-l-4 border-stuhub-border-strong pl-3 text-xl font-semibold">
-                    {children}
-                  </h2>
+                  <h2 className="mt-6 mb-2 text-xl font-semibold tracking-tight">{children}</h2>
                 ),
                 h3: ({ children }) => (
-                  <h3 className="mt-4 mb-2 border-l-4 border-stuhub-border pl-3 text-lg font-semibold">
+                  <h3 className="mt-4 mb-2 text-lg font-semibold text-stuhub-text-secondary">
                     {children}
                   </h3>
                 ),

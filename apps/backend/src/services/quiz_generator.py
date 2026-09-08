@@ -312,3 +312,203 @@ async def _generate(chapter_id: int, tenant_id: str = LOCAL_TENANT_ID):
         "quiz": {"id": row_id, "chapter_id": chapter_id, "questions_json": questions_json},
         "warnings": warnings,
     }
+
+
+# ── Sonsuz kaydırma feed'i için parti üretimi (Plan: feed) ──────────────
+# Feed, bölüm quiziyle AYNI üretim hattını kullanır: aynı prompt, aynı doğrulama,
+# aynı atıf zenginleştirme, aynı denge düzeltmesi. Fark yalnızca (a) tekrar yasağı
+# negatif listesi, (b) soru başına `difficulty` alanı ve (c) partinin konulara
+# round-robin dağıtılmasıdır — tek konudan yığılma olmaz.
+
+FEED_BATCH_SIZE = 10
+FEED_AVOID_LIMIT = 40  # negatif listeye alınan en fazla soru sayısı (prompt şişmesin)
+_FEED_DIFFICULTIES = frozenset({"easy", "medium", "hard"})
+
+_FEED_EXTRA_PROMPT = """
+8. TEKRAR YASAĞI: aşağıdaki sorular kullanıcıya yakın zamanda soruldu. Aynı bilgiyi ölçen
+   veya benzer ifadeli soru ÜRETME; bölümün henüz sorulmamış ayrıntılarına yönel.
+9. Her soruya ayrıca "difficulty" alanı ekle: "easy" | "medium" | "hard".
+
+SORULMUŞ SORULAR (tekrar etme):
+{avoid_list}
+"""
+
+
+def normalize_difficulty(value: object) -> str | None:
+    """Modelin verdiği zorluk etiketini normalize eder; tanınmayan değer None olur."""
+    if isinstance(value, str) and value.strip().lower() in _FEED_DIFFICULTIES:
+        return value.strip().lower()
+    return None
+
+
+async def _generate_feed_topic(
+    topic: dict,
+    course_id: int,
+    chapter_id: int,
+    tenant_id: str,
+    avoid: list[str],
+) -> list[dict]:
+    """Bir konu için feed sorusu partisi üretir (bölüm quiziyle aynı doğrulama zinciri)."""
+    allowed = topic.get("citations", [])
+    allowed_text = json.dumps(
+        [{"id": c.get("id")} for c in allowed if c.get("id") is not None],
+        ensure_ascii=False,
+    )
+    avoid_list = "\n".join(f"- {q[:160]}" for q in avoid[-FEED_AVOID_LIMIT:]) or "- (yok)"
+    prompt = QUIZ_BATCH_PROMPT.format(
+        topic=topic["topic"],
+        note_section=topic["section"][:4000],
+        citations_json=allowed_text,
+        dil_talimati=dil_talimati(settings.not_dili),
+    ) + _FEED_EXTRA_PROMPT.format(avoid_list=avoid_list)
+
+    try:
+        data = await llm_service.chat_json(
+            [{"role": "user", "content": prompt}],
+            kind="feed_batch",
+            tenant_id=tenant_id,
+            course_id=course_id,
+            chapter_id=chapter_id,
+        )
+    except llm_service.LLMError:
+        # Feed asla hata göstermez: başarısız parti sessizce atlanır, havuz mevcut
+        # sorularla servis edilmeye devam eder.
+        return []
+
+    questions = [
+        q for q in (data.get("questions") or []) if isinstance(q, dict) and _validate_question(q)
+    ][:MAX_QUESTIONS_PER_TOPIC]
+    if not questions:
+        return []
+    if allowed:
+        questions = _enrich_citations(questions, allowed)
+        first_citation = next((c for c in allowed if c.get("id") is not None), None)
+        for q in questions:
+            if not q["citations"] and first_citation is not None:
+                q["citations"] = [dict(first_citation)]
+    else:
+        for q in questions:
+            q["citations"] = []
+    questions = _rebalance(questions)
+    for q in questions:
+        q["topic"] = topic["topic"]
+        q["difficulty"] = normalize_difficulty(q.get("difficulty"))
+    return questions
+
+
+async def generate_feed_batch(
+    chapter_id: int,
+    tenant_id: str = LOCAL_TENANT_ID,
+    *,
+    count: int = FEED_BATCH_SIZE,
+    avoid: list[str] | None = None,
+    topic_offset: int = 0,
+) -> list[dict]:
+    """Bölüm notundan feed havuzu için `count` soruluk parti üretir.
+
+    `topic_offset`: round-robin başlangıç konusu — çağıran taraf havuzdaki soru
+    sayısını geçirerek ardışık partilerin farklı konulardan başlamasını sağlar.
+    `avoid`: son sorulan soru metinleri (tekrar yasağı negatif listesi).
+
+    Not bulunamazsa ya da hiçbir parti doğrulamayı geçemezse boş liste döner —
+    feed hattı hata fırlatmaz (üst katman havuzu mevcut sorularla doldurur).
+    """
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT course_id FROM chapters WHERE id = ? AND tenant_id = ?",
+            (chapter_id, tenant_id),
+        )
+        chapter = await cursor.fetchone()
+        if chapter is None:
+            return []
+        course_id = chapter["course_id"]
+        cursor = await db.execute(
+            "SELECT content_md, citations_json FROM notes "
+            "WHERE chapter_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1",
+            (chapter_id, tenant_id),
+        )
+        note_row = await cursor.fetchone()
+    finally:
+        await db.close()
+
+    if note_row is None:
+        return []
+
+    citations_json = json.loads(note_row["citations_json"] or "{}")
+    sections = _split_topics(note_row["content_md"], citations_json.get("topics", []))
+    if not sections:
+        return []
+
+    avoid_texts = list(avoid or [])
+    collected: list[dict] = []
+    max_calls = max(1, -(-count // MAX_QUESTIONS_PER_TOPIC)) + 1
+    index = topic_offset
+    for _ in range(max_calls):
+        if len(collected) >= count:
+            break
+        topic = sections[index % len(sections)]
+        index += 1
+        batch = await _generate_feed_topic(
+            topic,
+            course_id,
+            chapter_id,
+            tenant_id,
+            avoid_texts + [q["question"] for q in collected],
+        )
+        collected.extend(batch)
+    return collected[:count]
+
+# ── Hata günlüğünden kurtarma quizi (Plan #6) ──────────────────────────────
+# Aynı üretim/doğrulama zincirini (`_generate_feed_topic`) kullanır. Fark: konu
+# kaynağı TEK bir bölüm değil ders geneli (her bölümün EN SON notu taranır, konu
+# adı `topic_matches` ile eşlenir); `avoid` hata günlüğündeki (routers/errors.py
+# Plan #5) soru metinleridir — LLM aynı soruları tekrar üretmesin diye negatif
+# liste olarak prompt'a girer.
+
+
+async def generate_from_errors(
+    course_id: int,
+    topics: list[str],
+    avoid: list[str],
+    tenant_id: str = LOCAL_TENANT_ID,
+) -> list[dict]:
+    """Verilen konular için dersin bölüm notlarından YENİ sorular üretir (Plan #6).
+
+    Bir konu hiçbir bölüm notunda bulunamazsa sessizce atlanır (feed hattıyla aynı
+    hata toleransı — LLM/kapsam hatası kullanıcıya asla gösterilmez, yalnızca o
+    konudan soru üretilmez).
+    """
+    if not topics:
+        return []
+
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT n.chapter_id, n.content_md, n.citations_json FROM notes n "
+            "JOIN chapters c ON c.id = n.chapter_id AND c.tenant_id = n.tenant_id "
+            "WHERE c.course_id = ? AND c.tenant_id = ? AND n.tenant_id = ? "
+            "AND n.id = (SELECT MAX(id) FROM notes WHERE chapter_id = n.chapter_id "
+            "AND tenant_id = ?)",
+            (course_id, tenant_id, tenant_id, tenant_id),
+        )
+        note_rows = [dict(row) for row in await cursor.fetchall()]
+    finally:
+        await db.close()
+
+    collected: list[dict] = []
+    for note_row in note_rows:
+        citations_json = json.loads(note_row["citations_json"] or "{}")
+        sections = _split_topics(note_row["content_md"], citations_json.get("topics", []))
+        for section in sections:
+            if not any(topic_matches(section["topic"], wanted) for wanted in topics):
+                continue
+            batch = await _generate_feed_topic(
+                section,
+                course_id,
+                note_row["chapter_id"],
+                tenant_id,
+                avoid + [q["question"] for q in collected],
+            )
+            collected.extend(batch)
+    return collected

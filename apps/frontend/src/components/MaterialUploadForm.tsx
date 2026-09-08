@@ -10,27 +10,40 @@ interface MaterialUploadFormProps {
  * çağıran yer (`glass-panel`/`PostCreatePrompt`) sağlar, iç içe kart olmasın. */
 export function MaterialUploadForm({ onUpload, fixedType }: MaterialUploadFormProps) {
   const [type, setType] = useState<'textbook' | 'slides'>(fixedType ?? 'textbook')
-  const [file, setFile] = useState<File | null>(null)
+  const [files, setFiles] = useState<File[]>([])
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  // Toplu yüklemede kaçıncı dosyada olunduğunu gösterir — tek dosyada gösterilmez
+  // (2026-09-08 kritik incelemede "Alex/power-user" bulgusu: tek seferde tek dosya
+  // yükleme, birden fazla chapter'ı olan bir dersi hazırlarken yavaştı).
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
-    if (!file) {
-      setError('Lütfen bir dosya seç.')
+    if (files.length === 0) {
+      setError('Lütfen en az bir dosya seç.')
       return
     }
     setBusy(true)
     setError('')
-    try {
-      await onUpload(type, file)
-      setFile(null)
+    const failed: string[] = []
+    for (let i = 0; i < files.length; i += 1) {
+      setProgress(files.length > 1 ? { done: i, total: files.length } : null)
+      try {
+        await onUpload(type, files[i])
+      } catch {
+        failed.push(files[i].name)
+      }
+    }
+    setProgress(null)
+    setBusy(false)
+    if (failed.length > 0) {
+      setError(`Yüklenemedi: ${failed.join(', ')}. Lütfen tekrar deneyin.`)
+      setFiles(files.filter((f) => failed.includes(f.name)))
+    } else {
+      setFiles([])
       if (inputRef.current) inputRef.current.value = ''
-    } catch {
-      setError('Dosya yüklenemedi. Lütfen tekrar deneyin.')
-    } finally {
-      setBusy(false)
     }
   }
 
@@ -74,18 +87,23 @@ export function MaterialUploadForm({ onUpload, fixedType }: MaterialUploadFormPr
           Dosya Seç
         </button>
         <span className="min-w-0 truncate text-sm text-stuhub-text-secondary">
-          {file ? file.name : 'Dosya seçilmedi'}
+          {files.length === 0
+            ? 'Dosya seçilmedi'
+            : files.length === 1
+              ? files[0].name
+              : `${files.length} dosya seçildi`}
         </span>
         <input
           id="material-file"
           ref={inputRef}
           type="file"
+          multiple
           accept={type === 'textbook' ? '.pdf' : '.pdf,.pptx,.ppt'}
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
           className="hidden"
         />
-        <button type="submit" disabled={!file || busy} className="btn-primary sm:ml-auto">
-          {busy ? 'Yükleniyor…' : 'Yükle'}
+        <button type="submit" disabled={files.length === 0 || busy} className="btn-primary sm:ml-auto">
+          {progress ? `Yükleniyor ${progress.done + 1}/${progress.total}…` : busy ? 'Yükleniyor…' : 'Yükle'}
         </button>
       </div>
       {error && <p className="text-sm text-stuhub-error">{error}</p>}

@@ -44,3 +44,35 @@ EMPTY_SUBMISSION_MESSAGE = (
     "Ödev metni boş bırakılmış. Değerlendirme yapılamadı — lütfen metni yazıp "
     "tekrar gönderin."
 )
+
+DRAFT_REVIEW_PROMPT = """Sen destekleyici bir yazma koçusun. Bir öğrencinin HENÜZ
+BİTMEMİŞ ödev taslağını inceleyeceksin — PUAN VERMEYECEKSİN, yalnızca son teslimden
+önce düzeltebileceği yapısal geri bildirim vereceksin.
+
+ÖDEV TALİMATI (öğrenciye verilen):
+{instructions}
+
+DEĞERLENDİRME ÖLÇÜTLERİ (yapı için referans, puanlama için DEĞİL):
+{criteria_text}
+
+ÖĞRENCİNİN TASLAĞI:
+{user_text}
+
+KURALLAR:
+1. HİÇBİR SAYISAL PUAN VERME — çıktıda "score" alanı OLMAYACAK.
+2. Nesnel ve yapıcı ol; aşağılayıcı dil kullanma.
+3. `has_thesis`/`thesis_feedback`: taslakta açık bir tez/ana iddia var mı, yoksa
+   nasıl netleştirilebilir.
+4. `evidence_linked`/`evidence_feedback`: iddialar kanıt/örnekle desteklenmiş mi.
+5. `weak_sections`: yapısal olarak zayıf/eksik bölümlerin kısa listesi (yoksa boş liste).
+6. `next_steps`: son teslimden önce yapılacak somut, uygulanabilir adımlar (en az 1).
+7. Şu JSON şemasına birebir uy (``` işareti kullanma):
+{{
+  "has_thesis": true,
+  "thesis_feedback": "...",
+  "evidence_linked": false,
+  "evidence_feedback": "...",
+  "weak_sections": ["..."],
+  "next_steps": ["..."]
+}}
+"""

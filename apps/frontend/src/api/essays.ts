@@ -78,3 +78,40 @@ export async function listEssays(courseId: number): Promise<EssayRecord[]> {
   if (!response.ok) return []
   return (await response.json()) as EssayRecord[]
 }
+
+/** Ödev taslak koçu geri bildirimi — PUAN YOK, yalnızca yapısal geri bildirim (Plan #41). */
+export interface DraftFeedback {
+  has_thesis: boolean
+  thesis_feedback: string
+  evidence_linked: boolean
+  evidence_feedback: string
+  weak_sections: string[]
+  next_steps: string[]
+}
+
+/** Ödev taslağını puansız değerlendirir (POST /courses/{id}/essays/draft-review). */
+export async function draftReview(
+  courseId: number,
+  instructions: string,
+  rubric: string,
+  userText: string,
+): Promise<DraftFeedback> {
+  const body: { instructions: string; rubric?: string; user_text: string } = {
+    instructions,
+    user_text: userText,
+  }
+  const trimmedRubric = rubric.trim()
+  if (trimmedRubric) body.rubric = trimmedRubric
+
+  const response = await authFetch(`/courses/${courseId}/essays/draft-review`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    throw new Error(
+      await readErrorDetail(response, 'Taslak değerlendirilemedi. Lütfen tekrar deneyin.'),
+    )
+  }
+  return (await response.json()) as DraftFeedback
+}

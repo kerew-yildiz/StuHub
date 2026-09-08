@@ -12,6 +12,7 @@ import { listQuizzes, removeQuiz, type Quiz } from '../api/quizzes'
 import { slidesApi, type Slide } from '../api/slides'
 import { termsApi } from '../api/terms'
 import { Breadcrumb } from '../components/Breadcrumb'
+import { CoverageIndicator } from '../components/CoverageIndicator'
 import { FilePreviewModal } from '../components/FilePreviewModal'
 import { FlashcardPlayer } from '../components/FlashcardPlayer'
 import { GuidePanel } from '../components/GuidePanel'
@@ -19,6 +20,7 @@ import { GuideSlidesForm } from '../components/GuideSlidesForm'
 import { NoteViewer } from '../components/NoteViewer'
 import { QuizPlayer } from '../components/QuizPlayer'
 import { SlidePreview } from '../components/SlidePreview'
+import { SpokenRecallRecorder } from '../components/SpokenRecallRecorder'
 import { TabBar } from '../components/TabBar'
 import { useAnimatedProgress } from '../lib/useAnimatedProgress'
 import { useAuthedFileUrl } from '../lib/useAuthedFileUrl'
@@ -31,6 +33,7 @@ const NOTEBOOK_TABS = [
   { id: 'notes', label: 'Notlar' },
   { id: 'cards', label: 'Kartlar' },
   { id: 'quiz', label: 'Quiz' },
+  { id: 'recall', label: 'Sesli Tekrar' },
   { id: 'guide', label: 'Rehber' },
 ] as const
 
@@ -260,6 +263,11 @@ export function NotebookPage() {
 
       {tab === 'notes' && (
         <>
+          {/* Kaynak kapsama göstergesi — notun kitabın hangi sayfalarını kullandığı (Plan #31) */}
+          <div className="mt-8">
+            <CoverageIndicator chapterId={numericChapterId} />
+          </div>
+
           {/* Guide slides — orijinal dosya önizlemesi (PDF) ya da metin kartı */}
           <div className="mt-8">
         <div className="flex items-start justify-between gap-4">
@@ -573,6 +581,12 @@ export function NotebookPage() {
       )}
 
       {tab === 'guide' && <GuidePanel scope="chapter" scopeId={numericChapterId} />}
+
+      {tab === 'recall' && (
+        <div className="mt-8">
+          <SpokenRecallRecorder chapterId={numericChapterId} />
+        </div>
+      )}
 
       {pdfPreview && (
         <FilePreviewModal

@@ -103,3 +103,91 @@ export async function getGuide(
     return null
   }
 }
+
+// ── Karşılaştırma tablosu (Plan #24) + terim sözlüğü (Plan #29) ────────────
+
+/** Karşılaştırma rehberinin `kind` değeri (backend `COMPARISON_KIND`). */
+export const COMPARISON_KIND = 'comparison'
+
+/** Bir ikilideki tek fark satırı: ölçüt + iki kavramın o ölçütteki durumu. */
+export interface ComparisonDifference {
+  aspect: string
+  a: string
+  b: string
+}
+
+/** İki kavramın karşılaştırması. */
+export interface ComparisonPair {
+  a: string
+  b: string
+  similarities: string[]
+  differences: ComparisonDifference[]
+  /** Öğrencilerin bu ikilide en sık karıştırdığı nokta. */
+  confusion: string
+}
+
+/** Karşılaştırma içeriği (backend `content_json`). */
+export interface ComparisonContent {
+  concepts: string[]
+  pairs: ComparisonPair[]
+}
+
+/** Karşılaştırma rehberi (backend ile birebir). */
+export interface ComparisonGuide {
+  id: number
+  kind: 'comparison'
+  content_json: ComparisonContent
+  created_at: string
+}
+
+/** Sözlük kaydı — tanım ve ilk geçiş bilgisi notun markdown metninden çıkarılır. */
+export interface GlossaryEntry {
+  term: string
+  definition: string
+  /** Terimin ilk geçtiği bölüm (hiçbir notta geçmiyorsa null). */
+  chapter_id: number | null
+  chapter_title: string | null
+  note_id: number | null
+  /** İlk geçişin not metnindeki karakter konumu. */
+  position: number | null
+  /** İlk geçişin altında bulunduğu markdown başlığı. */
+  heading: string | null
+}
+
+/** Seçilen kavramların karşılaştırma tablosunu üretir (POST /courses/{id}/compare; LLM). */
+export async function generateComparison(
+  courseId: number,
+  concepts: string[],
+): Promise<GenerateGuideResult> {
+  const response = await authFetch(`/courses/${courseId}/compare`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ concepts }),
+  })
+  if (!response.ok) {
+    throw new Error(
+      await readErrorDetail(response, 'Karşılaştırma üretilemedi. Lütfen tekrar deneyin.'),
+    )
+  }
+  return (await response.json()) as GenerateGuideResult
+}
+
+/** Kayıtlı karşılaştırma tablosunu döndürür (GET /courses/{id}/guides?kind=comparison). */
+export async function getComparison(courseId: number): Promise<ComparisonGuide | null> {
+  try {
+    const response = await authFetch(`/courses/${courseId}/guides?kind=${COMPARISON_KIND}`)
+    if (!response.ok) return null
+    return (await response.json()) as ComparisonGuide | null
+  } catch {
+    return null
+  }
+}
+
+/** Ders terim sözlüğünü döndürür (GET /courses/{id}/glossary; alfabetik, LLM yok). */
+export async function getGlossary(courseId: number): Promise<GlossaryEntry[]> {
+  const response = await authFetch(`/courses/${courseId}/glossary`)
+  if (!response.ok) {
+    throw new Error(await readErrorDetail(response, 'Terim sözlüğü alınamadı.'))
+  }
+  return (await response.json()) as GlossaryEntry[]
+}

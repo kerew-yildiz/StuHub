@@ -13,7 +13,7 @@ from ..db import get_db
 from ..quota import enforce_quota
 from ..services.essay_grader import EssayGradeError, grade_essay
 from ..services.fib_utils import fib_is_correct
-from ..services.overall_generator import generate_overall_quiz_stream
+from ..services.overall_generator import generate_overall_quiz_stream, strip_exam_answers
 
 router = APIRouter(prefix="/api", tags=["overall-quiz"])
 
@@ -29,6 +29,8 @@ class OverallAnswerIn(BaseModel):
 
 class OverallAttemptIn(BaseModel):
     answers: list[OverallAnswerIn]
+    # Sınav simülasyonunda (Plan #35) istemcinin ölçtüğü geçen süre; pratik modda gönderilmez.
+    duration_sec: int | None = None
 
 
 @router.post("/courses/{course_id}/overall-quiz")
@@ -43,10 +45,13 @@ async def generate_overall_quiz(
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
-def _strip_answers(questions_json: dict) -> dict:
-    """answer_keys'i servis etmez; frontend yalnızca answer_key_ref görür (Yetenek 04 §6)."""
+def _strip_answers(questions_json: dict, mode: str = "practice") -> dict:
+    """answer_keys'i servis etmez; sınav modunda ayrıca cevabı açığa çıkaran alanlar da
+    süzülür (Plan #35 — bkz. `overall_generator.strip_exam_answers`)."""
     public = dict(questions_json)
     public.pop("answer_keys", None)
+    if mode == "exam":
+        public["questions"] = strip_exam_answers(public.get("questions", []))
     return public
 
 
@@ -58,7 +63,7 @@ async def get_latest_overall_quiz(
     db = await get_db()
     try:
         cursor = await db.execute(
-            "SELECT id, questions_json, created_at FROM overall_quizzes "
+            "SELECT id, questions_json, created_at, mode, exam_id FROM overall_quizzes "
             "WHERE course_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1",
             (course_id, tenant_id),
         )
@@ -71,8 +76,10 @@ async def get_latest_overall_quiz(
     return {
         "id": row["id"],
         "course_id": course_id,
-        "questions_json": _strip_answers(questions_json),
+        "questions_json": _strip_answers(questions_json, row["mode"]),
         "created_at": row["created_at"],
+        "mode": row["mode"],
+        "exam_id": row["exam_id"],
     }
 
 
@@ -220,13 +227,15 @@ async def submit_overall_attempt(
     db = await get_db()
     try:
         cursor = await db.execute(
-            "INSERT INTO overall_attempts (tenant_id, overall_quiz_id, answers_json, score_json) "
-            "VALUES (?, ?, ?, ?)",
+            "INSERT INTO overall_attempts "
+            "(tenant_id, overall_quiz_id, answers_json, score_json, duration_sec) "
+            "VALUES (?, ?, ?, ?, ?)",
             (
                 tenant_id,
                 quiz_id,
                 json.dumps([a.model_dump() for a in payload.answers], ensure_ascii=False),
                 json.dumps(score_json, ensure_ascii=False),
+                payload.duration_sec,
             ),
         )
         await db.commit()
@@ -234,7 +243,7 @@ async def submit_overall_attempt(
     finally:
         await db.close()
 
-    return {"attempt_id": attempt_id, **score_json}
+    return {"attempt_id": attempt_id, "duration_sec": payload.duration_sec, **score_json}
 
 
 @router.get("/courses/{course_id}/overall-quizzes")
@@ -245,7 +254,7 @@ async def list_course_overall_quizzes(
     db = await get_db()
     try:
         cursor = await db.execute(
-            "SELECT id, questions_json, created_at FROM overall_quizzes "
+            "SELECT id, questions_json, created_at, mode, exam_id FROM overall_quizzes "
             "WHERE course_id = ? AND tenant_id = ? ORDER BY id DESC",
             (course_id, tenant_id),
         )
@@ -256,8 +265,10 @@ async def list_course_overall_quizzes(
         {
             "id": row["id"],
             "course_id": course_id,
-            "questions_json": _strip_answers(json.loads(row["questions_json"])),
+            "questions_json": _strip_answers(json.loads(row["questions_json"]), row["mode"]),
             "created_at": row["created_at"],
+            "mode": row["mode"],
+            "exam_id": row["exam_id"],
         }
         for row in rows
     ]
@@ -286,7 +297,7 @@ async def list_overall_attempts(
     db = await get_db()
     try:
         cursor = await db.execute(
-            "SELECT id, score_json, created_at FROM overall_attempts "
+            "SELECT id, score_json, created_at, duration_sec FROM overall_attempts "
             "WHERE overall_quiz_id = ? AND tenant_id = ? ORDER BY id DESC",
             (quiz_id, tenant_id),
         )
@@ -299,6 +310,7 @@ async def list_overall_attempts(
             "overall_quiz_id": quiz_id,
             "created_at": row["created_at"],
             "score_json": json.loads(row["score_json"] or "{}"),
+            "duration_sec": row["duration_sec"],
         }
         for row in rows
     ]

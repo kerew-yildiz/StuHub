@@ -9,6 +9,7 @@ import {
   type Quiz,
 } from '../api/quizzes'
 import { confirmDialog } from '../stores/confirmStore'
+import { WrongAnswerLinks } from './WrongAnswerLinks'
 
 interface QuizPlayerProps {
   quiz: Quiz
@@ -152,6 +153,13 @@ export function QuizPlayer({ quiz, onDelete }: QuizPlayerProps) {
                   <p className="mt-1 text-stuhub-text-secondary">
                     <b>Açıklama:</b> {result.explanation}
                   </p>
+                )}
+                {!result.correct && (
+                  <WrongAnswerLinks
+                    citations={result.citations}
+                    topic={questions.find((q) => q.qid === result.qid)?.question.topic}
+                    chapterId={quiz.chapter_id}
+                  />
                 )}
               </div>
             ))}

@@ -14,6 +14,7 @@ from ..auth import LOCAL_TENANT_ID
 from ..db import get_db
 from ..prompts.essay_prompts import (
     DEFAULT_CRITERIA_TEXT,
+    DRAFT_REVIEW_PROMPT,
     EMPTY_SUBMISSION_MESSAGE,
     HOMEWORK_GRADE_PROMPT,
 )
@@ -132,13 +133,14 @@ async def _save_submission(
     course_id: int | None,
     chapter_id: int | None,
     tenant_id: str,
+    kind: str = "grade",
 ) -> None:
     db = await get_db()
     try:
         await db.execute(
             "INSERT INTO essay_submissions "
-            "(tenant_id, course_id, chapter_id, prompt, user_text, grade_json) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "(tenant_id, course_id, chapter_id, prompt, user_text, grade_json, kind) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
                 tenant_id,
                 course_id,
@@ -146,6 +148,7 @@ async def _save_submission(
                 instructions,
                 user_text[:MAX_USER_TEXT],
                 json.dumps(grade, ensure_ascii=False),
+                kind,
             ),
         )
         await db.commit()
@@ -153,13 +156,103 @@ async def _save_submission(
         await db.close()
 
 
+def _validate_draft(data: dict) -> list[str]:
+    """Taslak geri bildirim şeması — ihlal listesi döner (boş = geçerli).
+
+    `score` alanının YOKLUĞUNU da doğrular: taslak modda puan sızmamalı.
+    """
+    errors: list[str] = []
+    if "score" in data:
+        errors.append("draft modda 'score' alanı olmamalı")
+    if not isinstance(data.get("has_thesis"), bool):
+        errors.append("has_thesis eksik/geçersiz")
+    if not isinstance(data.get("thesis_feedback"), str) or not data["thesis_feedback"].strip():
+        errors.append("thesis_feedback eksik")
+    if not isinstance(data.get("evidence_linked"), bool):
+        errors.append("evidence_linked eksik/geçersiz")
+    if not isinstance(data.get("evidence_feedback"), str) or not data["evidence_feedback"].strip():
+        errors.append("evidence_feedback eksik")
+    if not isinstance(data.get("weak_sections"), list):
+        errors.append("weak_sections liste olmalı")
+    next_steps = data.get("next_steps")
+    if not isinstance(next_steps, list) or not next_steps:
+        errors.append("next_steps en az bir adım içermeli")
+    return errors
+
+
+def _empty_draft_feedback() -> dict:
+    return {
+        "has_thesis": False,
+        "thesis_feedback": "Taslak boş. Önce tek cümlelik bir tez/ana iddia yaz.",
+        "evidence_linked": False,
+        "evidence_feedback": "Henüz kanıt/örnek bulunamadı.",
+        "weak_sections": ["tüm metin"],
+        "next_steps": ["Ana iddiani tek cümlede yaz.", "En az bir kanıt/örnek ekle."],
+    }
+
+
+async def review_draft(
+    *,
+    instructions: str,
+    user_text: str,
+    rubric: str | None = None,
+    course_id: int | None = None,
+    chapter_id: int | None = None,
+    tenant_id: str = LOCAL_TENANT_ID,
+) -> dict:
+    """Ödev taslağını PUANSIZ değerlendirir — yalnızca yapısal geri bildirim (Plan #41).
+
+    Son teslimden önce öğrenciyi yönlendirmek içindir: tez var mı, kanıt bağlanmış mı,
+    zayıf bölümler. `essay_submissions`'a `kind='draft'` ile kaydedilir — `grade_homework`
+    ile aynı tabloyu paylaşır ama `list_submissions` (final geçmişi) taslakları göstermez.
+    """
+    if not user_text.strip():
+        feedback = _empty_draft_feedback()
+        await _save_submission(
+            instructions, user_text, feedback, course_id, chapter_id, tenant_id, kind="draft"
+        )
+        return feedback
+
+    criteria_text = rubric.strip() if rubric and rubric.strip() else DEFAULT_CRITERIA_TEXT
+    prompt = DRAFT_REVIEW_PROMPT.format(
+        instructions=instructions[:MAX_INSTRUCTIONS],
+        criteria_text=criteria_text[:2000],
+        user_text=user_text[:MAX_USER_TEXT],
+    )
+
+    for attempt in range(2):
+        data = await llm_service.chat_json(
+            [{"role": "user", "content": prompt}],
+            kind="essay_draft_review",
+            tenant_id=tenant_id,
+            course_id=course_id,
+            chapter_id=chapter_id,
+        )
+        errors = _validate_draft(data)
+        if errors:
+            logger.warning(
+                "taslak geri bildirim doğrulama hatası (deneme %s): %s", attempt + 1, errors
+            )
+            if attempt == 1:
+                raise EssayServiceError("Taslak geri bildirimi üretilemedi. Lütfen tekrar deneyin.")
+            continue
+        await _save_submission(
+            instructions, user_text, data, course_id, chapter_id, tenant_id, kind="draft"
+        )
+        return data
+
+    raise EssayServiceError("Taslak geri bildirimi üretilemedi. Lütfen tekrar deneyin.")
+
+
 async def list_submissions(course_id: int, tenant_id: str = LOCAL_TENANT_ID) -> list[dict]:
-    """Dersin ödev geçmişi (yeni→eski) — metinler kısaltılmadan saklanır, listede özetlenir."""
+    """Dersin ödev geçmişi (yeni→eski, yalnızca final değerlendirmeler — taslaklar HARİÇ).
+
+    Metinler kısaltılmadan saklanır, listede özetlenir."""
     db = await get_db()
     try:
         cursor = await db.execute(
             "SELECT id, course_id, chapter_id, prompt, grade_json, created_at "
-            "FROM essay_submissions WHERE course_id = ? AND tenant_id = ? "
+            "FROM essay_submissions WHERE course_id = ? AND tenant_id = ? AND kind = 'grade' "
             "ORDER BY id DESC LIMIT 50",
             (course_id, tenant_id),
         )

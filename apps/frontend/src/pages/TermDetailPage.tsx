@@ -162,7 +162,7 @@ export function TermDetailPage() {
   return (
     <section>
       <Breadcrumb items={[{ label: 'Dönemler', to: '/' }, { label: term?.name ?? 'Dönem' }]} />
-      <div className="mt-2 flex items-center justify-between">
+      <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold">{term?.name ?? 'Dönem'}</h1>
           <p className="mt-2 text-stuhub-text-secondary">

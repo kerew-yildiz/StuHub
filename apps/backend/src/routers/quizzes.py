@@ -134,7 +134,8 @@ async def submit_attempt(
     db = await get_db()
     try:
         cursor = await db.execute(
-            "INSERT INTO quiz_attempts (tenant_id, quiz_id, user_answers_json, score, feedback_json) "
+            "INSERT INTO quiz_attempts "
+            "(tenant_id, quiz_id, user_answers_json, score, feedback_json) "
             "VALUES (?, ?, ?, ?, ?)",
             (
                 tenant_id,

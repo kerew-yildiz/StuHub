@@ -9,6 +9,7 @@ import {
   type OverallQuiz,
 } from '../api/overall'
 import { confirmDialog } from '../stores/confirmStore'
+import { WrongAnswerLinks } from './WrongAnswerLinks'
 
 interface OverallQuizPlayerProps {
   quiz: OverallQuiz
@@ -238,6 +239,17 @@ export function OverallQuizPlayer({ quiz, onDelete }: OverallQuizPlayerProps) {
                         </div>
                       )}
                     </div>
+                  )}
+
+                  {/* Yanlış (açık uçluda tam puan alınamamış) sorularda not + kaynak bağlantısı */}
+                  {(result.type === 'open'
+                    ? (result.score ?? 0) < 10
+                    : result.correct === false) && (
+                    <WrongAnswerLinks
+                      citations={result.citations ?? []}
+                      topic={questions[result.qid]?.topic}
+                      courseId={quiz.course_id}
+                    />
                   )}
                 </div>
               ))}

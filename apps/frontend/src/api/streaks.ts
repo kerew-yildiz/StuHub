@@ -18,3 +18,15 @@ export interface StreakSummary {
 export function getStreakSummary(): Promise<StreakSummary> {
   return apiFetch<StreakSummary>('/streaks')
 }
+
+/** Haftalık kalıcı hatırlama ilerlemesi (Plan #48). */
+export interface RetentionProgress {
+  topics_mastered_this_week: number
+  topics: string[]
+}
+
+/** Bu hafta kalıcı hatırlama eşiğine (SM-2 aralığı >= 21 gün) ulaşan konuları getirir
+ * (GET /courses/{id}/retention-progress). LLM YOK. */
+export function getRetentionProgress(courseId: number): Promise<RetentionProgress> {
+  return apiFetch<RetentionProgress>(`/courses/${courseId}/retention-progress`)
+}

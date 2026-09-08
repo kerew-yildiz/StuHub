@@ -6,9 +6,11 @@ günlük hedef ilerlemesini türetir. Kişisel kalır (leaderboard/paylaşım yo
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+import json
+from datetime import UTC, date, datetime, timedelta
 
 from ..auth import LOCAL_TENANT_ID
+from ..config import settings
 from ..db import get_db
 
 ACTIVITY_KINDS = ("note", "quiz", "flashcard", "chat")
@@ -130,3 +132,74 @@ async def load_active_dates(tenant_id: str = LOCAL_TENANT_ID) -> set[str]:
     finally:
         await db.close()
     return {row["date"] for row in rows}
+
+
+# ── Öğrenme ilerlemesi göstergesi (Plan #48) ────────────────────────────
+
+# Bir kartın "kalıcı hatırlandı" sayılması için gereken SM-2 aralık eşiği (gün).
+# SRS pratiğinde ~3 haftalık aralık kısa vadeli ezberden ayırt edici kabul edilir.
+MASTERY_INTERVAL_DAYS = 21.0
+
+
+def _week_start(today: date) -> date:
+    """Bu haftanın Pazartesi günü (bugün dahil) — ISO hafta sınırı."""
+    return today - timedelta(days=today.weekday())
+
+
+def _week_start_param(today: date) -> datetime | str:
+    """Hafta başlangıcı zaman filtresi — `feed_service._cutoff` ile aynı ikili biçim:
+    SaaS/Postgres'te native `datetime` (asyncpg TIMESTAMPTZ karşılaştırması için),
+    SQLite'ta `CURRENT_TIMESTAMP` ile aynı 'YYYY-MM-DD HH:MM:SS' metni."""
+    monday = _week_start(today)
+    moment = datetime(monday.year, monday.month, monday.day, tzinfo=UTC)
+    if settings.saas_mode:
+        return moment
+    return moment.strftime("%Y-%m-%d %H:%M:%S")
+
+
+async def topics_mastered_this_week(
+    course_id: int, tenant_id: str = LOCAL_TENANT_ID, today: date | None = None
+) -> list[str]:
+    """Bu hafta kalıcı hatırlama eşiğine ulaşan KONU adları — LLM YOK (Plan #48).
+
+    Ölçüt: kartın mevcut aralığı `MASTERY_INTERVAL_DAYS`i karşılıyor VE en son
+    tekrarı (`reviewed_at`) bu hafta içinde. `card_reviews` yalnızca son durumu
+    tutar (aralık geçmişi yok) — bu yüzden bir kart haftalar önce eşiği geçip bu
+    hafta hiç tekrar edilmediyse sayılmaz; bu, kullanıcının o konuyu bu hafta
+    fiilen tekrar ettiğini garanti eden kasıtlı bir tasarım seçimidir.
+
+    Konu adı `flashcard_sets.cards_json[card_index]["topic"]`den okunur (bkz.
+    services/flashcard_generator.py). Aynı konudaki birden çok kart tek girdiye
+    indirgenir.
+    """
+    today = today or datetime.now(UTC).date()
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT id, cards_json FROM flashcard_sets WHERE course_id = ? AND tenant_id = ?",
+            (course_id, tenant_id),
+        )
+        sets = {row["id"]: json.loads(row["cards_json"] or "[]") for row in await cursor.fetchall()}
+        if not sets:
+            return []
+
+        placeholders = ", ".join("?" * len(sets))
+        cursor = await db.execute(
+            "SELECT set_id, card_index FROM card_reviews "  # nosec B608 - araya giren metin sabit `?` yer tutucularıdır; değerler parametreyle geçer
+            f"WHERE tenant_id = ? AND set_id IN ({placeholders}) "
+            "AND interval_days >= ? AND reviewed_at >= ?",
+            (tenant_id, *sets.keys(), MASTERY_INTERVAL_DAYS, _week_start_param(today)),
+        )
+        rows = list(await cursor.fetchall())
+    finally:
+        await db.close()
+
+    topics: set[str] = set()
+    for row in rows:
+        cards = sets.get(row["set_id"], [])
+        index = row["card_index"]
+        if 0 <= index < len(cards):
+            topic = str(cards[index].get("topic") or "").strip()
+            if topic:
+                topics.add(topic)
+    return sorted(topics)

@@ -14,6 +14,8 @@ from ..quota import enforce_quota
 from ..services.essay_service import EssayServiceError, grade_homework, list_submissions
 from ..services.guide_service import (
     GuideError,
+    compare,
+    course_glossary,
     generate_chapter_guide,
     generate_course_guide,
     get_latest_guide,
@@ -42,6 +44,24 @@ class EssayGradeIn(BaseModel):
     instructions: str = Field(min_length=1)
     rubric: str | None = None
     user_text: str
+
+class CompareIn(BaseModel):
+    """Karşılaştırma tablosu isteği — kavramlar `study_guides` anahtar terimleridir."""
+
+    concepts: list[str] = Field(min_length=2, max_length=6)
+
+
+class GlossaryEntryOut(BaseModel):
+    """Sözlük kaydı — tanım ve ilk geçiş bilgisi notun markdown metninden gelir."""
+
+    term: str
+    definition: str
+    chapter_id: int | None
+    chapter_title: str | None
+    note_id: int | None
+    position: int | None
+    heading: str | None
+
 
 async def _chapter_exists(db, chapter_id: int, tenant_id: str) -> bool:
     cursor = await db.execute(
@@ -111,6 +131,44 @@ async def latest_course_guide(
     return await get_latest_guide(
         course_id=course_id, chapter_id=None, kind=kind, tenant_id=tenant_id
     )
+
+
+# ── Karşılaştırma tablosu + terim sözlüğü (Plan #24 / #29) ──────────────
+
+
+@router.post("/courses/{course_id}/compare")
+async def create_comparison(
+    course_id: int, payload: CompareIn, tenant_id: str = Depends(enforce_quota)
+) -> dict:
+    """Seçilen kavramları ikili karşılaştırır (LLM) ve kind='comparison' kaydeder.
+
+    Kaydedilen tablo `GET /api/courses/{course_id}/guides?kind=comparison` ile okunur.
+    """
+    db = await get_db()
+    try:
+        if not await _course_exists(db, course_id, tenant_id):
+            raise HTTPException(status_code=404, detail="Ders bulunamadı")
+    finally:
+        await db.close()
+    try:
+        return await compare(course_id, payload.concepts, tenant_id=tenant_id)
+    except GuideError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/courses/{course_id}/glossary")
+async def course_glossary_entries(
+    course_id: int, tenant_id: str = Depends(get_tenant_id)
+) -> list[GlossaryEntryOut]:
+    """Ders terim sözlüğü — alfabetik, ilk geçiş bağlantılı (LLM YOK, SQL + regex)."""
+    db = await get_db()
+    try:
+        if not await _course_exists(db, course_id, tenant_id):
+            raise HTTPException(status_code=404, detail="Ders bulunamadı")
+    finally:
+        await db.close()
+    entries = await course_glossary(course_id, tenant_id=tenant_id)
+    return [GlossaryEntryOut(**entry) for entry in entries]
 
 
 # ── Ödev değerlendirme ──────────────────────────────────────────────────

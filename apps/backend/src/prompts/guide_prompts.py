@@ -60,3 +60,39 @@ KURALLAR:
 CHAPTAR NOTLARI:
 {notes_md}
 """
+
+COMPARISON_PROMPT = """Sen bir üniversite ders asistanısın. Öğrenci, sınavda birbirine
+karıştırdığı kavramları yan yana görmek istiyor.
+
+GÖREV: Aşağıdaki kavramları İKİLİ olarak karşılaştıran bir tablo üret.
+
+KARŞILAŞTIRILACAK KAVRAMLAR:
+{concepts}
+
+ZORUNLU İKİLİLER (her biri için tam olarak bir kayıt üret, fazlasını üretme):
+{pairs}
+
+KURALLAR:
+1. SADECE aşağıdaki ders bağlamında geçen bilgileri kullan; dış bilgi EKLEME.
+2. Her ikili için en az 1 benzerlik, en az 2 ayırt edici fark ve öğrencilerin bu
+   ikilide en sık karıştırdığı noktayı yaz.
+3. Farklarda "aspect" karşılaştırma ölçütüdür (ör. "bellek karmaşıklığı"); "a" ve "b"
+   sırasıyla ikilinin birinci ve ikinci kavramına ait değerdir.
+4. {dil_talimati}
+5. Şu JSON şemasına birebir uy (``` işareti kullanma):
+{{
+  "concepts": ["kavram adları (girdiyle aynı sırada)"],
+  "pairs": [
+    {{
+      "a": "birinci kavram",
+      "b": "ikinci kavram",
+      "similarities": ["ortak nokta (1-4 adet, cümle halinde)"],
+      "differences": [{{"aspect": "ölçüt (1-4 kelime)", "a": "a'daki durum", "b": "b'deki durum"}}],
+      "confusion": "bu ikilide en sık karıştırılan nokta (tek cümle)"
+    }}
+  ]
+}}
+
+DERS BAĞLAMI:
+{context_md}
+"""

@@ -304,10 +304,43 @@ def _strip_answer_keys(questions: list[dict]) -> tuple[list[dict], dict]:
     return questions, answer_keys
 
 
-async def generate_overall_quiz_stream(course_id: int, tenant_id: str):
-    """Genel quiz üretim hattı — SSE olayları yield eder (Faz 5.1)."""
+# Sınav modunda (Plan #35) sonuca kadar gizli kalması gereken alanlar — cevabı doğrudan
+# açığa çıkarırlar (mcq/tf/fib doğru cevabı, ya da feedback_wrong metninde yazılı doğru
+# cevap). DB'deki tam kayıt etkilenmez; yalnızca istemciye giden kopya süzülür.
+EXAM_REVEAL_FIELDS = {
+    "correct_index",
+    "answer",
+    "accepted_answers",
+    "feedback_correct",
+    "feedback_wrong",
+    "explanation",
+}
+
+
+def strip_exam_answers(questions: list[dict]) -> list[dict]:
+    """Sınav modu istemci kopyası — `EXAM_REVEAL_FIELDS` çıkarılmış soru listesi döner.
+
+    Puanlama `routers/overall.py` `submit_overall_attempt`'ta DB'deki tam kayıttan yapılır;
+    bu fonksiyon yalnızca üretim akışının/okuma uçlarının istemciye ne gönderdiğini süzer.
+    """
+    return [{k: v for k, v in q.items() if k not in EXAM_REVEAL_FIELDS} for q in questions]
+
+
+async def generate_overall_quiz_stream(
+    course_id: int,
+    tenant_id: str,
+    *,
+    mode: str = "practice",
+    exam_id: int | None = None,
+):
+    """Genel quiz üretim hattı — SSE olayları yield eder (Faz 5.1).
+
+    `mode='exam'` + `exam_id` sınav simülasyonu (Plan #35): aynı motor, tek fark
+    kaydın `overall_quizzes.mode`/`exam_id`'sine yazılması ve istemciye giden
+    `questions`'ın `strip_exam_answers` ile süzülmesi.
+    """
     try:
-        async for event in _generate(course_id, tenant_id):
+        async for event in _generate(course_id, tenant_id, mode=mode, exam_id=exam_id):
             yield event
     except OverallGenerationError as exc:
         yield {"type": "error", "message": str(exc)}
@@ -321,7 +354,7 @@ async def generate_overall_quiz_stream(course_id: int, tenant_id: str):
         }
 
 
-async def _generate(course_id: int, tenant_id: str):
+async def _generate(course_id: int, tenant_id: str, *, mode: str = "practice", exam_id: int | None = None):
     notes = await _load_course_notes(course_id, tenant_id)
     if not notes:
         raise OverallGenerationError(
@@ -395,8 +428,9 @@ async def _generate(course_id: int, tenant_id: str):
     db = await get_db()
     try:
         cursor = await db.execute(
-            "INSERT INTO overall_quizzes (tenant_id, course_id, questions_json) VALUES (?, ?, ?)",
-            (tenant_id, course_id, json.dumps(questions_json, ensure_ascii=False)),
+            "INSERT INTO overall_quizzes (tenant_id, course_id, questions_json, mode, exam_id) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (tenant_id, course_id, json.dumps(questions_json, ensure_ascii=False), mode, exam_id),
         )
         await db.commit()
         row_id = cursor.lastrowid
@@ -411,7 +445,10 @@ async def _generate(course_id: int, tenant_id: str):
             "id": row_id,
             "course_id": course_id,
             "seed": seed,
-            "questions": questions,  # answer_key'siz (frontend)
+            "mode": mode,
+            "exam_id": exam_id,
+            # sınav modunda cevabı açığa çıkaran alanlar süzülür (Plan #35)
+            "questions": strip_exam_answers(questions) if mode == "exam" else questions,
         },
         "warnings": warnings,
     }

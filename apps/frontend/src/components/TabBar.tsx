@@ -1,11 +1,14 @@
 interface TabBarProps {
-  tabs: readonly { id: string; label: string }[]
+  tabs: readonly { id: string; label: string; shortcutHint?: string }[]
   activeId: string
   onSelect: (id: string) => void
   ariaLabel: string
 }
 
-/** Yatay sekme çubuğu — cam pill mod değiştirici; mod değişimi rota değil. */
+/** Yatay sekme çubuğu — cam pill mod değiştirici; mod değişimi rota değil.
+ * `shortcutHint` verilirse (örn. "1") etiketin yanında soluk bir tuş rozeti gösterir
+ * — klavye kısayolunun keşfedilebilir olması için (2026-09-08 kritik incelemede
+ * "Alex/power-user" bulgusu). */
 export function TabBar({ tabs, activeId, onSelect, ariaLabel }: TabBarProps) {
   return (
     <div
@@ -22,6 +25,7 @@ export function TabBar({ tabs, activeId, onSelect, ariaLabel }: TabBarProps) {
             role="tab"
             aria-selected={active}
             onClick={() => onSelect(tab.id)}
+            title={tab.shortcutHint ? `Kısayol: ${tab.shortcutHint}` : undefined}
             className={`rounded-pill px-3.5 py-1.5 text-sm font-medium transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] active:scale-[0.98] ${
               active
                 ? 'bg-stuhub-accent-glass border border-stuhub-accent-glass-border text-stuhub-text shadow-sm'
@@ -29,6 +33,11 @@ export function TabBar({ tabs, activeId, onSelect, ariaLabel }: TabBarProps) {
             }`}
           >
             {tab.label}
+            {tab.shortcutHint && (
+              <span className="ml-1.5 text-xs text-stuhub-text-muted" aria-hidden="true">
+                {tab.shortcutHint}
+              </span>
+            )}
           </button>
         )
       })}

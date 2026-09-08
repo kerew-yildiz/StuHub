@@ -33,6 +33,10 @@ export interface OverallQuiz {
   course_id: number
   questions_json: { seed: number; questions: OverallQuestion[] }
   created_at?: string
+  /** 'practice' (varsayılan, anlık feedback) | 'exam' (sınav simülasyonu, Plan #35). */
+  mode?: 'practice' | 'exam'
+  /** Sınav modunda bağlı olduğu sınav kaydı; pratik modda null/undefined. */
+  exam_id?: number | null
 }
 
 export interface OverallGrade {
@@ -72,6 +76,8 @@ export interface OverallOutcome {
   closed_total: number
   open_total: number
   results: OverallResult[]
+  /** Sınav simülasyonunda gönderilen geçen süre (saniye); pratik modda null. */
+  duration_sec?: number | null
 }
 
 export interface OverallStreamHandlers {
@@ -156,6 +162,7 @@ export interface SavedOverallAttempt {
   overall_quiz_id: number
   created_at: string
   score_json: OverallOutcome
+  duration_sec?: number | null
 }
 
 export async function listOverallAttempts(quizId: number): Promise<SavedOverallAttempt[]> {
@@ -168,14 +175,16 @@ export async function removeOverallAttempt(attemptId: number): Promise<void> {
   await authFetch(`/overall-attempts/${attemptId}`, { method: 'DELETE' })
 }
 
-/** Tüm cevapları gönderir; kapalı sorular anında, açık uçlular Essay Grader ile puanlanır. */
+/** Tüm cevapları gönderir; kapalı sorular anında, açık uçlular Essay Grader ile puanlanır.
+ * `durationSec` yalnızca sınav simülasyonunda (Plan #35) gönderilir. */
 export async function submitOverallAttempt(
   quizId: number,
   answers: Array<{ qid: number; value: number | string }>,
+  durationSec?: number,
 ): Promise<OverallOutcome> {
   const response = await authFetch(`/overall-quizzes/${quizId}/attempts`, {
     method: 'POST',
-    body: JSON.stringify({ answers }),
+    body: JSON.stringify({ answers, duration_sec: durationSec ?? null }),
   })
   if (!response.ok) {
     throw new Error('Cevaplar gönderilemedi. Lütfen tekrar deneyin.')

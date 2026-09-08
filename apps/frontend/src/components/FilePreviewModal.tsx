@@ -7,6 +7,8 @@ interface FilePreviewModalProps {
   /** `authFetch` kuralına uygun `/api` ÖNEKSİZ yol (örn. `/materials/5/file`). */
   path: string
   title: string
+  /** PDF'i belirli sayfada açar (`#page=N`); verilmezse dosya baştan açılır. */
+  page?: number
   onClose: () => void
 }
 
@@ -15,7 +17,7 @@ interface FilePreviewModalProps {
  * SaaS modda `Authorization` başlığı gerektiği için (`<iframe src>` başlık taşıyamaz)
  * dosya önce `authFetch` ile blob olarak indirilir, sonra `blob:` URL'i iframe'e verilir
  * (bkz. `lib/useAuthedFileUrl.ts`). */
-export function FilePreviewModal({ path, title, onClose }: FilePreviewModalProps) {
+export function FilePreviewModal({ path, title, page, onClose }: FilePreviewModalProps) {
   const closeRef = useRef<HTMLButtonElement>(null)
   const { blobUrl, loading, error } = useAuthedFileUrl(path)
 
@@ -63,7 +65,11 @@ export function FilePreviewModal({ path, title, onClose }: FilePreviewModalProps
             Yükleniyor…
           </p>
         ) : (
-          <iframe src={blobUrl} title={title} className="h-[75vh] w-full bg-white" />
+          <iframe
+            src={page != null ? `${blobUrl}#page=${page}` : blobUrl}
+            title={title}
+            className="h-[75vh] w-full bg-white"
+          />
         )}
       </div>
     </div>

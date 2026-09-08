@@ -8,21 +8,35 @@ import { courseFlashcardsExportUrl, downloadFile } from '../api/exports'
 import { fetchDueCards, type DueCard } from '../api/flashcards'
 import { indexingApi, type IndexingJob } from '../api/indexing'
 import { materialsApi, type Material } from '../api/materials'
-import { listOverallQuizzes, removeOverallQuiz, type OverallQuiz } from '../api/overall'
+import { listOverallQuizzes, removeOverallQuiz, type OverallOutcome, type OverallQuiz } from '../api/overall'
 import { slidesApi } from '../api/slides'
 import { termsApi } from '../api/terms'
+import { AbandonedTopicsList } from '../components/AbandonedTopicsList'
 import { Breadcrumb } from '../components/Breadcrumb'
 import { ChapterForm } from '../components/ChapterForm'
 import { ChatPanel } from '../components/ChatPanel'
+import { ComparisonTable } from '../components/ComparisonTable'
+import { ErrorLogPanel } from '../components/ErrorLogPanel'
+import { EssayDraftCoach } from '../components/EssayDraftCoach'
 import { EssayGraderForm } from '../components/EssayGraderForm'
+import { ExamCountdownPanel } from '../components/ExamCountdownPanel'
+import { ExamPostmortemForm, type MissedQuestion } from '../components/ExamPostmortemForm'
+import { ExamSimulationPlayer } from '../components/ExamSimulationPlayer'
 import { FilePreviewModal } from '../components/FilePreviewModal'
 import { FlashcardPlayer } from '../components/FlashcardPlayer'
+import { GlossaryPanel } from '../components/GlossaryPanel'
 import { GuidePanel } from '../components/GuidePanel'
 import { GuideSlidesForm } from '../components/GuideSlidesForm'
 import { MaterialUploadForm } from '../components/MaterialUploadForm'
+import { NextActionCard } from '../components/NextActionCard'
 import { OverallQuizPlayer } from '../components/OverallQuizPlayer'
 import { PostCreatePrompt } from '../components/PostCreatePrompt'
+import { QuizFeed } from '../components/QuizFeed'
+import { RetentionCurve } from '../components/RetentionCurve'
+import { RetentionProgressBadge } from '../components/RetentionProgressBadge'
+import { StudyTimer } from '../components/StudyTimer'
 import { TabBar } from '../components/TabBar'
+import { WeakTopicHeatmap } from '../components/WeakTopicHeatmap'
 import { useAnimatedProgress } from '../lib/useAnimatedProgress'
 import { confirmDialog } from '../stores/confirmStore'
 import { useGenerationStore } from '../stores/generationStore'
@@ -36,9 +50,50 @@ const COURSE_TABS = [
   { id: 'cards', label: "Bugünün Kartları" },
   { id: 'guide', label: 'Rehber' },
   { id: 'essay', label: 'Ödev Değerlendir' },
+  { id: 'errors', label: 'Hatalarım' },
+  { id: 'heatmap', label: 'Zayıf Konular' },
+  { id: 'exam', label: 'Sınav Planı' },
+  { id: 'feed', label: 'Kaydırarak Quiz' },
+  { id: 'study', label: 'Karşılaştır & Sözlük' },
+  { id: 'smart', label: 'Bugün Ne Çalışsam' },
+  { id: 'draft', label: 'Ödev Taslak Koçu' },
 ] as const
 
 type CourseTab = (typeof COURSE_TABS)[number]['id']
+
+// Belirsiz/jargon etiketler ("Kaydırarak Quiz", "Ödev Taslak Koçu"...) için tek
+// satırlık bağlamsal açıklama — sekme değişince altında görünür (2026-09-08 kritik
+// incelemede "Jordan/ilk-kullanıcı" bulgusu: hangi sekmenin ne yaptığı belli değildi).
+const COURSE_TAB_DESCRIPTIONS: Record<CourseTab, string> = {
+  overview: 'Chapter\'ları ve materyalleri buradan yönetirsin.',
+  quiz: "Dersin tüm chapter notlarından tek seferlik geniş bir quiz üretir.",
+  ask: 'Materyale doğrudan soru sorup kaynaklı yanıt alırsın.',
+  cards: 'Bugün tekrar etmen gereken flashcard\'ları gösterir.',
+  guide: 'Hocanın sunumundan üretilen konu rehberini gösterir.',
+  essay: 'Yazdığın bir ödevi kaynağa dayalı olarak değerlendirir.',
+  errors: 'Quizlerde yanlış yaptığın soruları biriktirir.',
+  heatmap: 'En çok hata yaptığın konuları ısı haritasıyla gösterir.',
+  exam: 'Sınav tarihini girip geri sayım + tekrar planı oluşturursun.',
+  feed: 'Sosyal medya tarzı, kaydırarak ilerleyen kısa quiz akışı.',
+  study: 'Konuları karşılaştırır ve terim sözlüğüne bakarsın.',
+  smart: 'Bugün hangi konuya çalışman gerektiğini önerir.',
+  draft: 'Bitmemiş ödev taslağına puan vermeden yönlendirme verir.',
+}
+
+// 13 sekme tek sıra hâlinde bilişsel yük eşiğinin (≤4 görünür seçenek) çok üstündeydi
+// ve mobilde ilk ekranın tamamını kaplıyordu (2026-09-08 kritik incelemede tespit
+// edildi). Öğrenci çalışma akışına göre 4 üst gruba ayrıldı; her grup ≤4 alt sekme
+// taşır.
+const COURSE_TAB_GROUPS = [
+  { id: 'learn', label: 'Öğren', tabIds: ['overview', 'guide', 'study'] },
+  { id: 'practice', label: 'Pratik Yap', tabIds: ['quiz', 'cards', 'feed', 'ask'] },
+  { id: 'exam-prep', label: 'Sınava Hazırlan', tabIds: ['exam', 'heatmap', 'errors', 'smart'] },
+  { id: 'homework', label: 'Ödev', tabIds: ['essay', 'draft'] },
+] as const satisfies readonly { id: string; label: string; tabIds: readonly CourseTab[] }[]
+
+function groupOf(tabId: CourseTab): (typeof COURSE_TAB_GROUPS)[number]['id'] {
+  return COURSE_TAB_GROUPS.find((group) => (group.tabIds as readonly string[]).includes(tabId))!.id
+}
 
 /** İndeksleme ilerleme çubuğu — hedefe 1'er birim animasyonla yaklaşır. */
 function JobProgressBar({ target }: { target: number }) {
@@ -145,6 +200,25 @@ export function CoursePage() {
   const [newChapter, setNewChapter] = useState<Chapter | null>(null)
   const [tab, setTab] = useState<CourseTab>('overview')
 
+  // Klavye kısayolu 1-4: ders bölümleri arasında geçiş (Öğren/Pratik Yap/Sınava
+  // Hazırlan/Ödev) — metin girişi odaktayken tetiklenmez (2026-09-08 kritik
+  // incelemede "Alex/power-user" bulgusu: klavye kısayolu yoktu).
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      const typing =
+        target?.tagName === 'INPUT' ||
+        target?.tagName === 'TEXTAREA' ||
+        target?.isContentEditable
+      if (typing || event.metaKey || event.ctrlKey || event.altKey) return
+      const index = Number(event.key) - 1
+      const group = COURSE_TAB_GROUPS[index]
+      if (group) setTab(group.tabIds[0])
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   // genel quiz durumu — küresel üretim deposu (madde 2)
   const [overallQuizzes, setOverallQuizzes] = useState<OverallQuiz[]>([])
   // bugünün due kartları + oynatıcı (Faz V2.2)
@@ -155,6 +229,12 @@ export function CoursePage() {
   )
   const quizProgress = useAnimatedProgress(overallJob?.percent ?? 0)
   const [quizKey, setQuizKey] = useState(0)
+  // sınav simülasyonu — seçilen sınav + oynatıcı sonucu (Plan #35/#44)
+  const [simulatingExam, setSimulatingExam] = useState<{ id: number; title: string } | null>(null)
+  const [examOutcome, setExamOutcome] = useState<{
+    outcome: OverallOutcome
+    missed: MissedQuestion[]
+  } | null>(null)
 
   const refreshJobs = useCallback(async () => {
     if (!numericId) return
@@ -315,13 +395,26 @@ export function CoursePage() {
         <p className="mt-8 text-sm text-stuhub-text-secondary">Yükleniyor…</p>
       )}
 
-      <div className="mt-8">
+      <div className="mt-8 space-y-2">
         <TabBar
-          tabs={COURSE_TABS}
+          tabs={COURSE_TAB_GROUPS.map((group, index) => ({
+            ...group,
+            shortcutHint: String(index + 1),
+          }))}
+          activeId={groupOf(tab)}
+          onSelect={(groupId) => {
+            const group = COURSE_TAB_GROUPS.find((g) => g.id === groupId)
+            if (group) setTab(group.tabIds[0])
+          }}
+          ariaLabel="Ders bölümü"
+        />
+        <TabBar
+          tabs={COURSE_TABS.filter((t) => groupOf(t.id) === groupOf(tab))}
           activeId={tab}
           onSelect={(id) => setTab(id as CourseTab)}
           ariaLabel="Ders modu"
         />
+        <p className="px-1 text-sm text-stuhub-text-secondary">{COURSE_TAB_DESCRIPTIONS[tab]}</p>
       </div>
 
       {tab === 'overview' && (
@@ -441,8 +534,15 @@ export function CoursePage() {
                       </span>
                     )}
                     {active && <JobProgressBar target={job.progress} />}
-                    {!job && (
+                    {/* Sunumlar (guide slides) hiç indekslenmez — job kaydı asla oluşmaz.
+                        Bu materyaller için "Kuyruğa alınıyor" göstermek kalıcı/yanlış bir
+                        "hâlâ işleniyor" izlenimi veriyordu (2026-09-08 kritik incelemede
+                        tespit edildi: gerçekte materyal zaten kullanıma hazırdı). */}
+                    {!job && material.type === 'textbook' && (
                       <span className="text-stuhub-text-secondary">Kuyruğa alınıyor…</span>
+                    )}
+                    {!job && material.type !== 'textbook' && (
+                      <span className="text-stuhub-success">Kullanıma hazır</span>
                     )}
                     {job?.status === 'failed' && (
                       <button
@@ -666,6 +766,92 @@ export function CoursePage() {
             </div>
           </div>
         </>
+      )}
+
+      {tab === 'errors' && <ErrorLogPanel courseId={numericId} />}
+
+      {tab === 'heatmap' && <WeakTopicHeatmap courseId={numericId} />}
+
+      {tab === 'exam' && (
+        <div className="mt-8 space-y-8">
+          {examOutcome ? (
+            <div className="glass-panel space-y-4 p-5">
+              <h2 className="text-xl font-semibold">Sınav Sonucu</h2>
+              <p className="text-sm text-stuhub-text-secondary">
+                Puan: {examOutcome.outcome.score} — {examOutcome.missed.length} soru kaçırıldı.
+              </p>
+              {examOutcome.missed.length > 0 && (
+                <ExamPostmortemForm
+                  examId={simulatingExam?.id ?? 0}
+                  missedQuestions={examOutcome.missed}
+                  onSubmitted={() => setExamOutcome(null)}
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setExamOutcome(null)
+                  setSimulatingExam(null)
+                }}
+                className="glass-panel-subtle glass-interactive rounded-control px-4 py-2 text-sm font-medium text-stuhub-text-secondary"
+              >
+                Kapat
+              </button>
+            </div>
+          ) : simulatingExam ? (
+            <ExamSimulationPlayer
+              courseId={numericId}
+              examId={simulatingExam.id}
+              examTitle={simulatingExam.title}
+              onFinished={(outcome) => {
+                const missed: MissedQuestion[] = outcome.results
+                  .filter((r) => (r.score != null ? r.score < 10 : r.correct === false))
+                  .map((r) => ({ qid: r.qid, question: r.question }))
+                setExamOutcome({ outcome, missed })
+              }}
+            />
+          ) : (
+            <>
+              <ExamCountdownPanel
+                courseId={numericId}
+                chapters={chapters}
+                onSimulate={(exam) => setSimulatingExam({ id: exam.id, title: exam.title })}
+              />
+              <RetentionCurve courseId={numericId} />
+            </>
+          )}
+        </div>
+      )}
+
+      {tab === 'feed' && (
+        <div className="mt-8">
+          <QuizFeed courseId={numericId} />
+        </div>
+      )}
+
+      {tab === 'study' && (
+        <div className="mt-8 space-y-8">
+          <ComparisonTable courseId={numericId} />
+          <GlossaryPanel courseId={numericId} />
+        </div>
+      )}
+
+      {tab === 'smart' && (
+        <div className="mt-8 space-y-8">
+          <NextActionCard
+            courseId={numericId}
+            onOpenChapter={(chapterId) => navigate(`/dersler/${numericId}/defter/${chapterId}`)}
+          />
+          <RetentionProgressBadge courseId={numericId} />
+          <StudyTimer courseId={numericId} />
+          <AbandonedTopicsList courseId={numericId} />
+        </div>
+      )}
+
+      {tab === 'draft' && (
+        <div className="mt-8">
+          <EssayDraftCoach courseId={numericId} />
+        </div>
       )}
     </section>
   )

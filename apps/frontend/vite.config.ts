@@ -60,5 +60,9 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // Yalnızca uygulama kaynağındaki testler koşar (varsayılan include deseni
+    // node_modules içindeki paket testlerini de topluyordu).
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    exclude: ['node_modules/**', 'dist/**'],
   },
 })
