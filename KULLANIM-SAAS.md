@@ -1,7 +1,13 @@
 # StuHub — SaaS Kurulum Kılavuzu
 
-Bu belge StuHub'ı **çok kiracılı (multi-tenant) SaaS** modunda çalıştırmak içindir.
-Yerel/tek-kullanıcı kurulum için `KULLANIM.md` yeterli — bu belgeyi okumanıza gerek yok.
+Bu belge StuHub'ı **çok kiracılı (multi-tenant) SaaS** modunda çalıştırmak içindir —
+Supabase, auth ve Lemon Squeezy kurulumu. Yerel/tek-kullanıcı kurulum için `KULLANIM.md`
+yeterli.
+
+> **Bu belge kurulumu anlatır, üretime almayı değil.** Railway'e deploy için
+> **[`DEPLOY.md`](./DEPLOY.md)**; projenin güncel durumu, bilinen tuzaklar ve sıradaki
+> işler için **[`DEVIR.md`](./DEVIR.md)**.
+
 Açık ürün kararları (dosya depolama, KVKK/gizlilik, farklılaşma) için:
 `🏰 300-Projects/StuHub/KARAR-SAAS-GECISI.md`.
 
@@ -92,11 +98,18 @@ UPDATE profiles SET is_admin = true WHERE email = '<sizin-e-postanız>';
 - **Dosya depolama:** materyal dosyaları hâlâ sunucu diskine yazılıyor
   (`materials.filepath`); object storage (S3/Supabase Storage) kararı verilmedi.
 - **Ücretsiz LLM sağlayıcı zinciri geçicidir** — tüm kiracılar aynı operatör anahtarlarını
-  paylaşıyor (Gemini → OpenRouter → Groq → GitHub Models). Kullanıcı sayısı arttıkça
+  paylaşıyor (Gemini → OpenRouter → Groq → Cerebras → GitHub Models). Kullanıcı sayısı arttıkça
   kota/maliyet operatöre yıkılır; kalıcı ücretli plan/anahtar modeline geçiş ayrı bir karar.
 - **KVKK/GDPR gizlilik sözleşmesi metni yazılmadı.**
-- **Kalıcı backend hosting'i yapılmadı** — bu belge geliştirme/test akışını anlatır,
-  production deploy (Railway/Render/Fly.io vb.) ayrı bir iştir.
+- **Hosting kararı verildi: Railway.** Konteyner dosyaları (`Dockerfile`, `railway.json`,
+  `docker-entrypoint.sh`) yazıldı ama **henüz canlıya alınmadı** ve imaj hiç derlenmedi —
+  adımlar ve doğrulama listesi `DEPLOY.md`'de.
+- **Yerel disk = tek instance.** Materyaller ve LanceDB indeksi sunucu diskinde olduğu için
+  ikinci bir replika açılamaz; yatay ölçekleme object storage + pgvector geçişine bağlı.
+- **Postgres şeması elle uygulanıyor** — SQLite tarafındaki otomatik migration runner'ın
+  Postgres karşılığı yok. Yeni migration'ların SQL karşılığı ilgili dosyanın başında yorum
+  olarak tutulur (örn. `sql/migrations/0011_indexing_jobs_worker.sql`).
+- **Rate limiting yok** — aylık kota dışında istek sınırı bulunmuyor.
 
 ## 8. Sorun Giderme
 
@@ -108,4 +121,6 @@ UPDATE profiles SET is_admin = true WHERE email = '<sizin-e-postanız>';
 | `/api/settings` her zaman 403 | Hesabınız admin değil — bkz. §5. |
 | Webhook secret kaydedilmiyor, `422` | Lemon Squeezy webhook secret'ı 40 karakteri geçemez. |
 | Not/quiz üretimi çok uzun sürüyor | Ücretsiz sağlayıcı zinciri çok adımlı (konu çıkarımı + konu başına üretim + kapsama/atıf doğrulama, her biri ayrı LLM çağrısı); Gemini kotası dolup OpenRouter'a düşülürse (~30-50sn/çağrı) toplam süre birkaç dakikaya çıkabilir — sayfadan ayrılmadan bekleyin. |
-| İlk materyal indeksleme çok yavaş | Embedding (bge-m3) + varsa reranker modeli ilk kullanımda indirilir (birkaç GB) — tek seferlik, sonraki indekslemeler hızlıdır. |
+| İlk materyal indeksleme çok yavaş | Embedding modeli ilk kullanımda indirilir — tek seferlik, sonraki indekslemeler hızlıdır. Üretim imajında model gömülü olduğu için bu yalnızca yerel kurulumda görülür. |
+| `VectorDimMismatch` hatası | `STUHUB_EMBED_MODEL`, indeksin kurulduğu modelden farklı. Kodun varsayılanı `BAAI/bge-m3` (1024 boyut), kullanılan model `paraphrase-multilingual-MiniLM-L12-v2` (384 boyut) — ortam değişkeni ayarlanmadıysa bu hata çıkar. Bkz. `DEVIR.md` §5.1. |
+| Loglarda `commit edilmemiş ... geri alındı` | Bir kod yolu `commit()` çağırmayı atlamış. `pg_compat` artık gerçek transaction kullanıyor; commit edilmeyen yazım kapanışta geri alınır. Bkz. `DEVIR.md` §5.2. |

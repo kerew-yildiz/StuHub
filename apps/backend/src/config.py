@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     google_api_key: str = Field(default="", alias="GOOGLE_API_KEY")
     openrouter_api_key: str = Field(default="", alias="OPENROUTER_API_KEY")
     groq_api_key: str = Field(default="", alias="GROQ_API_KEY")
+    cerebras_api_key: str = Field(default="", alias="CEREBRAS_API_KEY")
+    """Geçici test sağlayıcısı (Kerem kararı, 2026-09-05): Gemini/OpenRouter günlük kotası
+    tükenince ve GitHub Models bakımdayken devreye giren ücretsiz yedek. Kaldırılana kadar
+    `PROVIDER_CHAIN`'de kalır (bkz. Backlog.md)."""
     github_token: str = Field(default="", alias="GITHUB_TOKEN")
     embed_model: str = Field(default="", alias="STUHUB_EMBED_MODEL")
 
@@ -47,6 +51,29 @@ class Settings(BaseSettings):
     daily_goal: int = Field(default=3, alias="STUHUB_DAILY_GOAL")
     # Kitapta kaynak yokken web'den not üretimi (Yetenek 02 §web yedeği)
     web_search_enabled: bool = Field(default=True, alias="STUHUB_WEB_SEARCH_ENABLED")
+    # Tek materyal yükleme üst sınırı (bayt; varsayılan 200 MB). Sınır olmadan tek bir
+    # istek diski doldurabilir — SaaS'ta bu hem maliyet hem kullanılabilirlik riski.
+    max_upload_bytes: int = Field(default=200 * 1024 * 1024, alias="STUHUB_MAX_UPLOAD_BYTES")
+    # Aynı anda çalışacak indeksleme işi sayısı. Her iş bge-m3 batch'i işler (CPU + RAM
+    # yoğun); sınırsız bırakılırsa N eşzamanlı yükleme N paralel iş başlatır ve process
+    # hem thread havuzunu hem belleği tüketir. 2: küçük bir instance'ta güvenli varsayılan.
+    indexer_concurrency: int = Field(default=2, alias="STUHUB_INDEXER_CONCURRENCY")
+    # Feed havuzu doldurucusunun bir turda işleyeceği azami ders sayısı. Döngü tüm aktif
+    # (kiracı, ders) çiftlerini SIRAYLA geziyor; sınırsızken tek bir yavaş LLM partisi
+    # tüm sırayı bloklar ve birkaç yüz aktif derste tur hiç tamamlanmaz.
+    feed_topup_batch: int = Field(default=20, alias="STUHUB_FEED_TOPUP_BATCH")
+    # API process'i arka plan işçilerini de çalıştırsın mı. Ayrı bir worker servisi
+    # (STUHUB_ROLE=worker) varsa API'de `false` yapılmalı — çifte tarama güvenlidir
+    # (claim atomik + worker_id/heartbeat korumalı) ama gereksiz DB yükü yaratır.
+    run_workers: bool = Field(default=True, alias="STUHUB_RUN_WORKERS")
+    # SPA farklı bir origin'den (CDN/ayrı domain) servis edilirse virgülle ayrılmış
+    # origin listesi. Boşsa CORS middleware hiç eklenmez — SPA backend'le aynı
+    # origin'den servis edildiği sürece gerekli değildir.
+    cors_origins: str = Field(default="", alias="STUHUB_CORS_ORIGINS")
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
     # ── SaaS (KARAR-SAAS-GECISI.md) ─────────────────────────────────────────
     # Boşsa yerel/test modu: aiosqlite + auth yok (mevcut davranış korunur).

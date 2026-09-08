@@ -1,7 +1,15 @@
-# StuHub — Kullanım Kılavuzu
+# StuHub — Kullanım Kılavuzu (yerel mod)
 
-StuHub, üniversite dersleriniz için **tamamen yerel** çalışan bir ders notu ve quiz uygulamasıdır.
-Ders kitaplarınızı (PDF) ve hoca sunumlarınızı yükler; yapay zeka ile **atıflı notlar**, **bölüm quizleri** ve **ders geneli quizler** üretir. Tüm veriniz bilgisayarınızda kalır (`data/` klasörü).
+> **Bu belge yerel modu anlatır** — yani `.env`'de `DATABASE_URL` **boş** bırakıldığında
+> uygulamanın davranışını: hesap yok, veri tamamen bilgisayarınızda.
+>
+> StuHub'ın ikinci bir modu daha var: çok kiracılı **SaaS modu** (`DATABASE_URL` dolu →
+> Supabase/Postgres + giriş zorunlu + plan kotası). Onun kurulumu **[`KULLANIM-SAAS.md`](./KULLANIM-SAAS.md)**,
+> üretime alınması **[`DEPLOY.md`](./DEPLOY.md)**, projenin güncel durumu
+> **[`DEVIR.md`](./DEVIR.md)** dosyasındadır. İki mod aynı kod tabanını paylaşır.
+
+StuHub, üniversite dersleriniz için bir ders notu ve quiz uygulamasıdır.
+Ders kitaplarınızı (PDF) ve hoca sunumlarınızı yükler; yapay zeka ile **atıflı notlar**, **bölüm quizleri** ve **ders geneli quizler** üretir. Yerel modda tüm veriniz bilgisayarınızda kalır (`data/` klasörü).
 
 ---
 
@@ -9,10 +17,16 @@ Ders kitaplarınızı (PDF) ve hoca sunumlarınızı yükler; yapay zeka ile **a
 
 Gereksinimler: **Python 3.12 + uv**, **Node ≥ 20 + npm**, **git**, ve en az bir **ücretsiz LLM sağlayıcı anahtarı** (Google Gemini önerilir).
 
-```bash
-# 1) Bağımlılıklar
-cd apps/backend && uv sync
-cd ../frontend && npm install
+> Uygulama **native Windows** üzerinde çalışır (PowerShell / Windows Terminal —
+> WSL değil). WSL yalnızca dosya erişiminde gecikme yaratır.
+
+```powershell
+# 1) Bağımlılıklar (Windows native venv + native node_modules)
+cd apps\backend
+$env:UV_PROJECT_ENVIRONMENT = ".venv-win"
+uv sync --python 3.12
+cd ..\frontend
+npm install
 
 # 2) API anahtarı
 # .env.example dosyasını .env olarak kopyalayıp en az bir sağlayıcı anahtarını doldurun
@@ -25,15 +39,22 @@ cd ../frontend && npm install
 
 ## 2. Başlatma
 
-İki terminal:
+Repo kökünden iki kısayol (PowerShell/Windows Terminal'den, WSL değil):
 
-```bash
-# Terminal 1 — backend (8000)
-cd apps/backend
-uv run uvicorn src.main:app --port 8000
+```powershell
+.\dev-backend.cmd     # backend, 8000
+.\dev-frontend.cmd    # frontend, 5173 (ayrı pencerede)
+```
 
-# Terminal 2 — frontend (5173, geliştirme modu)
-cd apps/frontend
+Elle çalıştırmak isterseniz:
+
+```powershell
+# Terminal 1 — backend
+cd apps\backend
+.venv-win\Scripts\python.exe -m uvicorn src.main:app --port 8000
+
+# Terminal 2 — frontend
+cd apps\frontend
 npm run dev
 ```
 
@@ -112,17 +133,27 @@ flashcard/rehber üretim dili değişir (varsayılan: Türkçe).
 ## 4. Maliyet
 
 Not/quiz üretimi ücretsiz LLM sağlayıcı zincirini kullanır (Gemini → OpenRouter → Groq →
-GitHub Models; geçici çözüm — bkz. `README.md`). Tüm çağrılar `generation_logs` tablosunda
+Cerebras → GitHub Models; geçici çözüm — güncel liste `src/services/llm_providers.py`).
+Tüm çağrılar `generation_logs` tablosunda
 izlenir (tür, model, sağlayıcı, token sayısı). Sağlayıcıların günlük ücretsiz kotaları vardır;
 biri tükenince otomatik sıradakine geçilir, hepsi tükenirse ertesi gün sıfırlanana kadar
 beklenir. **Embedding, transkripsiyon ve OCR ücretsiz ve yereldir — API kotası harcamaz.**
 
 ## 5. Güvenlik & Gizlilik
 
+> Aşağıdakiler **yerel mod** içindir. SaaS modunda veri Supabase'de tutulur ve gizlilik
+> modeli farklıdır — bkz. `KULLANIM-SAAS.md` §6 ve `README.md`.
+
 - **Hesap yok, telemetri yok, analitik yok.** Tüm veri yerel (`data/` — SQLite, LanceDB, dosyalar).
 - API anahtarı `.env` veya `settings` tablosunda; **asla loglanmaz/yanıtlanmaz** (gitleaks hook'u korur).
-- API'ye yalnızca üretim için gerekli kaynak parçaları gider; embedding tamamen yereldir (bge-m3).
+- API'ye yalnızca üretim için gerekli kaynak parçaları gider; embedding tamamen yereldir
+  (varsayılan model `paraphrase-multilingual-MiniLM-L12-v2`, `STUHUB_EMBED_MODEL` ile değiştirilir).
 - Yedekleme: `data/` klasörünü kopyalamanız yeterli.
+
+> ⚠️ **Embedding modelini sonradan değiştirmeyin.** İndeks, kurulduğu modelin vektör
+> boyutuna göre oluşur; farklı boyutlu bir modele geçerseniz uygulama `VectorDimMismatch`
+> hatasıyla durur (sessizce bozulmaması için bilinçli). Değiştirmek isterseniz materyalleri
+> yeniden indekslemeniz gerekir.
 
 ## 6. Sorun Giderme
 

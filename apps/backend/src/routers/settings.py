@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -54,6 +54,9 @@ async def upsert_setting(item: SettingIn, _: str = Depends(require_admin)) -> di
         await db.commit()
     finally:
         await db.close()
+    # LLM anahtarı/ayarı değişmiş olabilir — TTL'li önbellek beklenmeden tazelensin
+    # (Ayarlar sayfasından anahtar giren kullanıcı etkiyi hemen görmeli).
+    llm_service.reset_config_cache()
     return {"ok": True}
 
 
@@ -63,17 +66,16 @@ async def get_llm_status(_: str = Depends(require_admin)) -> list[dict[str, obje
 
     Anahtar değerleri döndürmez; yalnızca Ayarlar sayfasındaki durum göstergesi için.
     """
-    await llm_service._apply_table_config()
-    cooldowns = await llm_service._load_cooldowns()
+    keys, cooldowns = await llm_service._load_config()
     active_found = False
     result: list[dict[str, object]] = []
     for provider in PROVIDER_CHAIN:
-        configured = llm_service._is_provider_configured(provider)
+        configured = llm_service._is_provider_configured(provider, keys)
         cooldown_until = cooldowns.get(provider.name)
         in_cooldown = False
         if cooldown_until:
             try:
-                in_cooldown = datetime.fromisoformat(cooldown_until) > datetime.now(timezone.utc)
+                in_cooldown = datetime.fromisoformat(cooldown_until) > datetime.now(UTC)
             except ValueError:
                 in_cooldown = False
         is_active = configured and not in_cooldown and not active_found

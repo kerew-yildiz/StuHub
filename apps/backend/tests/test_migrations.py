@@ -6,10 +6,12 @@ idempotent yeniden çalıştırma.
 
 from __future__ import annotations
 
+import re
+
 import aiosqlite
 
 from src.config import settings
-from src.db import init_db
+from src.db import MIGRATIONS_DIR, init_db
 
 V2_TABLES = (
     "flashcard_sets",
@@ -20,6 +22,14 @@ V2_TABLES = (
     "activity_log",
     "schema_migrations",
 )
+
+
+def _migration_file_count() -> int:
+    """Diskteki geçerli migration dosya sayısı — yeni migration eklenince test kırılmasın.
+
+    Adlandırma kuralı `src/db.py`'deki runner ile aynı: `NNN_ad.sql` (3+ hane).
+    """
+    return len([p for p in MIGRATIONS_DIR.glob("*.sql") if re.match(r"^\d{3,}_.+\.sql$", p.name)])
 
 
 async def test_fresh_install_creates_v2_schema(tmp_path, monkeypatch):
@@ -40,11 +50,18 @@ async def test_fresh_install_creates_v2_schema(tmp_path, monkeypatch):
         db.row_factory = aiosqlite.Row
         cursor = await db.execute("SELECT version, name FROM schema_migrations ORDER BY version")
         rows = list(await cursor.fetchall())
-        assert [row["version"] for row in rows] == [1, 2, 3, 4]
-        assert rows[0]["name"] == "materials_tipleri"
-        assert rows[1]["name"] == "yeni_tablolar"
-        assert rows[2]["name"] == "llm_provider_column"
-        assert rows[3]["name"] == "tenant_id"
+        versions = [row["version"] for row in rows]
+        # Sabit liste değil: yeni migration eklendiğinde bu test kırılmasın.
+        # Sözleşme: sürümler 1'den başlar, artan ve boşluksuz; ilk dördünün adı sabit.
+        assert versions == list(range(1, len(rows) + 1))
+        assert len(rows) >= 4
+        names = [row["name"] for row in rows]
+        assert names[:4] == [
+            "materials_tipleri",
+            "yeni_tablolar",
+            "llm_provider_column",
+            "tenant_id",
+        ]
 
         cursor = await db.execute("PRAGMA table_info(indexing_jobs)")
         columns = [row["name"] for row in list(await cursor.fetchall())]
@@ -128,7 +145,7 @@ async def test_upgrade_preserves_existing_data(tmp_path, monkeypatch):
 
         cursor = await db.execute("SELECT COUNT(*) AS c FROM schema_migrations")
         row = await cursor.fetchone()
-        assert row is not None and row["c"] == 4
+        assert row is not None and row["c"] == _migration_file_count()
 
 
 async def test_init_db_is_idempotent(tmp_path, monkeypatch):
@@ -140,7 +157,8 @@ async def test_init_db_is_idempotent(tmp_path, monkeypatch):
         db.row_factory = aiosqlite.Row
         cursor = await db.execute("SELECT COUNT(*) AS c FROM schema_migrations")
         row = await cursor.fetchone()
-        assert row is not None and row["c"] == 4
+        # Tekilleşme kontrolü: iki init_db sonrası kayıt sayısı migration dosya sayısına eşit
+        assert row is not None and row["c"] == _migration_file_count()
 
         cursor = await db.execute("SELECT COUNT(*) AS c FROM materials")
         row = await cursor.fetchone()

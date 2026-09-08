@@ -86,3 +86,41 @@ async def test_delete_material(client):
 
     resp = await client.get(f"/api/courses/{course_id}/materials")
     assert resp.json() == []
+
+
+async def test_upload_rejects_oversized_file(client, monkeypatch):
+    """Boyut sınırı aşılırsa 413 döner ve yarım dosya diskte kalmaz.
+
+    Sınır olmadan tek bir istek diski doldurabiliyordu (yol haritası Aşama 0-4).
+    """
+    from src.config import settings
+
+    monkeypatch.setattr(settings, "max_upload_bytes", 1024)
+    course_id = await _make_course(client)
+
+    resp = await client.post(
+        f"/api/courses/{course_id}/materials",
+        files={"file": ("kitap.pdf", PDF_BYTES + b"x" * 5000, "application/pdf")},
+        data={"type": "textbook"},
+    )
+    assert resp.status_code == 413
+
+    # Materyal kaydedilmemeli ve dosya artığı bırakılmamalı.
+    resp = await client.get(f"/api/courses/{course_id}/materials")
+    assert resp.json() == []
+    course_dir = settings.materials_dir / str(course_id)
+    assert not course_dir.exists() or list(course_dir.iterdir()) == []
+
+
+async def test_upload_within_limit_still_works(client, monkeypatch):
+    from src.config import settings
+
+    monkeypatch.setattr(settings, "max_upload_bytes", 10 * 1024)
+    course_id = await _make_course(client)
+
+    resp = await client.post(
+        f"/api/courses/{course_id}/materials",
+        files={"file": ("kitap.pdf", PDF_BYTES, "application/pdf")},
+        data={"type": "textbook"},
+    )
+    assert resp.status_code == 201

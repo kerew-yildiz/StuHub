@@ -95,6 +95,8 @@ CREATE TABLE IF NOT EXISTS overall_quizzes (
     tenant_id      TEXT NOT NULL DEFAULT 'local',
     course_id      INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
     questions_json TEXT NOT NULL,
+    mode           TEXT NOT NULL DEFAULT 'practice',
+    exam_id        INTEGER REFERENCES exams(id) ON DELETE SET NULL,
     created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -104,8 +106,10 @@ CREATE TABLE IF NOT EXISTS overall_attempts (
     overall_quiz_id INTEGER NOT NULL REFERENCES overall_quizzes(id) ON DELETE CASCADE,
     answers_json    TEXT NOT NULL,
     score_json      TEXT,
+    duration_sec    INTEGER,
     created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
 
 -- Vektör indeksleme işleri (arka plan, Faz 2.2)
 -- kind: 'index' (çıkarım+embed) | 'transcribe' (v2: ses/youtube → transkript, ardından index zincirlenir)
@@ -118,9 +122,16 @@ CREATE TABLE IF NOT EXISTS indexing_jobs (
     progress    REAL NOT NULL DEFAULT 0,
     error       TEXT,
     kind        TEXT NOT NULL DEFAULT 'index',
+    -- worker_id/heartbeat_at: işi claim eden process kimliği ve son yaşam işareti.
+    -- Çok-instance kurtarmada, canlı bir worker'ın işlediği iş yanlışlıkla kuyruğa
+    -- geri konmasın diye kullanılır (bkz. migrations/0011, workers/indexer.py).
+    worker_id    TEXT,
+    heartbeat_at TIMESTAMP,
     created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX IF NOT EXISTS idx_indexing_jobs_recovery
+    ON indexing_jobs(status, heartbeat_at);
 
 -- Atıf defteri (chunk → kaynak eşlemesi; doğrulama Faz 3+)
 CREATE TABLE IF NOT EXISTS citations_ledger (
@@ -200,7 +211,7 @@ CREATE TABLE IF NOT EXISTS study_guides (
     tenant_id    TEXT NOT NULL DEFAULT 'local',
     course_id    INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
     chapter_id   INTEGER REFERENCES chapters(id) ON DELETE CASCADE,
-    kind         TEXT NOT NULL CHECK (kind IN ('summary', 'concept_map')),
+    kind         TEXT NOT NULL CHECK (kind IN ('summary', 'concept_map', 'comparison')),
     content_json TEXT NOT NULL,
     created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     model_used   TEXT
@@ -215,6 +226,7 @@ CREATE TABLE IF NOT EXISTS essay_submissions (
     prompt      TEXT NOT NULL,
     user_text   TEXT NOT NULL,
     grade_json  TEXT,
+    kind        TEXT NOT NULL DEFAULT 'grade' CHECK (kind IN ('grade', 'draft')),
     created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -227,6 +239,61 @@ CREATE TABLE IF NOT EXISTS activity_log (
     count     INTEGER NOT NULL DEFAULT 1,
     course_id INTEGER
 );
+
+-- Pomodoro çalışma oturumu kayıtları (Plan #14; migration 0010 ile de kurulur).
+CREATE TABLE IF NOT EXISTS study_sessions (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id    TEXT NOT NULL DEFAULT 'local',
+    course_id    INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    session_id   TEXT NOT NULL,
+    duration_sec INTEGER NOT NULL,
+    created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_study_sessions_tenant_course
+    ON study_sessions(tenant_id, course_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_study_sessions_session
+    ON study_sessions(tenant_id, session_id);
+
+-- Sınavlar — geri sayım planlayıcısı (Plan #9; migration 0005 ile de kurulur).
+-- exam_date ISO 'YYYY-MM-DD' metin; scope_json chapter id dizisi ('[]' = tüm ders);
+-- postmortem_json sınav sonrası muhasebe (Plan #44) için ayrılmıştır, şimdilik NULL.
+CREATE TABLE IF NOT EXISTS exams (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id       TEXT NOT NULL DEFAULT 'local',
+    course_id       INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    title           TEXT NOT NULL,
+    exam_date       TEXT NOT NULL,
+    scope_json      TEXT NOT NULL DEFAULT '[]',
+    postmortem_json TEXT,
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Sonsuz kaydırma quiz feed'inin sunucu havuzu (Plan #feed; migration 0007 ile de kurulur).
+CREATE TABLE IF NOT EXISTS feed_questions (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id          TEXT NOT NULL DEFAULT 'local',
+    course_id          INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    chapter_id         INTEGER REFERENCES chapters(id) ON DELETE CASCADE,
+    topic              TEXT,
+    question           TEXT NOT NULL,
+    options_json       TEXT NOT NULL,
+    correct_index      INTEGER NOT NULL,
+    explanation        TEXT NOT NULL DEFAULT '',
+    citations_json     TEXT,
+    difficulty         TEXT,
+    source             TEXT NOT NULL DEFAULT 'generated'
+                       CHECK (source IN ('generated', 'existing')),
+    origin_question_id TEXT,
+    served_at          TIMESTAMP,
+    consumed_at        TIMESTAMP,
+    created_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_feed_questions_serve
+    ON feed_questions(tenant_id, course_id, served_at);
+CREATE INDEX IF NOT EXISTS idx_feed_questions_consume
+    ON feed_questions(tenant_id, course_id, consumed_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_feed_questions_origin
+    ON feed_questions(tenant_id, course_id, origin_question_id);
 
 -- Uygulanan şema migration'larının kaydı (db.py migration runner'ı)
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -250,5 +317,8 @@ CREATE INDEX IF NOT EXISTS idx_chat_messages_course      ON chat_messages(course
 CREATE INDEX IF NOT EXISTS idx_study_guides_course       ON study_guides(course_id);
 CREATE INDEX IF NOT EXISTS idx_essay_submissions_course  ON essay_submissions(course_id);
 CREATE INDEX IF NOT EXISTS idx_activity_log_date         ON activity_log(date);
+CREATE INDEX IF NOT EXISTS idx_exams_course              ON exams(course_id);
+CREATE INDEX IF NOT EXISTS idx_exams_tenant_course       ON exams(tenant_id, course_id);
+CREATE INDEX IF NOT EXISTS idx_exams_tenant_date         ON exams(tenant_id, exam_date);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_activity_day_kind_course
     ON activity_log(tenant_id, date, kind, COALESCE(course_id, 0));

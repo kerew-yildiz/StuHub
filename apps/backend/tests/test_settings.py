@@ -31,7 +31,13 @@ async def test_llm_status_reports_unconfigured_chain(client):
     resp = await client.get("/api/settings/llm-status")
     assert resp.status_code == 200
     body = resp.json()
-    assert [p["name"] for p in body] == ["gemini", "openrouter", "groq", "github"]
+    assert [p["name"] for p in body] == [
+        "gemini",
+        "openrouter",
+        "groq",
+        "cerebras",
+        "github",
+    ]
     assert all(p["configured"] is False for p in body)
     assert all(p["active"] is False for p in body)
 

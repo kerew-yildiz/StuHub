@@ -35,38 +35,63 @@ _JWT_AUDIENCE = "authenticated"
 
 _jwk_client: jwt.PyJWKClient | None = None
 
+# `_ensure_profile` idempotent bir INSERT ... ON CONFLICT DO NOTHING'dir — ama JWT
+# doğrulandıktan sonra HER istekte çalıştırılıyordu, yani her tek API çağrısına gereksiz
+# bir tam Postgres round-trip'i (~200-250ms, 2026-09-05 perf turunda ölçüldü) ekliyordu.
+# Bir kiracı için satır bir kez açıldıktan sonra bu adımın tekrarına gerek yok; süreç
+# ömrü boyunca "zaten sağlandı" kümesi tutulur (yalnızca doğrulanmış JWT'lerden gelen
+# gerçek kiracı kimlikleri girer, kullanıcı girdisi değildir — güvenlik riski yok).
+_provisioned: set[str] = set()
+
 
 class AuthError(HTTPException):
     def __init__(self, detail: str, status_code: int = 401) -> None:
         super().__init__(status_code=status_code, detail=detail)
 
 
-def _get_jwk_client() -> jwt.PyJWKClient | None:
+def _get_jwk_client(*, fresh: bool = False) -> jwt.PyJWKClient | None:
+    """JWKS istemcisini döner (tembel singleton). `fresh=True`: önbelleği atlayıp
+    yeni bir istemci kurar — bkz. `_decode_token` soğuk-önbellek yeniden deneme notu."""
     global _jwk_client
     if not settings.supabase_url:
         return None
-    if _jwk_client is None:
+    if _jwk_client is None or fresh:
         jwks_url = settings.supabase_url.rstrip("/") + "/auth/v1/.well-known/jwks.json"
         _jwk_client = jwt.PyJWKClient(jwks_url, cache_keys=True, lifespan=3600)
     return _jwk_client
+
+
+def _decode_with_jwks(token: str, jwk_client: jwt.PyJWKClient) -> dict:
+    signing_key = jwk_client.get_signing_key_from_jwt(token)
+    return jwt.decode(
+        token,
+        signing_key.key,
+        algorithms=["ES256", "RS256"],
+        audience=_JWT_AUDIENCE,
+    )
 
 
 def _decode_token(token: str) -> dict:
     jwk_client = _get_jwk_client()
     if jwk_client is not None:
         try:
-            signing_key = jwk_client.get_signing_key_from_jwt(token)
-            return jwt.decode(
-                token,
-                signing_key.key,
-                algorithms=["ES256", "RS256"],
-                audience=_JWT_AUDIENCE,
-            )
-        except jwt.PyJWTError as exc:
-            if not settings.supabase_jwt_secret:
-                raise AuthError("Oturum geçersiz veya süresi dolmuş.") from exc
-            # JWKS başarısız (ör. eski proje, henüz asimetrik anahtara geçmemiş) —
-            # Legacy HS256 sırra düş.
+            return _decode_with_jwks(token, jwk_client)
+        except jwt.PyJWTError:
+            # İlk deneme başarısız — 2026-09-08 canlı bulgu: taze imzalanmış bir token,
+            # önbellekteki JWKS anahtar setinde henüz yoksa (soğuk önbellek/anahtar
+            # rotasyonu) burada başarısız olup kullanıcıya "geçersiz oturum" gösteriyordu;
+            # oysa sayfa yenilendiğinde (yeni bir istek → önbellek o sırada ısınmış oluyor)
+            # AYNI token sorunsuz doğrulanıyordu. Düzeltme: önbelleği atlayıp bir kez daha
+            # dene — bu, kullanıcının yenilemeyle elde ettiği sonucu tek istekte verir.
+            try:
+                fresh_client = _get_jwk_client(fresh=True)
+                if fresh_client is not None:
+                    return _decode_with_jwks(token, fresh_client)
+            except jwt.PyJWTError as exc:
+                if not settings.supabase_jwt_secret:
+                    raise AuthError("Oturum geçersiz veya süresi dolmuş.") from exc
+                # JWKS iki denemede de başarısız (ör. eski proje, henüz asimetrik
+                # anahtara geçmemiş) — Legacy HS256 sırra düş.
     if not settings.supabase_jwt_secret:
         raise AuthError(
             "Sunucu SaaS auth için yapılandırılmamış (VITE_SUPABASE_URL/SUPABASE_JWT_SECRET eksik)."
@@ -120,7 +145,9 @@ async def get_tenant_id(authorization: str | None = Header(default=None)) -> str
     tenant_id = payload.get("sub")
     if not tenant_id:
         raise AuthError("Oturum geçersiz.")
-    await _ensure_profile(tenant_id, payload.get("email", ""))
+    if tenant_id not in _provisioned:
+        await _ensure_profile(tenant_id, payload.get("email", ""))
+        _provisioned.add(tenant_id)
     return tenant_id
 
 

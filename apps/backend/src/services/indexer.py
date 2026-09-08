@@ -20,7 +20,7 @@ from . import chunking, embed_service, media_extractors, pdf_service, slides_ser
 
 logger = logging.getLogger(__name__)
 
-EMBED_BATCH_SIZE = 32
+EMBED_BATCH_SIZE = 64
 
 # Extractor imzası: (kaynak) -> (parça listesi, 'pages' | 'slides' | 'segments')
 ExtractorFn = Callable[[str], tuple[list[dict], str]]

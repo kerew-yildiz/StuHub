@@ -157,7 +157,24 @@ async def test_material_file_endpoint(client):
 
 
 async def test_resolve_citation(client, monkeypatch):
+    """Atıf çözümü — chunk'ın materyali istek sahibi kiracıya ait olmalıdır.
+
+    Kiracı izolasyonunun kendisi `tests/test_citations_router.py`'de test edilir;
+    burada yalnızca mutlu yol korunur. `materials` satırı, uç artık sahiplik
+    doğruladığı için gereklidir.
+    """
+    import aiosqlite
+
+    from src.config import settings
     from src.services import embed_service, vector_store
+
+    async with aiosqlite.connect(settings.db_path) as db:
+        await db.execute(
+            "INSERT INTO materials (id, tenant_id, course_id, type, filepath) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (5, "local", 1, "textbook", "/tmp/yok.pdf"),
+        )
+        await db.commit()
 
     monkeypatch.setattr(embed_service, "embed_texts", lambda texts: [[0.1] * 4 for _ in texts])
     vector_store.upsert_chunks(

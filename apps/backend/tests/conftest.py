@@ -10,13 +10,17 @@ import pytest
 from src.config import settings
 from src.db import init_db
 from src.main import app
+from src.services import llm_service
 from src.services.llm_providers import PROVIDER_CHAIN
 
 
 @pytest.fixture(autouse=True)
 def _reset_llm_provider_keys(monkeypatch):
-    """`llm_service._apply_table_config` global `settings` nesnesini doğrudan mutasyona uğratır
-    (monkeypatch takibi dışında) — testler arası sızıntıyı önlemek için her testte sıfırlanır.
+    """Sağlayıcı anahtarlarını ve LLM ayar önbelleğini her testte sıfırlar.
+
+    `llm_service` artık global `settings` nesnesini mutasyona uğratmıyor (anahtarlar
+    `_load_config`'ten döndürülüyor), ama okuduğu değerleri TTL'li bir önbellekte
+    tutuyor — sıfırlanmazsa bir testin anahtarları/cooldown'ları sonrakine sızar.
 
     `database_url` de burada sıfırlanır: `.env`'de gerçek bir SaaS `DATABASE_URL` tanımlıysa
     (geliştirici makinesinde SaaS test ediliyorsa) testler yine de her zaman yerel/SQLite modda
@@ -25,9 +29,11 @@ def _reset_llm_provider_keys(monkeypatch):
     monkeypatch.setattr(settings, "database_url", "")
     for provider in PROVIDER_CHAIN:
         setattr(settings, provider.api_key_setting, "")
+    llm_service.reset_config_cache()
     yield
     for provider in PROVIDER_CHAIN:
         setattr(settings, provider.api_key_setting, "")
+    llm_service.reset_config_cache()
 
 
 @pytest.fixture

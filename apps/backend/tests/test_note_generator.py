@@ -301,3 +301,44 @@ async def test_generation_logs_written(client, monkeypatch):
         row = await cursor.fetchone()
     count = row[0] if row is not None else 0
     assert count >= 2  # topic_extraction + en az bir üretim
+
+
+async def test_regen_provider_exhaustion_never_aborts_note(client, monkeypatch):
+    """Atıf düzeltme turunda sağlayıcı zinciri tükenirse (LLMError) not YİNE DE teslim edilir.
+
+    Regresyon (2026-09-05): `_regen_topic`'in gerçek-içerik yolu (chunks mevcut) LLMError'ı
+    yakalamıyordu — zaten üretilmiş 8 bölümlük bir not, atıf düzeltme turunda sağlayıcı
+    kotası tükendiği an tamamen çöpe atılıyordu (bkz. Backlog.md). Artık `_regen_topic`
+    başarısızlığı "bu turda değişiklik yok" sayılır, yedek zincir (SON GÜVENCE) devreye girer.
+    """
+    chapter_id = await _make_chapter_with_slides(client)
+    await _insert_slide(chapter_id, 1, "İçerik")
+    monkeypatch.setattr(llm_service.settings, "google_api_key", "sk-test")
+    # alıntı chunk'la eşleşmeyecek → atıf doğrulama başarısız, düzeltme turu tetiklenir
+    bad_section = f"### {TOPIC}\n\nTamamen alakasız bir cümle burada [1]."
+    _setup_mocks(monkeypatch, section=bad_section)
+
+    async def fake_chat_stream_exhausted(messages, **kwargs):
+        kind = kwargs.get("kind", "")
+        if kind in ("note_regeneration", "note_generation_slide_only"):
+            # Tüm sağlayıcılar tükendi (2026-09-05'te gerçekleşen gerçek senaryo).
+            raise llm_service.LLMError("API kotası aşıldı. Birazdan tekrar deneyin.")
+        for delta in [bad_section[i : i + 20] for i in range(0, len(bad_section), 20)]:
+            yield delta
+
+    monkeypatch.setattr(llm_service, "chat_stream", fake_chat_stream_exhausted)
+
+    async def _disabled():
+        return False
+
+    monkeypatch.setattr(web_search_service, "web_search_enabled", _disabled)
+
+    events = await _collect_events(note_generator.generate_notes_stream(chapter_id))
+    assert not any(e["type"] == "error" for e in events), [
+        e for e in events if e["type"] == "error"
+    ]
+    done = next(e for e in events if e["type"] == "done")
+    assert TOPIC in done["note"]["content_md"]
+    # sağlayıcı zinciri tükendiği için hiçbir yedek not üretemedi → SON ÇARE devreye girdi,
+    # çözümsüz atıf düşürüldü ama not (ve önceki içerik) korundu.
+    assert done["note"]["citations_json"]["topics"][0]["citations"] == []

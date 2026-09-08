@@ -15,6 +15,9 @@ eklensin — sürücü değişimi router kodunu kırmasın.
   sondaki sayı `cursor.rowcount` olarak ayrıştırılır.
 - Satırlar `asyncpg.Record` — `dict(record)` mapping protokolüyle çalışır, aiosqlite.Row
   ile aynı `dict(row)` kullanım şeklini korur.
+- `commit()` gerçek bir işlemi işler: ilk yazma ifadesinde tembel bir transaction
+  açılır, `close()` işlenmemiş kalanı geri alır (bkz. `PgConnection` docstring'i).
+  Böylece SaaS yolunda çok adımlı işlemler aiosqlite yolundaki gibi atomiktir.
 
 Sınır: gerçek bir Postgres sunucusuna karşı bu modül CI'da doğrulanamadı (bu ortamda
 Postgres/Docker yok). SQLite yolu (aiosqlite, db.py) testlerle doğrulanır; bu modülün
@@ -23,11 +26,20 @@ Supabase projesi kurulduktan sonra yapılmalı (bkz. KULLANIM-SAAS.md).
 """
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Awaitable, Callable
 from datetime import date, datetime
+from typing import TYPE_CHECKING, Any
 
 import asyncpg
+
+if TYPE_CHECKING:
+    # `asyncpg.transaction` alt modülü paketin `__init__`inde dışa aktarılmıyor;
+    # tip referansı için açıkça içe aktarılır (çalışma zamanında gerekmez).
+    from asyncpg.transaction import Transaction
+
+logger = logging.getLogger(__name__)
 
 _INSERT_RE = re.compile(r"^\s*INSERT\s+INTO", re.IGNORECASE)
 _RETURNING_RE = re.compile(r"\bRETURNING\b", re.IGNORECASE)
@@ -52,15 +64,19 @@ class _Row:
     __slots__ = ("_keys", "_values")
 
     def __init__(self, record: asyncpg.Record) -> None:
-        self._keys = list(record.keys())
-        self._values = tuple(
+        self._keys: list[str] = list(record.keys())
+        self._values: tuple[Any, ...] = tuple(
             v.isoformat() if isinstance(v, datetime | date) else v for v in record.values()
         )
 
     def keys(self) -> list[str]:
         return self._keys
 
-    def __getitem__(self, key: str | int):
+    def __getitem__(self, key: str | int) -> Any:
+        # Dönüş `Any`: kolon değerleri şemaya göre değişir (int/str/None/float) ve
+        # çağıran taraf beklediği tipi bilir. Açıkça `Any` denmezse tip denetleyici
+        # gövdeden `Any | str` çıkarsıyor ve bu birleşim, `row["id"]` gibi her
+        # erişimden onlarca yanlış pozitif üretiyordu.
         if isinstance(key, str):
             return self._values[self._keys.index(key)]
         return self._values[key]
@@ -124,16 +140,44 @@ class PgConnection:
     Not: aiosqlite gibi her istekte yeni bağlantı açılır (bkz. db.py `get_db()`).
     Üretimde havuzlama `asyncpg.create_pool()` ile `db.py` seviyesinde yapılır;
     bu sınıf tek bir alınmış havuz bağlantısını sarmalar.
+
+    **İşlem (transaction) semantiği.** asyncpg varsayılan olarak autocommit'tedir;
+    bu sınıfın `commit()`'i eskiden hiçbir şey yapmayan bir saplamaydı, yani SaaS
+    (Postgres) yolunda çok adımlı hiçbir işlem atomik DEĞİLDİ — materyal silme
+    (satır + chunk'lar + dosya), quiz gönderimi gibi akışlar yarıda hata alırsa
+    tutarsız satır bırakıyordu. Artık:
+
+    - İlk YAZMA ifadesinde (SELECT dışındaki her şey) tembel bir işlem açılır;
+      salt-okunur istekler işlem açmaz (gereksiz snapshot/kilit maliyeti olmasın).
+    - `commit()` açık işlemi işler; sonraki yazma yeni bir işlem başlatır.
+    - `close()` işlenmemiş bir işlem bulursa geri alır — `finally: await db.close()`
+      kalıbı sayesinde hata yolunda kısmi yazımlar kendiliğinden temizlenir.
+
+    Bu, aiosqlite yolunun zaten uyguladığı sözleşmenin aynısıdır (orada da commit
+    çağrılmazsa yazım kalıcı olmaz), dolayısıyla router kodu değişmez. Yine de
+    commit'i unutan bir yol sessizce veri kaybetmesin diye geri alma UYARI loglar.
     """
 
     def __init__(self, raw: asyncpg.Connection, release: Callable[[], Awaitable[None]]):
         self._raw = raw
         self._release = release
+        self._tx: Transaction | None = None
+        self._pending_writes = 0
+
+    async def _begin_if_needed(self) -> None:
+        """İlk yazma ifadesinde işlemi başlatır (salt-okunur yollarda açılmaz)."""
+        if self._tx is None:
+            self._tx = self._raw.transaction()
+            await self._tx.start()
 
     async def execute(self, sql: str, params: tuple = ()) -> PgCursor:
         translated = _translate_placeholders(sql)
         is_insert = _INSERT_RE.match(translated) is not None
         has_returning = _RETURNING_RE.search(translated) is not None
+
+        if translated.lstrip()[:6].upper() != "SELECT":
+            await self._begin_if_needed()
+            self._pending_writes += 1
 
         if is_insert and not has_returning:
             attempt = translated.rstrip().rstrip(";") + " RETURNING id"
@@ -147,7 +191,9 @@ class PgConnection:
                 rowcount = int(match.group(2)) if match and match.group(2) else 0
                 return PgCursor(rows=[], rowcount=rowcount, lastrowid=None)
             lastrowid = row["id"] if row else None
-            return PgCursor(rows=[row] if row else [], rowcount=1 if row else 0, lastrowid=lastrowid)
+            return PgCursor(
+                rows=[row] if row else [], rowcount=1 if row else 0, lastrowid=lastrowid
+            )
 
         if translated.lstrip()[:6].upper() == "SELECT":
             rows = await self._raw.fetch(translated, *params)
@@ -159,10 +205,42 @@ class PgConnection:
         return PgCursor(rows=[], rowcount=rowcount, lastrowid=None)
 
     async def executescript(self, script: str) -> None:
+        await self._begin_if_needed()
+        self._pending_writes += 1
         await self._raw.execute(script)
 
     async def commit(self) -> None:
-        """asyncpg autocommit modundadır (açık işlem kullanılmıyor) — no-op, aiosqlite API uyumu için."""
+        """Açık işlemi işler; işlem yoksa (salt-okunur istek) no-op."""
+        if self._tx is not None:
+            await self._tx.commit()
+            self._tx = None
+            self._pending_writes = 0
+
+    async def rollback(self) -> None:
+        """Açık işlemi geri alır; işlem yoksa no-op."""
+        if self._tx is not None:
+            await self._tx.rollback()
+            self._tx = None
+            self._pending_writes = 0
 
     async def close(self) -> None:
+        """Bağlantıyı havuza iade eder; işlenmemiş yazım varsa ÖNCE geri alır.
+
+        Geri alma iki durumda devreye girer: (1) hata yolunda `finally` ile
+        kapatılan bağlantı — istenen davranış, kısmi yazım kalmaz; (2) commit'i
+        unutan bir kod yolu — bu bir hatadır ve sessiz veri kaybı olmasın diye
+        uyarı loglanır.
+        """
+        if self._tx is not None:
+            pending = self._pending_writes
+            try:
+                await self._tx.rollback()
+            finally:
+                self._tx = None
+                self._pending_writes = 0
+            logger.warning(
+                "commit edilmemiş %d yazma ifadesi geri alındı (bağlantı kapatıldı) — "
+                "hata yolu değilse çağıran taraf commit() çağırmayı atlamış olabilir",
+                pending,
+            )
         await self._release()

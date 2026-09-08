@@ -13,7 +13,7 @@ tutulmuyor.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import Depends
 
@@ -38,7 +38,7 @@ def _month_start() -> datetime:
     çağrılır (`enforce_quota` yerel modda erken döner) — asyncpg, `TIMESTAMPTZ`
     sütunuyla karşılaştırılan parametrenin string değil gerçek `datetime` olmasını
     şart koşar (SQLite'ın aksine, tip zorlaması yapmaz)."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
 

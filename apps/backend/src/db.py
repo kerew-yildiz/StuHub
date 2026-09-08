@@ -13,6 +13,7 @@ import logging
 import re
 import sqlite3
 from pathlib import Path
+from typing import cast
 
 import aiosqlite
 import asyncpg
@@ -29,13 +30,33 @@ _MIGRATION_NAME_RE = re.compile(r"^(\d{3,})_(.+)\.sql$")
 
 # SaaS modunda (settings.saas_mode) tekil havuz — get_db() her çağrıda oluşturmaz,
 # yalnızca alır/serbest bırakır (asyncpg bağlantı açma maliyeti aiosqlite'tan yüksektir).
+#
+# min_size=3: tipik bir sayfa yüklemesi 5-6 sorguyu paralel ateşler (ör. CoursePage
+# `Promise.all`); havuz `min_size=1` iken bu patlama her seferinde eksik bağlantıları
+# TALEP ANINDA açıyordu — Supabase'e her yeni bağlantı TLS handshake'i ~250-900ms
+# sürüyor (ölçüldü, 2026-09-05 perf turu), yani ısınmamış havuzla bir sayfa yüklemesi
+# ~900ms+ oluyordu. Havuz `init_db()` içinde açılışta (kullanıcı beklemeden) kısmen
+# ısıtılınca aynı sayfa yüklemesi ~265ms'e iniyor (yalnızca ağ gecikmesi kalıyor,
+# LLM'siz). 3 seçildi (5 değil): Supabase session pooler toplam istemciyi 15 ile
+# sınırlıyor (canlı ölçümde görüldü) — `max_size=10` zaten üst sınırı koruyor, `min_size`
+# çok yüksek olursa Supabase Studio/diğer istemcilere yer kalmaz.
 _pg_pool: asyncpg.Pool | None = None
 
 
 async def _get_pg_pool() -> asyncpg.Pool:
     global _pg_pool
     if _pg_pool is None:
-        _pg_pool = await asyncpg.create_pool(settings.database_url, min_size=1, max_size=10)
+        _pg_pool = await asyncpg.create_pool(
+            settings.database_url,
+            min_size=3,
+            max_size=10,
+            # Ağ kesintisinde (ör. pooler'a "no route to host") sorgu sonsuza kadar
+            # asılı kalmasın — canlı testte görüldü, saatlerce sessizce donan bir
+            # indeksleme işi tespit edildi. Bozuk bağlantılar da periyodik geri
+            # dönüştürülür (zombie connection birikimini önler).
+            command_timeout=60,
+            max_inactive_connection_lifetime=300,
+        )
     return _pg_pool
 
 
@@ -134,7 +155,9 @@ async def get_db() -> aiosqlite.Connection | PgConnection:
         async def _release() -> None:
             await pool.release(raw)
 
-        return PgConnection(raw, _release)
+        # `pool.acquire()` bir `PoolConnectionProxy` döner; proxy `Connection` arayüzünü
+        # devreder ama tip olarak onun alt sınıfı değildir.
+        return PgConnection(cast("asyncpg.Connection", raw), _release)
     conn = await aiosqlite.connect(settings.db_path)
     conn.row_factory = aiosqlite.Row
     await conn.execute("PRAGMA journal_mode = WAL;")

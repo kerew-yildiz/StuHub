@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 import uuid
 from contextlib import suppress
@@ -14,7 +15,7 @@ from ..auth import get_tenant_id
 from ..config import settings
 from ..db import get_db
 from ..services import vector_store
-from ..services.indexer import MEDIA_TYPES, create_indexing_job
+from ..services.indexer import create_indexing_job
 from ..workers.indexer import process_pending_jobs
 
 router = APIRouter(prefix="/api", tags=["materials"])
@@ -107,30 +108,49 @@ async def upload_material(
             detail=f"{type} türü için desteklenen uzantılar: {allowed}",
         )
 
+    # Ders varlık kontrolü kısa ömürlü bir bağlantıyla yapılır ve HEMEN bırakılır.
+    # Bağlantı eskiden dosya yazma döngüsü boyunca tutuluyordu: yavaş bağlantıdan
+    # büyük bir kitap yükleyen kullanıcı, 10 bağlantılık havuzdan birini dakikalarca
+    # meşgul ediyordu — 10 eşzamanlı yavaş yükleme tüm uygulamayı kilitliyordu.
     db = await get_db()
     try:
         if not await _course_exists(db, course_id, tenant_id):
             raise HTTPException(status_code=404, detail="Ders bulunamadı")
+    finally:
+        await db.close()
 
-        course_dir = settings.materials_dir / str(course_id)
-        course_dir.mkdir(parents=True, exist_ok=True)
-        stored_name = f"{uuid.uuid4().hex}_{_safe_filename(file.filename or 'dosya')}"
-        dest = course_dir / stored_name
+    course_dir = settings.materials_dir / str(course_id)
+    course_dir.mkdir(parents=True, exist_ok=True)
+    stored_name = f"{uuid.uuid4().hex}_{_safe_filename(file.filename or 'dosya')}"
+    dest = course_dir / stored_name
 
-        # Büyük kitaplar için akışkan yükleme (parça parça diske yaz)
-        total = 0
+    # Büyük kitaplar için akışkan yükleme (parça parça diske yaz). Disk yazımı
+    # bloklayıcıdır — event loop'u tutmasın diye executor'a devredilir.
+    limit = settings.max_upload_bytes
+    total = 0
+    try:
         with dest.open("wb") as handle:
             while chunk := await file.read(1024 * 1024):
-                handle.write(chunk)
                 total += len(chunk)
+                if total > limit:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Dosya çok büyük (en fazla {limit // (1024 * 1024)} MB).",
+                    )
+                await asyncio.to_thread(handle.write, chunk)
         if total == 0:
-            dest.unlink(missing_ok=True)
             raise HTTPException(
                 status_code=422,
                 detail="Dosya boş (0 bayt). Dosyanın bozuk ya da eksik indirilmiş olmadığından "
                 "emin olup tekrar yükleyin.",
             )
+    except Exception:
+        # Yarım kalan dosya diskte kalmasın (limit aşımı, kopan bağlantı, disk hatası).
+        dest.unlink(missing_ok=True)
+        raise
 
+    db = await get_db()
+    try:
         cursor = await db.execute(
             "INSERT INTO materials (tenant_id, course_id, type, filepath) VALUES (?, ?, ?, ?)",
             (tenant_id, course_id, type, str(dest)),
@@ -146,12 +166,12 @@ async def upload_material(
     if row is None:
         raise RuntimeError("beklenen materyal satırı bulunamadı")
 
-    # v2: medya türleri yükleme anında otomatik işe alınır (Yetenek 11)
-    # ses → önce transkripsiyon; docx/epub/görsel → doğrudan indeksleme
-    if type in MEDIA_TYPES:
-        kind = "transcribe" if type == "audio" else "index"
-        await create_indexing_job(course_id, row_id, tenant_id, kind=kind)
-        await process_pending_jobs()
+    # Tüm türler yükleme anında otomatik işe alınır (kullanıcı elle "İndeksle"ye
+    # basmaz — Kerem kararı, 2026-09-04). ses → önce transkripsiyon; diğerleri
+    # (textbook/slides/docx/epub/görsel) → doğrudan indeksleme.
+    kind = "transcribe" if type == "audio" else "index"
+    await create_indexing_job(course_id, row_id, tenant_id, kind=kind)
+    await process_pending_jobs()
 
     return _to_out(dict(row))
 
@@ -171,7 +191,9 @@ async def get_material(material_id: int, tenant_id: str = Depends(get_tenant_id)
 
 
 @router.get("/courses/{course_id}/materials", response_model=list[MaterialOut])
-async def list_materials(course_id: int, tenant_id: str = Depends(get_tenant_id)) -> list[MaterialOut]:
+async def list_materials(
+    course_id: int, tenant_id: str = Depends(get_tenant_id)
+) -> list[MaterialOut]:
     """Bir derse ait materyaller."""
     db = await get_db()
     try:
@@ -194,7 +216,9 @@ async def delete_material(material_id: int, tenant_id: str = Depends(get_tenant_
         row = await cursor.fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="Materyal bulunamadı")
-        await db.execute("DELETE FROM materials WHERE id = ? AND tenant_id = ?", (material_id, tenant_id))
+        await db.execute(
+            "DELETE FROM materials WHERE id = ? AND tenant_id = ?", (material_id, tenant_id)
+        )
         await db.commit()
     finally:
         await db.close()

@@ -58,9 +58,10 @@ def _fake_client(responses: list) -> _FakeClient:
 
 
 def _single_provider_client(monkeypatch, client) -> None:
-    """Yalnızca Gemini (zincirin ilki) yapılandırılmış, her sağlayıcı isteği aynı fake client'a gider."""
+    """Yalnızca Gemini (zincirin ilki) yapılandırılmış; her sağlayıcı isteği aynı fake
+    client'a gider."""
     monkeypatch.setattr(llm_service.settings, "google_api_key", "sk-test")
-    monkeypatch.setattr(llm_service, "_client_for", lambda provider: client)
+    monkeypatch.setattr(llm_service, "_client_for", lambda provider, keys=None: client)
 
 
 async def _collect_stream(agen) -> str:
@@ -144,7 +145,8 @@ async def test_chat_stream_gives_up_after_max_retries(monkeypatch):
 
 
 async def test_quota_exhausted_marks_provider_cooldown(monkeypatch):
-    """401/403/402/429 tüm retry'lardan sonra da sürerse sağlayıcı ertesi güne kadar cooldown'a alınır."""
+    """401/403/402/429 tüm retry'lardan sonra da sürerse sağlayıcı ertesi güne kadar
+    cooldown'a alınır."""
     err = _ApiError(429)
     client = _fake_client([err] * 10)
     _single_provider_client(monkeypatch, client)
@@ -173,7 +175,9 @@ async def test_falls_back_to_next_provider_on_quota_exhaustion(monkeypatch):
     openrouter_client = _fake_client([_agen()])
 
     clients = {"gemini": gemini_client, "openrouter": openrouter_client}
-    monkeypatch.setattr(llm_service, "_client_for", lambda provider: clients[provider.name])
+    monkeypatch.setattr(
+        llm_service, "_client_for", lambda provider, keys=None: clients[provider.name]
+    )
 
     text = await _collect_stream(
         llm_service.chat_stream([{"role": "user", "content": "x"}], kind="test")
@@ -189,6 +193,7 @@ async def test_falls_back_to_next_provider_on_quota_exhaustion(monkeypatch):
     async with aiosqlite.connect(llm_service.settings.db_path) as conn:
         cursor = await conn.execute("SELECT provider FROM generation_logs")
         row = await cursor.fetchone()
+    assert row is not None
     assert row[0] == "openrouter"
 
 
@@ -288,7 +293,9 @@ async def test_chat_json_falls_back_to_next_provider_on_auth_error(monkeypatch):
     openrouter_client = SimpleNamespace(chat=SimpleNamespace(completions=_FakeCompletionsJson()))
 
     clients = {"gemini": gemini_client, "openrouter": openrouter_client}
-    monkeypatch.setattr(llm_service, "_client_for", lambda provider: clients[provider.name])
+    monkeypatch.setattr(
+        llm_service, "_client_for", lambda provider, keys=None: clients[provider.name]
+    )
 
     data = await llm_service.chat_json([{"role": "user", "content": "json üret"}])
     assert data == {"ok": True}

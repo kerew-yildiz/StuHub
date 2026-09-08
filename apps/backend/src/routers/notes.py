@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
-import lancedb
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from ..auth import get_tenant_id
-from ..config import settings
 from ..db import get_db
 from ..quota import enforce_quota
+from ..services import retrieval
 from ..services.export_service import note_markdown_to_pdf
 from ..services.note_generator import generate_notes_stream
 
@@ -75,22 +75,35 @@ async def get_latest_note(
 
 @router.get("/citations/{chunk_id}")
 async def resolve_citation(chunk_id: str, tenant_id: str = Depends(get_tenant_id)) -> dict:
-    """Chunk kimliğinden kaynak parçayı çözer (atıf pop-up'ı — Yetenek 06 §4)."""
-    db = lancedb.connect(str(settings.data_dir / "lancedb"))
-    for table_name in db.list_tables().tables or []:
-        table = db.open_table(table_name)
-        rows = table.to_arrow().to_pylist()
-        for row in rows:
-            if row["chunk_id"] == chunk_id:
-                return {
-                    "chunk_id": row["chunk_id"],
-                    "course_id": row["course_id"],
-                    "material_id": row["material_id"],
-                    "text": row["text"],
-                    "page": row["page"],
-                    "slide": row["slide"],
-                }
-    raise HTTPException(status_code=404, detail="Kaynak parça bulunamadı")
+    """Chunk kimliğinden kaynak parçayı çözer (atıf pop-up'ı — Yetenek 06 §4).
+
+    `chunk_id` materyal kimliğini taşıdığı için parça döndürülmeden ÖNCE o
+    materyalin istek sahibi kiracıya ait olduğu doğrulanır. Bu kontrol olmadan uç,
+    kimliği doğrulanmış herhangi bir kullanıcıya başka kiracıların materyal metnini
+    açıyordu. Sahibi olmayan/var olmayan kimlikler aynı 404'ü alır — varlık bilgisi
+    de sızdırılmaz.
+    """
+    material_id = retrieval.parse_material_id(chunk_id)
+    if material_id is None:
+        raise HTTPException(status_code=404, detail="Kaynak parça bulunamadı")
+
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT course_id FROM materials WHERE id = ? AND tenant_id = ?",
+            (material_id, tenant_id),
+        )
+        row = await cursor.fetchone()
+    finally:
+        await db.close()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Kaynak parça bulunamadı")
+
+    # LanceDB erişimi bloklayıcıdır (senkron I/O) — event loop'u tutmasın.
+    chunk = await asyncio.to_thread(retrieval.get_chunk, row["course_id"], chunk_id)
+    if chunk is None:
+        raise HTTPException(status_code=404, detail="Kaynak parça bulunamadı")
+    return chunk
 
 
 @router.get("/notes/{note_id}/export")

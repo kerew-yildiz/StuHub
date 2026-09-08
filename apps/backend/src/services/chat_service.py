@@ -1,6 +1,7 @@
 """Materyale Sor (RAG chat) servisi — retrieval + atıflı yanıt + SSE olayları (Faz V2.1).
 
-`stream_chat_answer(course_id, user_message, mode, tenant_id)` bir async generator'dır; şunları üretir:
+`stream_chat_answer(course_id, user_message, mode, tenant_id)` bir async generator'dır;
+şunları üretir:
   {"type": "citations", "citations": [...]}
   {"type": "delta", "text": str}
   {"type": "done", "message": {...assistant kaydı...}}
@@ -10,6 +11,7 @@ Atıf doğrulaması ikinci kez de başarısız olursa `llm_service.LLMError` fı
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from datetime import datetime
@@ -209,7 +211,9 @@ async def stream_chat_answer(
     history = await _load_history(course_id, tenant_id)
     await _save_message(course_id, "user", user_message, [], mode, tenant_id)
 
-    chunks = retrieval.hybrid_search(course_id, user_message)
+    # Senkron ve ağır (bge-m3 inference + LanceDB okuması) — doğrudan çağrılırsa
+    # event loop'u ve dolayısıyla diğer tüm istekleri bloklar.
+    chunks = await asyncio.to_thread(retrieval.hybrid_search, course_id, user_message)
     if not chunks:
         yield {"type": "citations", "citations": []}
         yield {"type": "delta", "text": NO_SOURCES_MESSAGE}
