@@ -1,0 +1,7 @@
+# Git for Windows kurulumu core.autocrlf=true'yu SYSTEM seviyesinde ayarliyor
+# (2026-09-08'de dogrulandi). Konteynerde calisan dosyalar CRLF'e cevrilirse
+# shebang bozulur ve imaj "exec format error" ile acilmaz; bu yuzden satir
+# sonlari checkout'ta da LF'te sabitlenir.
+*.sh text eol=lf
+docker-entrypoint.sh text eol=lf
+Dockerfile text eol=lf
