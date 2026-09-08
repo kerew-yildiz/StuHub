@@ -1,0 +1,37 @@
+# Build bağlamını küçük tutar ve sırların imaja sızmasını engeller.
+
+# Sırlar — ASLA imaja girmemeli (üretim değerleri Railway ortam değişkenlerinden gelir).
+.env
+.env.*
+!.env.example
+
+.git
+.github
+.githooks
+.claude
+
+# Yerel veri: materyaller, SQLite, LanceDB indeksi.
+data/
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/.venv/
+**/.venv-win/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/htmlcov/
+**/.coverage
+
+# Node
+**/node_modules/
+**/dist/
+
+# Geliştirme yardımcıları / notlar
+*.md
+!README.md
+dev-backend.cmd
+dev-frontend.cmd
+apps/backend/_stream_test3.py
+apps/backend/_uvicorn_native.log
