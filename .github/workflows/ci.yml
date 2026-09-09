@@ -1,5 +1,8 @@
 # StuHub DS — CI/CD
-# Faz 0.1: her push/PR'de lint + tip + test + build + sır taraması.
+# Her push/PR'de lint + tip + test + build + sır taraması; main'e giden her push,
+# testler yeşilse GHCR'ye tek bir imaj olarak yayınlanır (Railway o imajı çeker —
+# bkz. DEPLOY.md §2.1). PR'larda imaj yalnızca DERLENİR, push edilmez (Dockerfile'ın
+# bozulmadığını erken yakalamak için).
 # Ücretsiz tier (GitHub Actions); tüm adımlar ücretsiz açık kaynak araçlarla.
 
 name: CI
@@ -71,3 +74,43 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+
+  docker:
+    name: Docker imajı (derle, main'de GHCR'ye yayınla)
+    runs-on: ubuntu-latest
+    needs: [secrets-scan, backend, frontend]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Buildx kurulumu
+        uses: docker/setup-buildx-action@v3
+      - name: GHCR girişi (yalnızca push, main dalı)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Etiketler
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-,format=short
+      - name: Derle (+ main'de yayınla)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
+            VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+

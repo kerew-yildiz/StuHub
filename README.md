@@ -61,7 +61,7 @@ StuHub **tek kod tabanı, iki mod** olarak çalışır. Modu `.env`'deki `DATABA
 | Embedding | sentence-transformers, yerel ve ücretsiz. **Kullanılan model: `paraphrase-multilingual-MiniLM-L12-v2`** (384 boyut, ~458 MB), `STUHUB_EMBED_MODEL` ile ayarlanır. Kodun varsayılanı `BAAI/bge-m3`'tür (1024 boyut, ~4.3 GB) — ikisi uyumsuzdur, bkz. `DEVIR.md` §5.1. |
 | LLM | Ücretsiz sağlayıcı zinciri (yetenek sırasına göre, biri kota sınırına ulaşınca otomatik sıradakine geçilir): Gemini 3.1 Flash Lite → OpenRouter (Nemotron 3 Ultra 550B free) → Groq (Llama 3.3 70B) → Cerebras (Llama 3.3 70B, geçici) → GitHub Models (GPT-4.1 mini). Geçici çözüm; ücretli birincil sağlayıcıya geçiş planlı. Tek kaynak: `src/services/llm_providers.py` |
 | Medya (v2) | yt-dlp (altyazı/indirme) · faster-whisper (yerel STT) · rapidocr-onnxruntime (yerel OCR) · python-docx (tümü ücretsiz lisanslı; EPUB stdlib) |
-| Dağıtım | Railway (Docker). Tek imaj, iki rol: `STUHUB_ROLE=api\|worker` — bkz. `DEPLOY.md` |
+| Dağıtım | Railway, GHCR imajından (repo build'inden değil — CI'da derlenip yayınlanır). Tek imaj, iki rol: `STUHUB_ROLE=api\|worker` — bkz. `DEPLOY.md` |
 
 ## Hızlı Başlangıç (Windows native)
 

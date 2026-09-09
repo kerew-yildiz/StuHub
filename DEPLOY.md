@@ -6,8 +6,21 @@ için önce `KULLANIM-SAAS.md`, ölçekleme gerekçeleri için
 
 > **Doğrulama durumu.** Bu depodaki Dockerfile bu makinede **derlenip test edilemedi**
 > (geliştirme ortamında Docker yok). Backend'in tüm CI adımları (ruff, pyright, 334
-> test, bandit, pip-audit) yerelde geçiyor; ama imajın kendisi ilk Railway build'inde
-> doğrulanacak. Aşağıdaki "İlk deploy kontrol listesi" tam olarak bunu adımlıyor.
+> test, bandit, pip-audit) yerelde geçiyor; ama imajın kendisi GitHub Actions'daki
+> ilk `docker` job'unda doğrulanacak. Aşağıdaki "İlk deploy kontrol listesi" tam
+> olarak bunu adımlıyor.
+>
+> **Deploy kaynağı: GHCR imajı, Railway build'i değil (2026-09-08 kararı).**
+> Railway'in "Deploy from GitHub repo" seçeneği her push'ta Dockerfile'ı kendi
+> build kuyruğunda yeniden derler — API ve worker iki ayrı Railway servisi olduğu
+> için aynı Dockerfile iki kez, model indirme dahil, baştan derlenir. Bunun yerine
+> `.github/workflows/ci.yml`'deki `docker` job'u testler yeşilse imajı BİR KEZ
+> derleyip `ghcr.io/kerew-yildiz/stuhub` paketine yayınlar; Railway'deki iki servis
+> de (api + worker) aynı imajı çeker. **Not: bu, tek başına "scale" sağlamaz** — Railway
+> replikaları image-tabanlı da repo-tabanlı da aynı çalışır; gerçek yatay ölçekleme
+> hâlâ Aşama 2'ye (yerel disk bağımlılığının kalkması) bağlı, bkz. `DEVIR.md` §5.3/§6.
+> Buradaki asıl kazanç: testler geçmeden imaj hiç yayınlanmaz (CI-gated deploy) ve
+> iki servis build'i tekrarlamaz.
 
 ---
 
@@ -30,18 +43,54 @@ embed_service` zinciriyle embedding modeline ihtiyaç duyuyor. İmaj ayrımı yo
 Bugünkü davranışın aynısı. Ayrı worker servisi ancak indeksleme yükü API'yi yavaşlatmaya
 başladığında gerekir.
 
+**İmaj nereden geliyor:** Railway build etmiyor, çekiyor. `.github/workflows/ci.yml`
+`docker` job'u main'e giden her push'ta (testler geçtikten sonra) `ghcr.io/kerew-yildiz/stuhub`
+paketine `latest` ve `sha-<kısa-sha>` etiketleriyle push eder. İki Railway servisi
+(api, worker) aynı `latest` imajını çeker; hangi rolde çalışacağı yalnızca
+`STUHUB_ROLE` ortam değişkeniyle belirlenir — imaj ikisi için de aynıdır.
+
 ---
 
 ## 2. İlk deploy kontrol listesi
 
-### 2.1 Railway projesi
+### 2.1 GitHub tarafı — bir kerelik kurulum
 
-1. Railway → **New Project → Deploy from GitHub repo** → bu depo.
-2. Railway `railway.json`'u okuyup Dockerfile builder'ını seçer.
-3. **Region: Europe West (Amsterdam)** — Türkiye kullanıcıları ve Supabase Frankfurt
+1. **GHCR paketini public yap.** İlk `docker` job'u çalışıp `ghcr.io/kerew-yildiz/stuhub`
+   paketini oluşturduktan sonra: GitHub → profil → **Packages** → `stuhub` →
+   **Package settings** → **Change visibility** → **Public**. İmajın içinde sır yok
+   (uygulama sırları Railway env değişkenlerinden gelir, imaja gömülmez — `.dockerignore`
+   `.env`'i zaten dışlıyor), yani public yapmak güvenli ve Railway'in Pro plan gerektiren
+   private-registry token akışından kurtarır. Private tutmak isterseniz alternatif:
+   `read:packages` yetkili bir GitHub PAT (classic) oluşturup Railway'in **Registry
+   Credentials** alanına yalnızca token'ı yapıştırın (kullanıcı adı otomatik) — bu Railway
+   Pro plan gerektirir.
+2. **Repo secret'ları ekleyin** (GitHub → repo → Settings → Secrets and variables →
+   Actions): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`. Bunlar Railway env
+   değişkenlerinden AYRI — imaj CI'da derlenirken frontend'e gömülür (tarayıcıya giden
+   değerler, gizli değil ama build zamanında lazım). `packages: write` izni GitHub
+   Actions'ın kendi `GITHUB_TOKEN`'ından geliyor, ekstra bir token gerekmiyor.
+3. `main`'e bir push yapın (ya da mevcut son commit'i yeniden çalıştırın) — `docker`
+   job'unun yeşil geçtiğini ve `ghcr.io/kerew-yildiz/stuhub:latest`'in Packages
+   sekmesinde göründüğünü doğrulayın.
+
+### 2.2 Railway projesi
+
+1. Railway → **New Project → Empty Project**.
+2. **Add a Service → Docker Image** → `ghcr.io/kerew-yildiz/stuhub:latest`.
+   (GitHub reposunu Railway'e BAĞLAMAYIN — kaynak imaj, repo değil; `railway.json`
+   bu yüzden artık okunmuyor, aşağıdaki healthcheck/restart ayarlarını dashboard'dan
+   elle girin: Settings → Deploy → Healthcheck Path `/health`, Restart Policy
+   `On Failure`, Max Retries `3`.)
+3. Aynı imajla ikinci bir servis daha ekleyin (worker) — §1'deki tabloya göre
+   `STUHUB_ROLE=worker` ortam değişkeniyle ayrışır.
+4. **Region: Europe West (Amsterdam)** — Türkiye kullanıcıları ve Supabase Frankfurt
    projesine en yakın seçenek. ABD bölgesi her istekte ~150ms ekler.
+5. **Otomatik güncelleme:** Railway varsayılan olarak `:latest` etiketini periyodik
+   yoklamaz; yeni bir imaj push edildiğinde servisin **Deployments** sekmesinden
+   **Redeploy** ile elle tetiklenir (ya da Railway CLI/Webhook ile otomatikleştirilir
+   — bu depoda henüz kurulmadı, isteğe bağlı bir sonraki adım).
 
-### 2.2 Kalıcı volume (ATLANMAMALI)
+### 2.3 Kalıcı volume (ATLANMAMALI)
 
 Materyal dosyaları ve LanceDB indeksi diskte tutuluyor. Volume bağlanmazsa
 **her deploy'da tüm yüklenen materyaller ve vektör indeksi silinir.**
@@ -59,7 +108,7 @@ yani her şeyi root çalıştırmak. Bu depo bunun yerine konteyneri root başla
 devrediyor ve ayrıcalığı hemen bırakıyor. Yani ekstra bir değişken gerekmiyor;
 `RAILWAY_RUN_UID` girilirse uygulama gereksiz yere root çalışır.
 
-### 2.3 Ortam değişkenleri
+### 2.4 Ortam değişkenleri
 
 Railway → servis → **Variables**. `.env`'deki değerleri buraya girin (dosyayı
 imaja koymayın — `.dockerignore` zaten engelliyor).
@@ -81,19 +130,19 @@ STUHUB_EMBED_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
 > `VectorDimMismatch` ile durur (`services/vector_store.py`) — ama en baştan doğru
 > ayarlamak gerekir. Değer, Dockerfile'da imaja gömülen modelle **birebir aynı** olmalı.
 
-**Build argümanları** (Railway → Settings → Build → Build Arguments): `VITE_*`
-değişkenleri tarayıcıya gömüldüğü için build sırasında da gerekir:
-
-```
-VITE_SUPABASE_URL=https://<ref>.supabase.co
-VITE_SUPABASE_ANON_KEY=<anon key>
-```
+> **Build argümanları artık Railway'de DEĞİL.** `VITE_*` değerleri imaj CI'da
+> derlenirken (`docker/build-push-action`, repo secret'larından) gömülüyor —
+> §2.1 madde 2. Railway'in Settings → Build → Build Arguments alanı imaj
+> kaynağında görünmez/uygulanmaz; yalnızca yukarıdaki **Variables**'a runtime
+> için `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` girmeniz yeterli (frontend
+> zaten build'te gömülü değeri kullanıyor, backend'in ayrıca bilmesine gerek yok
+> ama tutarlılık için Variables'ta da bulunsun).
 
 **İsteğe bağlı** (varsayılanlar makul): `STUHUB_MAX_UPLOAD_BYTES`,
 `STUHUB_INDEXER_CONCURRENCY`, `STUHUB_FEED_TOPUP_BATCH`, `STUHUB_CORS_ORIGINS`,
 Lemon Squeezy anahtarları. Tam liste: `.env.example`.
 
-### 2.4 Kaynak boyutlandırma
+### 2.5 Kaynak boyutlandırma
 
 Bellek tüketiminin ana kalemi embedding modeli (MiniLM-L12-v2, ~460 MB disk,
 çalışırken ~600 MB RAM) ve indeksleme sırasındaki batch'ler.
@@ -104,7 +153,7 @@ Bellek tüketiminin ana kalemi embedding modeli (MiniLM-L12-v2, ~460 MB disk,
   Yatay ölçekleme process çoğaltmakla değil, Railway replikasıyla yapılmalı — ve o da
   yol haritası Aşama 2'yi (paylaşımlı depolama) gerektirir.
 
-### 2.5 Şema — ARTIK OTOMATİK (2026-09-08)
+### 2.6 Şema — ARTIK OTOMATİK (2026-09-08)
 
 `schema_postgres.sql` her açılışta backend tarafından kendisi uygulanır
 (`db.apply_pg_schema`, `init_db()`'de çağrılır). Dosyanın tamamı idempotent
@@ -161,10 +210,12 @@ Sırayla, hepsi geçmeli:
 
 | Belirti | Olası neden |
 |---|---|
-| Build "no space" / çok uzun sürüyor | ML bağımlılıkları + model imajı büyütüyor; Railway build kaynağını artırın |
+| GitHub Actions'da `docker` job "no space" / çok uzun sürüyor | ML bağımlılıkları + model imajı büyütüyor (~5-8 GB); `ubuntu-latest` runner diski genelde yeterli, sürerse `cache-from/to: type=gha` zaten devrede — tekrar deneyin |
+| Railway "Image pull failed" | GHCR paketi hâlâ private (§2.1 madde 1: public yapın ya da Registry Credentials'a `read:packages` token girin — Pro plan gerekir) |
+| Yeni push sonrası eski davranış sürüyor | `:latest` imaj güncellendi ama Railway servisi otomatik çekmiyor — Deployments → Redeploy (§2.2 madde 5) |
 | Başlangıçta OOM | Bellek 2 GB'ın altında ya da `STUHUB_INDEXER_CONCURRENCY` çok yüksek |
-| `VectorDimMismatch` | `STUHUB_EMBED_MODEL` imajdaki modelle uyuşmuyor (§2.3) |
-| Deploy sonrası materyaller kayıp | `/data` volume'u bağlanmamış (§2.2) |
+| `VectorDimMismatch` | `STUHUB_EMBED_MODEL` imajdaki modelle uyuşmuyor (§2.4) |
+| Deploy sonrası materyaller kayıp | `/data` volume'u bağlanmamış (§2.3) |
 | `/health` ok ama `/health/deep` 503 | Supabase bağlantısı yok — Session pooler dizesi mi kullanılıyor? (`KULLANIM-SAAS.md` §2.2) |
-| Giriş ekranı yerine boş sayfa | `VITE_*` build argümanları verilmemiş; SPA Supabase istemcisini kuramıyor |
-| Aynı materyal iki kez indeksleniyor | Beklenmez (`worker_id`/heartbeat koruması); olursa migration §2.5 uygulanmamış olabilir |
+| Giriş ekranı yerine boş sayfa | `VITE_*` repo secret'ları CI'da yoktu, imaja boş gömülmüş; secret'ları ekleyip yeniden push edin (§2.1 madde 2) |
+| Aynı materyal iki kez indeksleniyor | Beklenmez (`worker_id`/heartbeat koruması); olursa şema §2.6 henüz uygulanmamış olabilir (yeni imaj deploy edilmemiş olabilir) |
