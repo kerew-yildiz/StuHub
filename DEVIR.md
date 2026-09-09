@@ -16,26 +16,22 @@ kaydeder. **Önce bunu, sonra `DEPLOY.md`'yi, sonra yol haritasını oku.**
 
 ## 1. Tek cümlelik durum
 
-Yol haritasının **Aşama 0'ı (lansman öncesi kod blokajları) tamamlandı**, Railway
-deploy dosyaları yazıldı, ilk gerçek deploy'u kıracak bir **volume izin hatası**
-bulunup düzeltildi, **Postgres migration runner** eklendi (elle şema yapıştırma
-adımı kalktı), **deploy kaynağı Railway build'inden GHCR imajına çevrildi**
-(Kerem'in talebi, CI-gated + iki servis tek imaj paylaşıyor — bkz. `DEPLOY.md` §1) ve
-**her şey commit edilip `origin/main`'e push edildi** (2026-09-08,
-`8644a7b..4a51131`, 9 commit). Docker imajı hâlâ hiç derlenmedi/push edilmedi —
-sıradaki iş **Kerem'in kendisinin yapması gereken kurulum** (GitHub secret'ları
-§2.1 + Railway proje/volume/env §2.2-2.4 — bkz. `DEPLOY.md` §2).
+Aşama 0 tamamlandı, deploy zinciri **uçtan uca çalışıyor**: CI (ruff/pyright/353 test/
+bandit/pip-audit) **depo tarihinde ilk kez yeşil** ve `docker` job'u imajı derleyip
+**GHCR'ye yayınlıyor** (`ghcr.io/kerew-yildiz/stuhub:latest` + `sha-<kısa>`,
+2026-09-09, run 34348799960, 6dk41sn).
 
-**Devralan ajan için not:** bu turun sonunda `apps/backend/src/services/quiz_generator.py`
-ve komşu dosyalarda (frontend `QuizPlayer.tsx`/`OnboardingWizard.tsx` silinmiş,
-yeni `SavedQuestionsPage`/migration `0012` beliriyor) **kullanıcının kendi
-editöründe sürmekte olan ayrı, büyük bir refactor** vardı — bu devir notuna
-dokunmadı. O çalışma bitmeden `pytest` collection'ı kırık olabilir
-(`generate_quiz_stream` tanımsız); bu §6'daki deploy işiyle ilgisizdir, karıştırma.
+Docker imajı ayrıca **yerelde gerçekten derlendi ve çalıştırıldı** (Docker bu makineye
+2026-09-09'da kuruldu): konteyner ayağa kalktı, `/health` 200 döndü, hem `api` hem
+`worker` rolü PID 1 olarak uid 10001'e düşüyor, `/data` yazılabilir.
 
-Bu turun BAŞINDA bağımsız doğrulanan temel çizgi: **backend 334 test, frontend
-65/66** (1 flaky Mermaid testi izole koşuda geçti — bkz. §5.4b); ruff/pyright/
-bandit temiz. Yukarıdaki not nedeniyle şu an tam paket koşulamıyor.
+**Sıradaki tek iş Kerem'de:** (1) GHCR paketini public yap (`DEPLOY.md` §2.1 madde 1 —
+Railway'in private registry'si Pro plan istiyor, imajda sır yok), (2) Railway'de
+Empty Project → Docker Image → volume + env değişkenleri (`DEPLOY.md` §2.2-2.4),
+(3) deploy sonrası 7 adımlık doğrulama (`DEPLOY.md` §3).
+
+Güncel doğrulama (2026-09-09, hem yerelde hem CI'da): **backend 353 test / 0 başarısız**,
+frontend lint+typecheck+test+build temiz, ruff/pyright/bandit/pip-audit temiz.
 
 (Oturum başındaki temel çizgi: backend 304 geçiyor / 2 başarısız, frontend 62 geçiyor /
 1 başarısız, ruff 16 hata, pyright 114 hata.)
