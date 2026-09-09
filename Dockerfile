@@ -77,12 +77,15 @@ RUN apt-get update \
 RUN useradd --create-home --uid 10001 stuhub
 
 WORKDIR /app
-COPY --from=deps /app/.venv /app/.venv
-COPY --from=model /opt/hf /opt/hf
-COPY apps/backend /app/apps/backend
-COPY --from=frontend /build/dist /app/apps/frontend/dist
-COPY docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh && chown -R stuhub:stuhub /app /opt/hf
+# Sahiplik KOPYALAMA SIRASINDA verilir. Ayrı bir `RUN chown -R` adımı, dokunduğu her
+# dosyayı yeni bir katmana yeniden yazar: 2026-09-09'da ölçüldü — içerik toplam 2.6 GB
+# (venv 2.1 GB + model 458 MB) iken imaj 8.39 GB'a çıkıyordu (aynı veri 2-3 kez) ve
+# chown adımı tek başına 175 saniye sürüyordu. `--chown`/`--chmod` bunu sıfıra indirir.
+COPY --from=deps --chown=stuhub:stuhub /app/.venv /app/.venv
+COPY --from=model --chown=stuhub:stuhub /opt/hf /opt/hf
+COPY --chown=stuhub:stuhub apps/backend /app/apps/backend
+COPY --from=frontend --chown=stuhub:stuhub /build/dist /app/apps/frontend/dist
+COPY --chown=stuhub:stuhub --chmod=0755 docker-entrypoint.sh /app/docker-entrypoint.sh
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \

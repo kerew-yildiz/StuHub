@@ -84,6 +84,19 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+      # ubuntu-latest runner'ında yalnızca ~14 GB boş disk var; bu imajın build'i
+      # (frontend + ML bağımlılıkları + gömülü model) yerelde 14.5 GB build cache
+      # ölçtü ve runner iki kez diski doldurup ÇÖKTÜ (2026-09-09; job 3-6 dk sonra
+      # ölüyor, logları bile yüklenemiyor). Kullanılmayan önyüklü SDK'lar ~25 GB
+      # boşaltıyor — üçüncü parti action yerine düz `rm -rf` yeterli.
+      - name: Runner diskinde yer aç
+        run: |
+          echo "önce:"; df -h / | tail -1
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+                      /usr/local/share/boost /usr/local/lib/node_modules \
+                      /opt/hostedtoolcache/CodeQL
+          sudo docker image prune -af || true
+          echo "sonra:"; df -h / | tail -1
       - name: Buildx kurulumu
         uses: docker/setup-buildx-action@v3
       - name: GHCR girişi (yalnızca push, main dalı)
@@ -112,5 +125,7 @@ jobs:
             VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
             VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # mode=max tüm ara katmanları cache'e yazar; GitHub cache kotası 10 GB,
+          # bu build ondan büyük — sürekli tahliye + fazladan disk baskısı demek.
+          cache-to: type=gha
 
