@@ -133,10 +133,18 @@ async def get_feed(
         await _ensure_chapter_in_course(chapter_id, course_id, tenant_id)
 
     items = await feed_service.serve_batch(course_id, tenant_id, limit, chapter_id)
-    if not items and await feed_service.backfill_from_existing(
-        course_id, tenant_id, limit, chapter_id
-    ):
+    if not items:
         # Havuz boş: LLM beklemeden, mevcut quiz sorularından anında dolgu denenir.
+        # `backfill_from_existing`'in DÖNÜŞ DEĞERİNE göre değil (kaç satır BU çağrı
+        # ekledi), her zaman yeniden dene: eşzamanlı bir arka plan doldurma görevi
+        # (spawn_topup, satır 142) AYNI kaynak sorulardan aynı anda kopyalıyor olabilir.
+        # Origin başına UNIQUE kısıt sayesinde kaybeden tarafın INSERT'i sessizce
+        # es geçilir (_insert_from_quiz) ve `inserted` 0 döner — ama satır artık
+        # HAVUZDA VAR, yalnızca biz eklemedik. Dönüş değerine göre atlarsak (`and`
+        # ile), kazanan görevin eklediği satır hiç servis edilmeden kaybolurdu
+        # (tests/test_feed.py::test_ayni_soru_iki_kez_servis_edilmez, ~%15 flaky —
+        # 2026-09-09, tam paket CI koşusunda kök nedeniyle yakalandı).
+        await feed_service.backfill_from_existing(course_id, tenant_id, limit, chapter_id)
         items = await feed_service.serve_batch(course_id, tenant_id, limit, chapter_id)
 
     feed_service.spawn_topup(course_id, tenant_id, chapter_id)
