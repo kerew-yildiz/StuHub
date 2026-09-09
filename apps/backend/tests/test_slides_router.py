@@ -3,10 +3,9 @@
 import io
 from pathlib import Path
 
+from conftest import TURKISH_FONT_FILE
 from pptx import Presentation
 from pptx.util import Inches
-
-from conftest import TURKISH_FONT_FILE
 
 PPTX_MIME = (
     "application/vnd.openxmlformats-officedocument.presentationml.presentation"

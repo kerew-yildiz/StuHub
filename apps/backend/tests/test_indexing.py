@@ -8,11 +8,10 @@ import io
 
 import lancedb
 import pymupdf
+from conftest import TURKISH_FONT_FILE
 
 import src.services.embed_service as embed_service
 from src.config import settings
-
-from conftest import TURKISH_FONT_FILE
 
 
 def _make_pdf_bytes() -> bytes:
