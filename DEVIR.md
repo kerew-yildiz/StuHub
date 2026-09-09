@@ -19,10 +19,12 @@ kaydeder. **Önce bunu, sonra `DEPLOY.md`'yi, sonra yol haritasını oku.**
 Yol haritasının **Aşama 0'ı (lansman öncesi kod blokajları) tamamlandı**, Railway
 deploy dosyaları yazıldı, ilk gerçek deploy'u kıracak bir **volume izin hatası**
 bulunup düzeltildi, **Postgres migration runner** eklendi (elle şema yapıştırma
-adımı kalktı) ve **her şey commit edilip `origin/main`'e push edildi**
-(2026-09-08, `8644a7b..2f3a3d9`, 7 commit). Docker imajı hâlâ hiç derlenmedi —
-sıradaki iş **Kerem'in kendisinin yapması gereken ilk Railway deploy'u**
-(Railway hesabı/proje/volume/env değişkenleri — bkz. `DEPLOY.md` §2).
+adımı kalktı), **deploy kaynağı Railway build'inden GHCR imajına çevrildi**
+(Kerem'in talebi, CI-gated + iki servis tek imaj paylaşıyor — bkz. `DEPLOY.md` §1) ve
+**her şey commit edilip `origin/main`'e push edildi** (2026-09-08,
+`8644a7b..4a51131`, 9 commit). Docker imajı hâlâ hiç derlenmedi/push edilmedi —
+sıradaki iş **Kerem'in kendisinin yapması gereken kurulum** (GitHub secret'ları
+§2.1 + Railway proje/volume/env §2.2-2.4 — bkz. `DEPLOY.md` §2).
 
 **Devralan ajan için not:** bu turun sonunda `apps/backend/src/services/quiz_generator.py`
 ve komşu dosyalarda (frontend `QuizPlayer.tsx`/`OnboardingWizard.tsx` silinmiş,
@@ -240,14 +242,16 @@ doldurulabilir, ücretli modeller sonra config'den takılır.
 
 ## 6. Sıradaki iş (öncelik sırasıyla)
 
-1. **İlk Railway deploy'u** — `DEPLOY.md` adım adım anlatıyor. Kritik noktalar:
-   `/data` volume'u (izinler için §2.2), `STUHUB_EMBED_MODEL`, `VITE_*` build
-   argümanları, EU-West bölgesi. Deploy sonrası 7 adımlık doğrulama listesi
-   `DEPLOY.md` §3'te. Bu aynı zamanda Dockerfile'ın, `pg_compat`'in VE yeni
-   `apply_pg_schema`'nın gerçek Postgres'e karşı ilk testi.
+1. **İlk deploy'u tamamla** — sırayla `DEPLOY.md` §2.1 (GitHub repo secret'ları
+   `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` + GHCR paketini public yapma),
+   §2.2 (Railway'de iki servis: api + worker, aynı `ghcr.io/kerew-yildiz/stuhub:latest`
+   imajından), §2.3 (`/data` volume'u), §2.4 (env değişkenleri, `STUHUB_EMBED_MODEL`
+   dahil). Deploy sonrası 7 adımlık doğrulama listesi `DEPLOY.md` §3'te. Bu aynı
+   zamanda Dockerfile'ın, `pg_compat`'in VE `apply_pg_schema`'nın gerçek Postgres'e
+   karşı ilk testi.
 2. ~~Postgres migration runner~~ **ÇÖZÜLDÜ (2026-09-08).** `db.apply_pg_schema` her
    açılışta `schema_postgres.sql`'i uyguluyor (idempotent, advisory lock'lu). Ayrıntı
-   ve sınır (yalnızca eklemeli değişiklikler) `DEPLOY.md` §2.5'te.
+   ve sınır (yalnızca eklemeli değişiklikler) `DEPLOY.md` §2.6'da.
 3. **Sentry + object storage** (aynı yol haritası bölümü, madde 2-3).
 4. **Aşama 2** — pgvector (ANN indeksi + SQL-tarafı top-k; port değil yeniden yazım),
    Redis + Arq kuyruğu, ücretli LLM kademelendirmesi (§5.5), rate limiting.
