@@ -17,12 +17,23 @@ kaydeder. **Önce bunu, sonra `DEPLOY.md`'yi, sonra yol haritasını oku.**
 ## 1. Tek cümlelik durum
 
 Yol haritasının **Aşama 0'ı (lansman öncesi kod blokajları) tamamlandı**, Railway
-deploy dosyaları yazıldı ve **her şey commit edilip `origin/main`'e push edildi**
-(2026-09-08, `8644a7b..af371d8`, 6 commit). Docker imajı hâlâ hiç derlenmedi —
-sıradaki iş ilk Railway deploy'u.
+deploy dosyaları yazıldı, ilk gerçek deploy'u kıracak bir **volume izin hatası**
+bulunup düzeltildi, **Postgres migration runner** eklendi (elle şema yapıştırma
+adımı kalktı) ve **her şey commit edilip `origin/main`'e push edildi**
+(2026-09-08, `8644a7b..2f3a3d9`, 7 commit). Docker imajı hâlâ hiç derlenmedi —
+sıradaki iş **Kerem'in kendisinin yapması gereken ilk Railway deploy'u**
+(Railway hesabı/proje/volume/env değişkenleri — bkz. `DEPLOY.md` §2).
 
-Doğrulama durumu: **backend 334 test, frontend 64 test, ikisi de 0 başarısız**;
-ruff/pyright/bandit/pip-audit temiz.
+**Devralan ajan için not:** bu turun sonunda `apps/backend/src/services/quiz_generator.py`
+ve komşu dosyalarda (frontend `QuizPlayer.tsx`/`OnboardingWizard.tsx` silinmiş,
+yeni `SavedQuestionsPage`/migration `0012` beliriyor) **kullanıcının kendi
+editöründe sürmekte olan ayrı, büyük bir refactor** vardı — bu devir notuna
+dokunmadı. O çalışma bitmeden `pytest` collection'ı kırık olabilir
+(`generate_quiz_stream` tanımsız); bu §6'daki deploy işiyle ilgisizdir, karıştırma.
+
+Bu turun BAŞINDA bağımsız doğrulanan temel çizgi: **backend 334 test, frontend
+65/66** (1 flaky Mermaid testi izole koşuda geçti — bkz. §5.4b); ruff/pyright/
+bandit temiz. Yukarıdaki not nedeniyle şu an tam paket koşulamıyor.
 
 (Oturum başındaki temel çizgi: backend 304 geçiyor / 2 başarısız, frontend 62 geçiyor /
 1 başarısız, ruff 16 hata, pyright 114 hata.)
