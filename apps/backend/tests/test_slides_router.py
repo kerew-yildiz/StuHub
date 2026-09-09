@@ -6,6 +6,8 @@ from pathlib import Path
 from pptx import Presentation
 from pptx.util import Inches
 
+from conftest import TURKISH_FONT_FILE
+
 PPTX_MIME = (
     "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 )
@@ -56,7 +58,7 @@ async def test_upload_and_list_slides(client):
 async def test_upload_pdf_slides(client):
     import pymupdf
 
-    font_file = r"C:\Windows\Fonts\arial.ttf"
+    font_file = TURKISH_FONT_FILE
     doc = pymupdf.open()
     page = doc.new_page()
     page.insert_text(

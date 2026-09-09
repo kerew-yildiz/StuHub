@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "Life of a Flashcard",
+    "output": "stuhub-flashcards.html",
+    "quality_profile": "showcase",
+    "viewBox": [1080, 630],
+    "views": [
+      { "id": "main-rail", "label": "The learning rail", "focus": ["born", "due", "shown", "answered", "scheduled"], "note": "How a card is born, shown, judged and given its next appointment." },
+      { "id": "forgetting", "label": "Forgetting and rescue", "focus": ["answered", "again", "due"], "note": "A forgotten card is shortened to tomorrow and starts climbing again." },
+      { "id": "graduation", "label": "Long-term mastery", "focus": ["scheduled", "mastered"], "note": "Good streaks stretch the gap until the card practically reviews itself." }
+    ]
+  },
+  "lanes": [
+    { "id": "main", "label": "Card journey" }
+  ],
+  "states": [
+    { "id": "born", "type": "start", "label": "Card Born", "sublabel": "from your notes", "lane": "main", "col": 0, "step": "01", "tag": "cited" },
+    { "id": "due", "type": "active", "label": "Due Today", "sublabel": "review queue", "lane": "main", "col": 1, "step": "02", "tag": "daily" },
+    { "id": "shown", "type": "active", "label": "Card Shown", "sublabel": "recall, then flip", "lane": "main", "col": 2, "step": "03", "tag": "recall" },
+    { "id": "answered", "type": "decision", "label": "How Well?", "sublabel": "grade yourself", "lane": "main", "col": 3, "step": "04", "tag": "4 buttons" },
+    { "id": "scheduled", "type": "success", "label": "Next Visit Set", "sublabel": "next gap grows", "lane": "main", "col": 4, "step": "05", "tag": "1d, 6d, x ease" },
+    { "id": "again", "type": "failure", "label": "Forgotten", "sublabel": "back to tomorrow", "lane": "main", "col": 1, "yOffset": 130, "tag": "lapsed" },
+    { "id": "mastered", "type": "neutral", "label": "Months Away", "sublabel": "caps at one year", "lane": "main", "col": 4, "yOffset": 130, "tag": "steady" }
+  ],
+  "transitions": [
+    { "id": "born-to-queue", "from": "born", "to": "due", "route": "straight" },
+    { "id": "queue-to-show", "from": "due", "to": "shown", "route": "straight" },
+    { "id": "show-to-answer", "from": "shown", "to": "answered", "route": "straight" },
+    { "id": "answer-schedule", "from": "answered", "to": "scheduled", "route": "straight" },
+    { "id": "answer-again", "from": "answered", "to": "again", "label": "lapsed", "variant": "security", "route": "drop", "fromSide": "bottom", "toSide": "top" },
+    { "id": "again-to-queue", "from": "again", "to": "due", "label": "relearn tomorrow", "variant": "security", "route": "straight", "fromSide": "top", "toSide": "bottom", "labelDx": 66 },
+    { "id": "schedule-to-queue", "from": "scheduled", "to": "due", "label": "when due again", "variant": "default", "route": "top-channel", "labelSegment": 1 },
+    { "id": "schedule-mastered", "from": "scheduled", "to": "mastered", "note": "streak grows to months", "variant": "dashed", "route": "straight", "fromSide": "bottom", "toSide": "top" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "Spaced repetition", "items": ["Remember well and the next gap multiplies - one day, then six, then longer", "The schedule is the SM-2 algorithm, tuned by your four-button honesty"] },
+    { "dot": "rose", "title": "Forgetting is part of the plan", "items": ["'Again' resets the card to a one-day gap with no shame attached", "Ease never drops below 1.3, so a bad day cannot doom a card forever"] }
+  ]
+}

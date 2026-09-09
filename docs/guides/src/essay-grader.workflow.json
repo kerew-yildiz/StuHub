@@ -1,0 +1,41 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Getting Homework Graded",
+    "output": "stuhub-essay-grader.html",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "grade-path", "label": "Draft to report card", "focus": ["paste", "retrieve", "grade", "report"], "note": "An essay is scored 0-100 against a rubric derived from your course material." },
+      { "id": "evidence", "label": "Where the score comes from", "focus": ["grade", "quotes", "report"], "note": "Every deduction quotes the exact sentence that triggered it." },
+      { "id": "coach", "label": "Improve before handing in", "focus": ["report", "coach"], "note": "A draft coach suggests fixes while you still control the text." }
+    ]
+  },
+  "lanes": [
+    { "id": "student", "label": "Student" },
+    { "id": "hub", "label": "StuHub" },
+    { "id": "ai", "label": "AI helpers" }
+  ],
+  "mainPath": ["paste", "retrieve", "grade", "report"],
+  "nodes": [
+    { "id": "paste", "lane": "student", "col": 0, "type": "external", "label": "Submit Your Draft", "sublabel": "paste or upload the essay", "width": 155 },
+    { "id": "retrieve", "lane": "hub", "col": 1, "type": "backend", "label": "Collect Course Facts", "sublabel": "what the course actually says", "width": 165 },
+    { "id": "grade", "lane": "hub", "col": 2, "type": "backend", "label": "AI Grader", "sublabel": "rubric scoring, 0 to 100", "width": 160 },
+    { "id": "report", "lane": "hub", "col": 3, "type": "frontend", "label": "Graded Report", "sublabel": "breakdown, strengths, weak spots", "width": 170 },
+    { "id": "quotes", "lane": "ai", "col": 2, "type": "messagebus", "label": "Quoted Evidence", "sublabel": "comments cite your text", "width": 160 },
+    { "id": "coach", "lane": "student", "col": 3, "type": "frontend", "label": "Draft Coach", "sublabel": "suggested fixes, you decide", "width": 155 }
+  ],
+  "edges": [
+    { "id": "submit", "from": "paste", "to": "retrieve", "label": "text of the essay", "variant": "emphasis" },
+    { "id": "context", "from": "retrieve", "to": "grade", "label": "course evidence", "variant": "emphasis" },
+    { "id": "score", "from": "grade", "to": "report", "label": "rubric + points", "variant": "emphasis" },
+    { "id": "cite", "from": "grade", "to": "quotes", "label": "line-level comments", "variant": "dashed" },
+    { "id": "evidence-view", "from": "quotes", "to": "report", "label": "shown inline", "variant": "dashed" },
+    { "id": "coach-loop", "from": "report", "to": "coach", "label": "revise and resubmit", "variant": "default", "role": "return", "route": "drop" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "A fair rubric", "items": ["Points are split across criteria like accuracy, structure and evidence", "The score is a breakdown, not a mystery number"] },
+    { "dot": "emerald", "title": "Quoted criticism", "items": ["Each weakness quotes the sentence that caused it", "You can disagree with a comment and check the source yourself"] },
+    { "dot": "rose", "title": "Coach, not judge", "items": ["Grading happens before the deadline, while you can still fix things", "The coach proposes; the student disposes"] }
+  ]
+}

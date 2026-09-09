@@ -21,14 +21,6 @@ vi.mock('../api/terms', () => ({
   },
 }))
 
-vi.mock('../api/settings', () => ({
-  settingsApi: {
-    list: vi.fn(async () => ({ onboarding_done: '1' })),
-    set: vi.fn(async () => ({ ok: true })),
-    llmStatus: vi.fn(async () => []),
-  },
-}))
-
 vi.mock('../api/streaks', () => ({
   getStreakSummary: vi.fn(async () => ({
     streak_days: 3,

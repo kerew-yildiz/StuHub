@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS materials (
     id             BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id      UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
     course_id      BIGINT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
-    type           TEXT NOT NULL CHECK (type IN ('textbook', 'slides', 'youtube', 'audio', 'docx', 'epub', 'image', 'text')),
+    type           TEXT NOT NULL CHECK (type IN ('textbook', 'slides', 'youtube', 'audio', 'docx', 'epub', 'image', 'text', 'syllabus')),
     filepath       TEXT NOT NULL,
     extracted_text TEXT,
     page_count     INTEGER,
@@ -321,6 +321,18 @@ CREATE INDEX IF NOT EXISTS idx_feed_questions_consume
 CREATE UNIQUE INDEX IF NOT EXISTS idx_feed_questions_origin
     ON feed_questions(tenant_id, course_id, origin_question_id);
 
+-- Kullanıcının feed'den kaydettiği sorular (migration 0012 ile de kurulur); aynı soru
+-- bir kiracı için yalnızca bir kez kaydedilebilir (UNIQUE(tenant_id, feed_question_id)).
+CREATE TABLE IF NOT EXISTS saved_questions (
+    id               BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id        UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    feed_question_id BIGINT NOT NULL REFERENCES feed_questions(id) ON DELETE CASCADE,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(tenant_id, feed_question_id)
+);
+CREATE INDEX IF NOT EXISTS idx_saved_questions_tenant_created
+    ON saved_questions(tenant_id, created_at DESC);
+
 -- Sık sorgu indeksleri (tenant_id her zaman ilk kolon — RLS + filtre birlikte hızlı)
 CREATE INDEX IF NOT EXISTS idx_terms_tenant             ON terms(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_courses_tenant_term       ON courses(tenant_id, term_id);
@@ -355,7 +367,7 @@ BEGIN
         'quiz_attempts','overall_quizzes','overall_attempts','indexing_jobs',
         'citations_ledger','generation_logs','flashcard_sets','card_reviews',
         'chat_messages','study_guides','essay_submissions','activity_log','exams',
-        'feed_questions','study_sessions'
+        'feed_questions','study_sessions','saved_questions'
     ]
     LOOP
         EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);

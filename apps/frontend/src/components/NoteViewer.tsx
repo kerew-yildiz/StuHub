@@ -109,12 +109,14 @@ export function NoteViewer({ note }: NoteViewerProps) {
   const sections = splitSections(note)
 
   return (
-    <div className="glass-panel p-6">
-      <div className="space-y-6">
+    <div className="glass-panel px-5 py-7 sm:px-8 sm:py-9">
+      <div className="mx-auto max-w-[92ch] space-y-10">
         {sections.map((section, index) => (
           <section
             key={`${section.heading ?? 'intro'}-${index}`}
-            className="max-w-[68ch] text-base leading-relaxed"
+            /* Gövde metni tam beyazın biraz altında: başlık/kalın vurgu ile düz metin
+               arasında ayrım kalsın, ama okunabilirlik düşmesin. */
+            className="text-[15.5px] leading-[1.75] text-stuhub-text/80"
           >
             <ReactMarkdown
               urlTransform={(url) => url}
@@ -127,31 +129,54 @@ export function NoteViewer({ note }: NoteViewerProps) {
                     onOpenCitation={setActive}
                   />
                 ),
-                /* Sol-kenar-vurgu çizgisi kaldırıldı — en tanınabilir "AI-üretimi arayüz"
-                   izlerinden biri (2026-09-08 kritik incelemede deterministik tarayıcı
-                   tarafından da işaretlendi). Hiyerarşi artık boşluk + ağırlık + ince bir
-                   alt çizgiyle (yalnızca h1) kuruluyor. */
+                /* Hiyerarşi yalnızca boşluk + punto + ağırlıkla kuruluyor; renkli/çizgili
+                   vurgu yok (sol-kenar çizgisi 2026-09-08'de kaldırıldı — en tanınabilir
+                   "AI-üretimi arayüz" izlerinden biriydi). */
                 h1: ({ children }) => (
-                  <h1 className="mt-0 mb-3 border-b border-stuhub-border pb-2 text-2xl font-semibold tracking-tight">
+                  <h1 className="mt-0 mb-4 text-[26px] font-semibold leading-tight tracking-tight text-stuhub-text">
                     {children}
                   </h1>
                 ),
                 h2: ({ children }) => (
-                  <h2 className="mt-6 mb-2 text-xl font-semibold tracking-tight">{children}</h2>
+                  <h2 className="mt-8 mb-3 text-[21px] font-semibold leading-snug tracking-tight text-stuhub-text">
+                    {children}
+                  </h2>
                 ),
+                /* Bölüm başlığı: `splitSections` her bölümü `### başlık` olarak veriyor,
+                   yani h3 pratikte notun ana başlığı — ikincil renk okunaksız kalıyordu. */
                 h3: ({ children }) => (
-                  <h3 className="mt-4 mb-2 text-lg font-semibold text-stuhub-text-secondary">
+                  <h3 className="mt-0 mb-4 text-[19px] font-semibold leading-snug tracking-tight text-stuhub-text">
                     {children}
                   </h3>
                 ),
+                h4: ({ children }) => (
+                  <h4 className="mt-6 mb-2 text-[16px] font-semibold text-stuhub-text">
+                    {children}
+                  </h4>
+                ),
+                p: ({ children }) => <p className="mb-4 last:mb-0">{children}</p>,
+                strong: ({ children }) => (
+                  <strong className="font-semibold text-stuhub-text">{children}</strong>
+                ),
                 ul: ({ children }) => (
-                  <ul className="mt-2 list-disc space-y-1 pl-6">{children}</ul>
+                  <ul className="mb-4 list-disc space-y-2 pl-5 marker:text-stuhub-text-secondary last:mb-0">
+                    {children}
+                  </ul>
                 ),
                 ol: ({ children }) => (
-                  <ol className="mt-2 list-decimal space-y-1 pl-6">{children}</ol>
+                  <ol className="mb-4 list-decimal space-y-2 pl-5 marker:text-stuhub-text-secondary last:mb-0">
+                    {children}
+                  </ol>
                 ),
+                li: ({ children }) => <li className="pl-1 [&>ul]:mt-2 [&>ol]:mt-2">{children}</li>,
+                code: ({ children }) => (
+                  <code className="rounded-sm bg-stuhub-glass-1-hover px-1.5 py-0.5 font-mono text-[13.5px]">
+                    {children}
+                  </code>
+                ),
+                hr: () => <hr className="my-8 border-stuhub-border" />,
                 blockquote: ({ children }) => (
-                  <blockquote className="mt-3 rounded-sm border-l-4 bg-stuhub-callout-bg px-4 py-2 text-[15px] text-stuhub-text"
+                  <blockquote className="mb-4 rounded-sm border-l-2 bg-stuhub-callout-bg px-4 py-3 text-[15px] text-stuhub-text-secondary last:mb-0"
                     style={{ borderLeftColor: 'var(--stuhub-callout-border)' }}
                   >
                     {children}

@@ -163,3 +163,13 @@ if INDEX_HTML.exists():
 
             raise HTTPException(status_code=404)
         return FileResponse(INDEX_HTML)
+
+else:
+    # dist yok (API-only: yerel dev'de frontend hiç build edilmemiş, ya da gelecekte
+    # Aşama 2'nin API/worker imaj ayrımı) — SPA servis edilemez, ama kök yine de bir
+    # yanıt vermeli. Bu dal önceden yoktu ve GET / bu modda sessizce 404 dönüyordu;
+    # yalnızca yerel geliştirmede `dist/` her zaman build edilmiş olduğu için hiç
+    # görünmemişti — backend'in kendi CI job'u (frontend build etmiyor) yakaladı.
+    @app.get("/", include_in_schema=False)
+    async def root_api_only() -> JSONResponse:
+        return JSONResponse({"app": "stuhub-backend", "version": APP_VERSION})

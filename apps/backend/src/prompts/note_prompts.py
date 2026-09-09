@@ -5,7 +5,7 @@ TOPIC_EXTRACTION_PROMPT = """Sen bir ders notu asistanısın. Aşağıdaki ders 
 
 SUNUM:
 {slides}
-
+{kazanimlar}
 KURALLAR:
 1. Her konu için kısa ve net bir başlık yaz.
 2. keywords: konuyla ilgili anahtar terimler. {dil_talimati}
@@ -30,7 +30,7 @@ REHBER (sunum):
 
 KAYNAKLAR:
 {numbered_sources}
-
+{kazanimlar}
 ÇIKTI: Markdown not bölümü (inline atıflı).
 """
 
@@ -67,7 +67,7 @@ KONU: {topic}
 
 KAYNAKLAR:
 {numbered_sources}
-
+{kazanimlar}
 ÇIKTI: Markdown not bölümü (inline atıflı).
 """
 
@@ -79,6 +79,6 @@ KURALLAR:
 
 REHBER:
 {slide_content}
-
+{kazanimlar}
 ÇIKTI: Markdown not bölümü (atıfsız).
 """

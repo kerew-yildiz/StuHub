@@ -48,6 +48,7 @@ Thumbs.db
 # 2.13 GB'lık kayıtlı bir worktree bulundu); .impeccable/ yerel kritik önbelleği.
 .claude/
 .impeccable/
+.freebuff/
 
 # ── Geliştirici scratch dosyaları ─────────────────────────────────────
 # Commit edilirse CI'daki `ruff check .` düşer (5 lint hatası taşıyor).

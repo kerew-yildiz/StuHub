@@ -1,4 +1,4 @@
-import { ArrowDown, CheckCircle, CircleNotch, Quotes, SkipForward, XCircle } from '@phosphor-icons/react'
+import { ArrowDown, BookmarkSimple, CheckCircle, CircleNotch, Quotes, SkipForward, XCircle } from '@phosphor-icons/react'
 import { useEffect, useRef } from 'react'
 
 import type { AnswerResult, FeedDifficulty, FeedQuestion } from '../api/feed'
@@ -20,6 +20,8 @@ interface QuizFeedCardProps {
   onAnswer: (selectedIndex: number, elapsedMs: number) => void
   onSkip: () => void
   onNext: () => void
+  /** Kaydet/kaydı kaldır — optimistik güncelleme store'da yapılır. */
+  onToggleSave: () => void
 }
 
 const DIFFICULTY_LABEL: Record<FeedDifficulty, string> = {
@@ -52,6 +54,7 @@ export function QuizFeedCard({
   onAnswer,
   onSkip,
   onNext,
+  onToggleSave,
 }: QuizFeedCardProps) {
   const startedAtRef = useRef<number>(Date.now())
 
@@ -67,12 +70,10 @@ export function QuizFeedCard({
 
   return (
     <div className="glass-panel flex h-full flex-col gap-4 overflow-y-auto p-6">
-      {(question.topic || question.difficulty) && (
-        <div className="flex items-center justify-between gap-2 text-xs text-stuhub-text-secondary">
-          {question.topic ? (
+      <div className="flex items-center justify-between gap-2 text-xs text-stuhub-text-secondary">
+        <div className="flex items-center gap-2">
+          {question.topic && (
             <span className="glass-panel-subtle rounded-pill px-2.5 py-1">{question.topic}</span>
-          ) : (
-            <span />
           )}
           {question.difficulty && (
             <span className="glass-panel-subtle rounded-pill px-2.5 py-1">
@@ -80,7 +81,16 @@ export function QuizFeedCard({
             </span>
           )}
         </div>
-      )}
+        <button
+          type="button"
+          onClick={onToggleSave}
+          aria-label={question.saved ? 'Kaydı kaldır' : 'Soruyu kaydet'}
+          aria-pressed={question.saved}
+          className="shrink-0 rounded-control p-1.5 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:text-stuhub-text"
+        >
+          <BookmarkSimple size={20} weight={question.saved ? 'fill' : 'regular'} />
+        </button>
+      </div>
 
       <p className="text-lg font-medium leading-relaxed">{question.question}</p>
 

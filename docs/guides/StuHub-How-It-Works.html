@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>StuHub — How It Works: A Plain-English Guide</title>
+<style>
+  :root { --ink:#1a2332; --soft:#5a6578; --line:#dfe4ec; --accent:#3b6ea5; --chip:#eef3f9; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: var(--ink); margin: 0; font-size: 11.5pt; line-height: 1.55; }
+  .page { padding: 14mm 16mm; }
+  .cover { text-align: center; padding-top: 70mm; page-break-after: always; }
+  .cover h1 { font-size: 34pt; margin: 0 0 8mm; letter-spacing: -0.5pt; }
+  .cover .sub { color: var(--soft); font-size: 14pt; margin-bottom: 24mm; }
+  .cover .meta { color: var(--soft); font-size: 10pt; }
+  .toc { page-break-after: always; }
+  .toc h2 { font-size: 20pt; border-bottom: 2px solid var(--line); padding-bottom: 4mm; }
+  .toc ol { padding-left: 8mm; }
+  .toc li { margin: 3mm 0; font-size: 12pt; }
+  section.feature { page-break-before: always; }
+  section.feature h2 { font-size: 19pt; margin: 0 0 2mm; color: var(--accent); }
+  section.feature .lead { color: var(--soft); font-size: 11.5pt; margin: 0 0 5mm; }
+  figure { margin: 0 0 5mm; page-break-inside: avoid; }
+  figure img { width: 100%; border: 1px solid var(--line); border-radius: 6px; }
+  figcaption { font-size: 9pt; color: var(--soft); margin-top: 1.5mm; text-align: center; }
+  h3 { font-size: 13pt; margin: 6mm 0 2.5mm; border-left: 4px solid var(--accent); padding-left: 3mm; }
+  dl.terms { margin: 0; }
+  dl.terms dt { font-weight: 600; margin-top: 2.8mm; }
+  dl.terms dd { margin: 0.6mm 0 0 5mm; color: #333d4e; }
+  dl.terms dd .ex { color: var(--soft); font-style: italic; }
+  .reallife { background: var(--chip); border: 1px solid var(--line); border-radius: 6px; padding: 4mm 5mm; margin-top: 4mm; page-break-inside: avoid; }
+  .reallife .tag { font-weight: 700; color: var(--accent); font-size: 10pt; text-transform: uppercase; letter-spacing: 0.5pt; }
+  footer.note { margin-top: 8mm; padding-top: 3mm; border-top: 1px solid var(--line); font-size: 9.5pt; color: var(--soft); }
+</style>
+</head>
+<body>
+
+<div class="page cover">
+  <h1>StuHub: How It Works</h1>
+  <div class="sub">A plain-English tour of every feature — for students, parents and anyone who is not a programmer.</div>
+  <div class="meta">12 guided diagrams · everyday examples · no technical background needed</div>
+</div>
+
+<div class="page toc">
+  <h2>Contents</h2>
+  <ol>
+    <li>The Big Picture — what StuHub is</li>
+    <li>Setting Up Your Semester</li>
+    <li>Turning Materials into Searchable Knowledge</li>
+    <li>Writing Cited Notes from Your Materials</li>
+    <li>Asking a Question About Your Material</li>
+    <li>Making a Chapter Quiz</li>
+    <li>Taking the Big Exam Quiz</li>
+    <li>Life of a Flashcard (Spaced Repetition)</li>
+    <li>Keeping the Study Streak Alive</li>
+    <li>Building the Study Guide and Concept Map</li>
+    <li>Getting Homework Graded</li>
+    <li>Exporting and Backing Up Your Work</li>
+  </ol>
+  <p style="margin-top:10mm; color:var(--soft)">Every diagram in this guide also exists as an interactive web page you can open in any browser — search, zoom and trace relationships are built in. The files live next to this guide in <b>docs/guides</b>.</p>
+</div>
+
+<section class="feature">
+  <h2>1. The Big Picture — what StuHub is</h2>
+  <p class="lead">StuHub is a study assistant that lives in your browser. It reads your course files, takes notes from them, quizzes you, and helps you remember — a bit like a tireless private tutor who has read everything you own.</p>
+  <figure><img src="images/stuhub-big-picture.png" alt="Big picture diagram"><figcaption>Everything you click travels from your screen, through StuHub's brain, to your saved study data.</figcaption></figure>
+  <h3>Words in the diagram</h3>
+  <dl class="terms">
+    <dt>Student</dt><dd>You. The only part of the picture that needs coffee. <span class="ex">Like the driver of a car — everything else is the car.</span></dd>
+    <dt>StuHub App (frontend)</dt><dd>The screens you see and click in your browser. It only shows things and passes your clicks along — like a shop counter, not the kitchen behind it.</dd>
+    <dt>StuHub Brain (API Server, FastAPI)</dt><dd>The middle layer that does the real work: it receives your requests, decides what to do, and answers. <span class="ex">Like a restaurant's head waiter who takes your order to the kitchen and brings back the food.</span></dd>
+    <dt>Study Database (SQLite / Supabase)</dt><dd>The filing cabinet where your courses, notes and scores are kept. In local mode it is a single file on your computer.</dd>
+    <dt>Memory Search (LanceDB vector store)</dt><dd>A special search that finds text by <i>meaning</i>, not just exact words. <span class="ex">Ask "what causes rain?" and it finds the paragraph about precipitation, even if the word "rain" never appears.</span></dd>
+    <dt>AI Helpers (5 free AI providers, fallback chain)</dt><dd>Outside writing services StuHub borrows. If one is busy, the next one steps in automatically — like calling friends one by one until someone picks up.</dd>
+    <dt>Media Tools (yt-dlp · Whisper · OCR)</dt><dd>Specialists for non-text files: they download videos, turn speech into text, and read text out of pictures.</dd>
+    <dt>Supabase Sign-in / Lemon Squeezy</dt><dd>Only used in the online (SaaS) mode: one checks who you are when signing in; the other handles paid plans and monthly limits. In local mode neither is needed.</dd>
+    <dt>Local mode vs SaaS mode</dt><dd>Local: everything stays on your computer, no account. SaaS: sign-in and plan limits, hosted online.</dd>
+  </dl>
+  <div class="reallife"><span class="tag">Real life</span> Think of StuHub as a librarian (the Brain) with a photographic memory (Memory Search), a small team of ghost-writers (AI Helpers), and a scanner for tapes and photos (Media Tools). Your notes and scores are kept in the library's own card catalog (the Study Database), and in local mode the whole library sits in your bedroom.</div>
+</section>
+
+<section class="feature">
+  <h2>2. Setting Up Your Semester</h2>
+  <p class="lead">Before anything smart can happen, StuHub needs to know what you are studying. This is the five-minute setup you do once per term.</p>
+  <figure><img src="images/stuhub-semester-setup.png" alt="Semester setup diagram"><figcaption>One semester holds courses; each course holds chapters; each chapter holds your materials.</figcaption></figure>
+  <h3>Words in the diagram</h3>
+  <dl class="terms">
+    <dt>Semester</dt><dd>The big folder for a school term. <span class="ex">Like "Fall 2026" written on the front of a binder.</span></dd>
+    <dt>Course</dt><dd>A subject inside the semester — one binder tab. You give it a name and (optionally) a color.</dd>
+    <dt>Chapter</dt><dd>A topic inside the course, mirroring your textbook's chapters. Notes, quizzes and flashcards are organized per chapter.</dd>
+    <dt>Material</dt><dd>Any file you attach to a chapter: a PDF of the book, lecture slides, a recorded lecture, a photo of the whiteboard.</dd>
+    <dt>Upload</dt><dd>Copying a file from your computer into StuHub's folder for that chapter. The original file never changes.</dd>
+    <dt>Course page</dt><dd>The dashboard for one course where everything you create — notes, quizzes, cards — appears.</dd>
+  </dl>
+  <div class="reallife"><span class="tag">Real life</span> It is exactly like organizing a physical binder before the term starts: one binder (semester), a tab per subject (course), and inside each tab the handouts and slides for each topic (chapter + materials). Students who spend ten minutes organizing the binder in September find everything instantly in June.</div>
+</section>
+
+<section class="feature">
+  <h2>3. Turning Materials into Searchable Knowledge</h2>
+  <p class="lead">When you drop a file in, StuHub does not just store it — it reads it, cuts it into small pieces, and builds a meaning-based index so every later feature can find and quote the right sentences.</p>
+  <figure><img src="images/stuhub-materials.png" alt="Materials pipeline diagram"><figcaption>From raw file to searchable, quotable passages.</figcaption></figure>
+  <h3>Words in the diagram</h3>
+  <dl class="terms">
+    <dt>Safety Check</dt><dd>A bouncer at the door: right file type? not empty? not too huge? Bad files are politely refused with an explanation and wiped away.</dd>
+    <dt>Pull Out the Text</dt><dd>Reading the raw text out of PDFs, slide decks and documents — like extracting the ink from a printed page.</dd>
+    <dt>Turn Media into Text</dt><dd>Videos and recordings get subtitles written (speech-to-text); images get their words read (OCR, "optical character recognition"). <span class="ex">A lecture recording becomes a transcript you could also read on a train.</span></dd>
+    <dt>Cut into Passages</dt><dd>The text is split into small chunks a few sentences long. <span class="ex">Like cutting a long tape into labeled clips, so a quote can point at one exact moment.</span></dd>
+    <dt>Save by Meaning (vector store)</dt><dd>Each passage is saved together with a numerical "meaning fingerprint", so searching can match ideas, not just keywords.</dd>
+    <dt>LanceDB</dt><dd>The specific database product that stores these fingerprints — the library shelf designed for meaning-lookup.</dd>
+    <dt>Material Ready</dt><dd>The file is now citable (it can be quoted with its location), searchable, and quotable by every other feature.</dd>
+  </dl>
+  <div class="reallife"><span class="tag">Real life</span> Imagine hiring an assistant for one evening: she reads every page, types up your audio lectures, scans your photos of notes, then cuts everything into numbered index cards and files them by topic — not alphabetically, but by <i>what they are about</i>. Ask her about "why plants lean toward light" and she hands you the three exact cards, each with the page number written on the back.</div>
+</section>
+
+<section class="feature">
+  <h2>4. Writing Cited Notes from Your Materials</h2>
+  <p class="lead">One click on a chapter, and StuHub writes a full study note — but unlike a random chatbot, every claim comes with a quote from your own material.</p>
+  <figure><img src="images/stuhub-notes.png" alt="Notes pipeline diagram"><figcaption>From one click to a finished note with clickable sources.</figcaption></figure>
+  <h3>Words in the diagram</h3>
+  <dl class="terms">
+    <dt>List the Topics</dt><dd>The AI first skims and lists up to 12 subjects the chapter covers — a table of contents before writing.</dd>
+    <dt>Gather Evidence</dt><dd>For each topic, the Memory Search pulls the exact passages that discuss it.</dd>
+    <dt>AI Writes a Draft</dt><dd>Per topic, a draft is written using only those passages, quotes attached.</dd>
+    <dt>Coverage Check</dt><dd>A quality gate: did every topic actually get explained? Missing ones are sent back for a second pass (up to 3 rounds). <span class="ex">Like an editor returning a chapter to the writer: "you skipped section 4.2."</span></dd>
+    <dt>Slides-Only Note</dt><dd>If the book text is missing and only slides exist, the note says honestly "written from slides" — no pretending.</dd>
+    <dt>Citation</dt><dd>A small chip under a claim showing which file and page (or which minute of a video) it came from. Click it to see the original passage.</dd>
+  </dl>
+  <div class="reallife"><span class="tag">Real life</span> Compare two classmates writing lecture summaries. One writes from memory — impressive but occasionally wrong. The other writes each sentence and staples a photocopy of the textbook line it came from. StuHub is the second classmate: slower to trust, but you can <i>check</i> every sentence, which makes revising stress-free.</div>
+</section>
+
+<section class="feature">
+  <h2>5. Asking a Question About Your Material</h2>
+  <p class="lead">The chat window ("Ask the Material") answers questions using your own files as the source of truth — and shows its receipts.</p>
+  <figure><img src="images/stuhub-ask-material.png" alt="Ask the material sequence diagram"><figcaption>Question in, evidence found, answer streamed back with citation chips.</figcaption></figure>
+  <h3>Words in the diagram</h3>
+  <dl class="terms">
+    <dt>Chat Window</dt><dd>The screen where you type questions, like a messaging app.</dd>
+    <dt>Find passages by meaning</dt><dd>Before writing anything, the Brain asks Memory Search for the passages that actually answer your question.</dd>
+    <dt>Guard rails</dt><dd>Rules that stop the AI from inventing: it may only write from the found passages.</dd>
+    <dt>Streaming</dt><dd>The answer appears word by word, like a friend typing, instead of a frozen 20-second wait.</dd>
+    <dt>Citation chips</dt><dd>The small source tags under the answer. Tap one and StuHub shows the exact quoted text from your file.</dd>
+    <dt>Done signal</dt><dd>A tidy "finished" event so the screen knows the answer is complete.</dd>
+  </dl>
+  <div class="reallife"><span class="tag">Real life</span> Ask a well-read friend "what did the textbook say about inflation?" A good friend says "wait, let me find the page" (retrieval), answers only from the page (guard rails), and shows you the paragraph when done (citation chips). A bad friend — most chatbots — answers confidently from general memory and may mix in things your course never said.</div>
+</section>
+
+<section class="feature">
+  <h2>6. Making a Chapter Quiz</h2>
+  <p class="lead">Practice quizzes are generated from your own cited notes — never from random internet content — and go through a fairness check before you see them.</p>
+  <figure><img src="images/stuhub-chapter-quiz.png" alt="Chapter quiz diagram"><figcaption>Each topic in your note becomes five fair multiple-choice questions.</figcaption></figure>
+  <h3>Words in the diagram</h3>
+  <dl class="terms">
+    <dt>Follow the Note</dt><dd>The quiz builder splits your chapter note into topic batches so every topic gets questions.</dd>
+    <dt>AI Writes Questions (5 per topic, cited)</dt><dd>Questions come with the note citation they were built from — the "answer key" is your own material.</dd>
+    <dt>Quality Check</dt><dd>Automated review: is exactly one answer correct? Are wrong options plausible? Are correct letters spread across A–D so nobody can game patterns? Bad batches are rewritten, up to 3 attempts.</dd>
+    <dt>Ready to Play</dt><dd>The quiz screen with instant feedback: answer, and you immediately see right/wrong with an explanation.</dd>
+    <dt>Instant feedback</dt><dd>Explanations were written when the quiz was made — a wrong answer is a mini-lesson, not just a red cross.</dd>
+  </dl>
+  <div class="reallife"><span class="tag">Real life</span> Like a teacher who writes quiz questions only from the assigned reading, then hands the draft to a strict colleague who checks: "Is question 3 unfair? Is the correct answer always C? Fix it before the students see it." You only ever see the cleaned-up version.</div>
+</section>
+
+<section class="feature">
+  <h2>7. Taking the Big Exam Quiz</h2>
+  <p class="lead">Exam Mode rehearses a whole course at once: 55 mixed questions in one sitting, marked to a 100-point scale.</p>
+  <figure><img src="images/stuhub-exam-quiz.png" alt="Exam quiz diagram"><figcaption>Twenty multiple choice, fifteen true-false, fifteen fill-in, five written — a full dress rehearsal.</figcaption></figure>
+  <h3>Words in the diagram</h3>
+  <dl class="terms">
+    <dt>The Recipe</dt><dd>The fixed question mix: 20 multiple choice + 15 true/false + 15 fill-in + 5 written. <span class="ex">Like a real exam blueprint announced in advance.</span></dd>
+    <dt>Question Bank</dt><dd>The pool of AI-written questions for the course, seeded from your cited notes.</dd>
+    <dt>Mixed Exam Paper (shuffled)</dt><dd>Each attempt assembles a fresh random selection — so every rehearsal feels new.</dd>
+    <dt>Marking (auto)</dt><dd>The 47 short answers are checked instantly by the computer, like a scanner grading a bubble sheet.</dd>
+    <dt>AI Reads Essays</dt><dd>The 5 written answers are read by an AI against a rubric (a scoring guide listing what a good answer must contain) — 10 points each.</dd>
+    <dt>Score out of 100</dt><dd>Quick-answer points + essay points, with weak spots highlighted so you know what to revise.</dd>
+    <dt>New shuffled attempt</dt><dd>Retake with a different shuffle of the same bank — memory works harder each time.</dd>
+  </dl>
+  <div class="reallife"><span class="tag">Real life</span> It is a mock exam with a fair examiner: the objective parts are machine-marked in seconds (no waiting a week), and the essays are read with the same rubric every time — no "the examiner had a bad morning" effect. And because each mock is shuffled from the same bank, retaking is like practicing penalty kicks with the goalkeeper diving a different way.</div>
+</section>
+
+<section class="feature">
+  <h2>8. Life of a Flashcard (Spaced Repetition)</h2>
+  <p class="lead">Flashcards are not random — each card follows a schedule that shows up exactly when you are about to forget it.</p>
+  <figure><img src="images/stuhub-flashcards.png" alt="Flashcard lifecycle diagram"><figcaption>How a card is born, shown, judged and given its next appointment.</figcaption></figure>
+  <h3>Words in the diagram</h3>
+  <dl class="terms">
+    <dt>Card Born (cited)</dt><dd>A card is created from your notes or quiz mistakes, carrying its source citation.</dd>
+    <dt>Due Today</dt><dd>The daily queue of cards whose "next visit" is today.</dd>
+    <dt>Card Shown / flip</dt><dd>You see the front, recall the answer in your head, then flip to check.</dd>
+    <dt>How Well? (Again / Hard / Good / Easy)</dt><dd>Your honest self-grade. "Again" means forgotten; the other three mean remembered with more or less effort.</dd>
+    <dt>Next Visit Set / the gap grows</dt><dd>Remembered well → the next gap multiplies: about 1 day, then 6 days, then longer. <span class="ex">Like watering a plant exactly when the soil starts drying — not on a rigid calendar, and not after it wilted.</span></dd>
+    <dt>Forgotten → back to tomorrow</dt><dd>Lapsed cards restart at a one-day gap, with no shame attached. Your "ease" for the card drops a little but never below 1.3, so one bad day cannot doom a card forever.</dd>
+    <dt>Months Away</dt><dd>After a long streak of success, the gap stretches toward the cap (one year) — the card practically reviews itself.</dd>
+    <dt>SM-2 (spaced repetition)</dt><dd>The name of this classic scheduling method — the same idea popular Anki decks use.</dd>
+  </dl>
+  <div class="reallife"><span class="tag">Real life</span> Learning vocabulary is the classic case: look at "bilirubin" ten times today and you forget it by Friday. See it once today, once in six days, once in three weeks — right when it starts slipping — and it sticks for months. StuHub does that date-math for every card, every day.</div>
+</section>
+
+<section class="feature">
+  <h2>9. Keeping the Study Streak Alive</h2>
+  <p class="lead">The streak counts consecutive productive days. It is deliberately kind: built to rescue bad days, not to punish you.</p>
+  <figure><img src="images/stuhub-streak.png" alt="Streak lifecycle diagram"><figcaption>Every note, quiz answer, flashcard review or chat question adds one tick to today's ring.</figcaption></figure>
+  <h3>Words in the diagram</h3>
+  <dl class="terms">
+    <dt>New Day / the ring</dt><dd>At midnight the progress ring resets to zero. The ring fills as you log activities toward your daily goal.</dd>
+    <dt>Studying (any counts)</dt><dd>Writing a note, answering a quiz, reviewing flashcards, asking a chat question — all feed the ring. <span class="ex">Five small sips fill the same glass as one big gulp.</span></dd>
+    <dt>Goal Reached?</dt><dd>Did today hit your personal target (say, 5 activities)? You choose the target.</dd>
+    <dt>Streak Grows</dt><dd>Hit the goal and tomorrow the chain is one link longer.</dd>
+    <dt>Day Almost Over → do one small task</dt><dd>In the evening with an empty ring, a gentle reminder appears. One honest flashcard review is enough to save the day.</dd>
+    <dt>Midnight passes → Day Missed → Streak Broken</dt><dd>Truly missing a day resets the counter to zero — but <b>nothing else is deleted</b>. Every note, score and card stays exactly as it was.</dd>
+  </dl>
+  <div class="reallife"><span class="tag">Real life</span> It works like a gym wall-calendar of X marks: the mark is the reward, a missed day leaves a gap, but the trainer never takes away what you already lifted. And the "evening nudge" is the friend texting "quick 5-minute session?" — often that tiny session is all the day needed.</div>
+</section>
+
+<section class="feature">
+  <h2>10. Building the Study Guide and Concept Map</h2>
+  <p class="lead">Before an exam you need one page, not twenty tabs. StuHub distills your course into a guide, then draws a map of how the ideas connect.</p>
+  <figure><img src="images/stuhub-study-guide.png" alt="Study guide diagram"><figcaption>One chapter becomes a one-page summary, key terms and exam focus points — plus a concept map.</figcaption></figure>
+  <h3>Words in the diagram</h3>
+  <dl class="terms">
+    <dt>Read Everything</dt><dd>The builder gathers your notes, their citations and your quiz history for the chapter.</dd>
+    <dt>AI Distills</dt><dd>That collection is compressed into a summary, exam focus points and likely questions — from <i>your</i> material, not a generic list.</dd>
+    <dt>Key Terms</dt><dd>The vocabulary you must own for this chapter, each with its grounded definition.</dd>
+    <dt>Link the Concepts / Concept Map</dt><dd>Boxes (terms) and arrows (which idea feeds which) drawn as a dependency tree. Arrows mean "understand this before that". <span class="ex">Like a recipe: you must chop before you sauté; the map shows which steps depend on which.</span></dd>
+    <dt>Guide Panel</dt><dd>The one screen you open the night before the exam.</dd>
+  </dl>
+  <div class="reallife"><span class="tag">Real life</span> Two students revise for a biology final. One rereads 60 pages in a panic. The other holds one page: five key terms, three focus points, and a map showing "cell respiration ← glucose ← photosynthesis" — study the roots of the tree first and the branches make sense. StuHub builds that second student's page automatically, from the student's own notes.</div>
+</section>
+
+<section class="feature">
+  <h2>11. Getting Homework Graded</h2>
+  <p class="lead">Paste an essay draft before the deadline and StuHub grades it against your course material — with every criticism quoted, and suggestions you remain in control of.</p>
+  <figure><img src="images/stuhub-essay-grader.png" alt="Essay grader diagram"><figcaption>An essay is scored 0–100 against a rubric derived from your course material.</figcaption></figure>
+  <h3>Words in the diagram</h3>
+  <dl class="terms">
+    <dt>Submit Your Draft</dt><dd>Paste the text or upload the file — nothing is sent to your teacher; this is private practice.</dd>
+    <dt>Collect Course Facts</dt><dd>The grader first pulls what the course actually says, so your essay is judged against <i>your</i> material.</dd>
+    <dt>Rubric (0–100)</dt><dd>A scoring guide splitting points across criteria — accuracy, structure, use of evidence. The score is a breakdown, not a mystery number.</dd>
+    <dt>Quoted Evidence</dt><dd>Every deducted point quotes the exact sentence that caused it, so you can disagree and check the source yourself.</dd>
+    <dt>Draft Coach</dt><dd>Suggested fixes you decide to accept or ignore. The coach proposes; the student disposes.</dd>
+  </dl>
+  <div class="reallife"><span class="tag">Real life</span> A good writing tutor never just says "72". She says: "72 — here is where your argument about the causes wobbled (quoting your paragraph 3), and here the evidence you cite doesn't match the claim (quoting it)." And she does this <i>before</i> the deadline, while you can still fix it — that is the whole point of practicing with a coach instead of only receiving a final judgment.</div>
+</section>
+
+<section class="feature">
+  <h2>12. Exporting and Backing Up Your Work</h2>
+  <p class="lead">Your study life belongs to you. Everything can leave StuHub in standard formats, and a whole semester can travel between computers as one zip file.</p>
+  <figure><img src="images/stuhub-export-archive.png" alt="Export and archive diagram"><figcaption>Notes, cards and whole semesters can leave StuHub in formats other apps understand.</figcaption></figure>
+  <h3>Words in the diagram</h3>
+  <dl class="terms">
+    <dt>Pick What to Export</dt><dd>A single note, a flashcard deck, or an entire semester.</dd>
+    <dt>Convert</dt><dd>Notes become PDF or Markdown (plain text that any app opens); flashcards become an .apkg deck — the format the popular free app Anki opens directly. No dead, proprietary formats.</dd>
+    <dt>Bundle (the zip suitcase)</dt><dd>A semester archive packs courses, notes and material files into one file. <span class="ex">Like packing a whole semester of binders into one labeled suitcase.</span></dd>
+    <dt>Import Archive</dt><dd>On a new computer, upload the zip and everything is rebuilt — courses, notes, even the material files. Switching computers becomes a copy-paste.</dd>
+    <dt>Local by design</dt><dd>In local mode, nothing leaves your machine unless you explicitly export it. The archive is your own backup — keep a copy in cloud storage if you like.</dd>
+  </dl>
+  <div class="reallife"><span class="tag">Real life</span> Graduating or switching laptops should never mean losing four years of notes. It is the difference between books locked in an old library's basement (no lock-in) and books you own and can box up, carry, and shelve in a new home. The zip suitcase even keeps the original textbooks (materials) in the boxes.</div>
+</section>
+
+<footer class="note" style="margin:10mm 16mm 14mm">
+  <b>Interactive versions.</b> Each diagram above is also delivered as a self-contained HTML page (in <b>docs/guides</b>) with dark/light themes, pan &amp; zoom, search, and relationship tracing — open them in any browser. All twelve passed automated showcase validation (9/9 artifact checks) and were verified at 1440×900, 1600×1000 and 1920×1080 desktop sizes.
+</footer>
+
+</body>
+</html>

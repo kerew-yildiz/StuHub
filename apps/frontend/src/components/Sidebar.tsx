@@ -94,6 +94,9 @@ export function Sidebar() {
         <NavLink to="/" end className={({ isActive }) => linkClass(isActive)}>
           Dönemler
         </NavLink>
+        <NavLink to="/kaydedilenler" className={({ isActive }) => linkClass(isActive)}>
+          Kaydedilenler
+        </NavLink>
         <NavLink to="/ayarlar" className={({ isActive }) => linkClass(isActive)}>
           Ayarlar
         </NavLink>
@@ -108,6 +111,9 @@ export function Sidebar() {
             className={({ isActive }) => linkClass(isActive)}
           >
             Dönemler
+          </NavLink>
+          <NavLink to="/kaydedilenler" className={({ isActive }) => linkClass(isActive)}>
+            Kaydedilenler
           </NavLink>
 
           {terms.map((term) => {

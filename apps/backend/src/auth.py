@@ -22,6 +22,8 @@ her istek admin sayılır; SaaS modunda yalnızca `profiles.is_admin = true`.
 
 from __future__ import annotations
 
+import asyncio
+
 import jwt
 from fastapi import Header, HTTPException
 
@@ -76,6 +78,10 @@ def _decode_token(token: str) -> dict:
     if jwk_client is not None:
         try:
             return _decode_with_jwks(token, jwk_client)
+        except jwt.ExpiredSignatureError as exc:
+            # Süresi dolmuş token YENİ imza anahtarı gerektirmez; JWKS'i tazelemek boşuna
+            # bir ağ turudur ve istemci token'ı yenileyene kadar HER istekte tekrarlanır.
+            raise AuthError("Oturum geçersiz veya süresi dolmuş.") from exc
         except jwt.PyJWTError:
             # İlk deneme başarısız — 2026-09-08 canlı bulgu: taze imzalanmış bir token,
             # önbellekteki JWKS anahtar setinde henüz yoksa (soğuk önbellek/anahtar
@@ -141,7 +147,9 @@ async def get_tenant_id(authorization: str | None = Header(default=None)) -> str
     if not authorization or not authorization.startswith("Bearer "):
         raise AuthError("Oturum açmanız gerekiyor.")
     token = authorization.removeprefix("Bearer ").strip()
-    payload = _decode_token(token)
+    # `_decode_token` senkron ağ I/O yapabilir (JWKS çekimi, ~250-900ms): event loop'ta
+    # çalıştırılırsa TÜM backend durur (6 eşzamanlı istekte /health 2ms → 1243ms ölçüldü).
+    payload = await asyncio.to_thread(_decode_token, token)
     tenant_id = payload.get("sub")
     if not tenant_id:
         raise AuthError("Oturum geçersiz.")

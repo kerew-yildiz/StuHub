@@ -342,3 +342,74 @@ async def test_regen_provider_exhaustion_never_aborts_note(client, monkeypatch):
     # sağlayıcı zinciri tükendiği için hiçbir yedek not üretemedi → SON ÇARE devreye girdi,
     # çözümsüz atıf düşürüldü ama not (ve önceki içerik) korundu.
     assert done["note"]["citations_json"]["topics"][0]["citations"] == []
+
+
+async def _insert_syllabus(course_id: int, text: str) -> None:
+    import aiosqlite
+
+    from src.config import settings
+
+    async with aiosqlite.connect(settings.db_path) as conn:
+        await conn.execute(
+            "INSERT INTO materials (course_id, type, filepath, extracted_text) "
+            "VALUES (?, 'syllabus', 'izlence.pdf', ?)",
+            (course_id, text),
+        )
+        await conn.commit()
+
+
+async def _course_id_for_chapter(chapter_id: int) -> int:
+    import aiosqlite
+
+    from src.config import settings
+
+    async with aiosqlite.connect(settings.db_path) as conn:
+        cursor = await conn.execute("SELECT course_id FROM chapters WHERE id = ?", (chapter_id,))
+        row = await cursor.fetchone()
+        assert row is not None
+        return row[0]
+
+
+async def test_load_kazanimlar_returns_latest_syllabus_text(client):
+    from src.db import get_db
+
+    chapter_id = await _make_chapter_with_slides(client)
+    course_id = await _course_id_for_chapter(chapter_id)
+    await _insert_syllabus(course_id, "Kazanım 1: türev alabilme.")
+
+    db = await get_db()
+    try:
+        text = await note_generator.load_kazanimlar(db, course_id, "local")
+    finally:
+        await db.close()
+    assert text == "Kazanım 1: türev alabilme."
+
+
+async def test_load_kazanimlar_empty_without_syllabus(client):
+    """Syllabus materyali yüklenmemişse boş string döner (not/quiz üretimi kazanımsız çalışır)."""
+    from src.db import get_db
+
+    chapter_id = await _make_chapter_with_slides(client)
+    course_id = await _course_id_for_chapter(chapter_id)
+
+    db = await get_db()
+    try:
+        text = await note_generator.load_kazanimlar(db, course_id, "local")
+    finally:
+        await db.close()
+    assert text == ""
+
+
+async def test_load_kazanimlar_truncates_long_text(client):
+    from src.db import get_db
+
+    chapter_id = await _make_chapter_with_slides(client)
+    course_id = await _course_id_for_chapter(chapter_id)
+    await _insert_syllabus(course_id, "a" * (note_generator.KAZANIMLAR_MAX_CHARS + 500))
+
+    db = await get_db()
+    try:
+        text = await note_generator.load_kazanimlar(db, course_id, "local")
+    finally:
+        await db.close()
+    assert len(text) == note_generator.KAZANIMLAR_MAX_CHARS

@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { importArchive } from '../api/archive'
-import { settingsApi } from '../api/settings'
 import { termsApi, type Term, type TermInput } from '../api/terms'
-import { OnboardingWizard } from '../components/OnboardingWizard'
 import { StreakRing } from '../components/StreakRing'
 import { TermCard } from '../components/TermCard'
 import { TermForm } from '../components/TermForm'
@@ -113,14 +111,13 @@ function TermEditForm({
   )
 }
 
-/** Dönemler ana sayfası (Faz 1.1) + streak halkası + 3 adımlı onboarding (Faz V2.4). */
+/** Dönemler ana sayfası (Faz 1.1) + streak halkası. */
 export function TermsPage() {
   const [terms, setTerms] = useState<Term[]>([])
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editingTerm, setEditingTerm] = useState<Term | null>(null)
-  const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null)
   const [includeFiles, setIncludeFiles] = useState(false)
   const [importing, setImporting] = useState(false)
   const [notice, setNotice] = useState('')
@@ -141,22 +138,6 @@ export function TermsPage() {
   useEffect(() => {
     void load()
   }, [load])
-
-  // Onboarding bayrağını oku — dönem listesi boşken sihirbazı açıp açmamaya karar verir.
-  useEffect(() => {
-    let cancelled = false
-    settingsApi
-      .list()
-      .then((settings) => {
-        if (!cancelled) setOnboardingDone(settings.onboarding_done === '1')
-      })
-      .catch(() => {
-        if (!cancelled) setOnboardingDone(true) // bayrak okunamazsa sihirbazı zorla açma
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   const handleCreate = async (input: TermInput) => {
     await termsApi.create(input)
@@ -184,11 +165,6 @@ export function TermsPage() {
     }
   }
 
-  const handleOnboardingComplete = () => {
-    setOnboardingDone(true)
-    void load()
-  }
-
   const handleImportFile = async (file: File) => {
     setImporting(true)
     setImportError('')
@@ -206,8 +182,6 @@ export function TermsPage() {
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
-
-  const showOnboarding = state === 'ready' && terms.length === 0 && onboardingDone === false
 
   return (
     <section>
@@ -285,17 +259,11 @@ export function TermsPage() {
         </div>
       )}
 
-      {showOnboarding && (
-        <div className="mt-8">
-          <OnboardingWizard onComplete={handleOnboardingComplete} />
-        </div>
-      )}
-
       <div className="mt-8 space-y-4">
         {state === 'loading' && (
           <p className="text-sm text-stuhub-text-secondary">Dönemler yükleniyor…</p>
         )}
-        {state === 'ready' && terms.length === 0 && !showOnboarding && (
+        {state === 'ready' && terms.length === 0 && (
           <div className="glass-panel-subtle border-dashed p-12 text-center">
             <p className="font-medium">Henüz dönem yok</p>
             <p className="mt-1 text-sm text-stuhub-text-secondary">

@@ -1,15 +1,20 @@
-"""Not PDF dışa aktarma — markdown'ı Türkçe karakter destekli, taşmasız PDF'e çevirir.
+"""Not dışa aktarma — markdown'ı Türkçe karakter destekli, tipografisi düzgün PDF'e çevirir.
 
-pymupdf ile satır bazlı düzenleyici: başlıklar (kalın), listeler, alıntılar, paragraflar.
-Metin genişliği ölçülerek kelime bazlı satır kaydırma yapılır (sayfa taşması olmaz).
+Düzen `pymupdf.Story` ile HTML+CSS üzerinden kurulur: satır kaydırma, sayfa akışı,
+iç içe listeler ve satır içi kalın/italik metin motorun kendi işi. Fiziksel çıktı için
+zemin beyaz, metin siyah kalır; tasarım dili yalnızca tipografi + boşluk hiyerarşisiyle
+taşınır (uygulamadaki monokrom kimlikle aynı mantık).
 """
 
 from __future__ import annotations
 
+import html
+import io
 import re
 from pathlib import Path
 
 import pymupdf
+from markdown_it import MarkdownIt
 
 FONT_CANDIDATES = (
     r"C:\Windows\Fonts\arial.ttf",
@@ -24,13 +29,30 @@ BOLD_CANDIDATES = (
     r"C:\Windows\Fonts\calibrib.ttf",
 )
 
-_MARGIN = 56
-_HEADING_SIZES = {1: 20, 2: 16, 3: 13, 4: 12}
+_MARGIN = 54
+# Story'ye verilen `em`: CSS'teki px değerleri bu ölçekle punto'ya çevrilir.
+_EM = 12
 
-_HEADING_RE = re.compile(r"^(#{1,4})\s+(.+)$")
-_LIST_RE = re.compile(r"^(\s*)([-*]|\d+\.)\s+(.*)$")
-_QUOTE_RE = re.compile(r"^>\s?(.*)$")
-_RULE_RE = re.compile(r"^\s*([-*_])\1{2,}\s*$")
+_CITATION_RE = re.compile(r"\[(\d+)\]")
+
+_CSS = """
+@font-face {{ font-family: stuhub; src: url(regular.ttf); }}
+@font-face {{ font-family: stuhub; font-weight: bold; src: url(bold.ttf); }}
+
+body {{ font-family: {family}; font-size: 10.5px; color: #18181b; line-height: 1.55; }}
+h1 {{ font-size: 19px; font-weight: bold; margin: 0 0 4px 0; }}
+h2 {{ font-size: 14px; font-weight: bold; margin: 18px 0 6px 0; }}
+h3 {{ font-size: 11.5px; font-weight: bold; margin: 14px 0 4px 0; }}
+h4 {{ font-size: 10.5px; font-weight: bold; margin: 12px 0 4px 0; }}
+p {{ margin: 0 0 8px 0; }}
+ul, ol {{ margin: 0 0 8px 0; }}
+li {{ margin: 0 0 5px 0; }}
+blockquote {{ margin: 8px 0 10px 12px; color: #52525b; }}
+code {{ font-family: monospace; font-size: 9.5px; color: #3f3f46; }}
+hr {{ margin: 14px 0; }}
+.citation {{ color: #71717a; }}
+.subtitle {{ color: #71717a; font-size: 9.5px; margin: 0 0 16px 0; }}
+"""
 
 
 def _find_font() -> tuple[str, str]:
@@ -44,105 +66,58 @@ def _find_font() -> tuple[str, str]:
     return "helv", "helv"
 
 
-def _clean_inline(text: str) -> str:
-    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
-    text = re.sub(r"\*(.+?)\*", r"\1", text)
-    text = re.sub(r"`(.+?)`", r"\1", text)
-    return text
+def _story_assets() -> tuple[pymupdf.Archive | None, str]:
+    """(font arşivi, CSS font ailesi) — sistemde TTF yoksa base-14'e düşer."""
+    regular, bold = _find_font()
+    if regular == "helv":
+        # Base-14 Helvetica WinAnsi kodlamasıdır: ğ/ş/ı gliflerini taşımaz, ama
+        # font bulunamayan bir ortamda PDF üretmemekten iyidir.
+        return None, "sans-serif"
+    archive = pymupdf.Archive()
+    archive.add(Path(regular).read_bytes(), "regular.ttf")
+    archive.add(Path(bold).read_bytes(), "bold.ttf")
+    return archive, "stuhub"
 
 
-def note_markdown_to_pdf(content_md: str) -> bytes:
-    """Markdown notu PDF baytlarına çevirir (görsel hata: taşan satırlar düzeltildi)."""
-    regular_font, bold_font = _find_font()
-    doc = pymupdf.open()
-    page = doc.new_page()
-    max_width = page.rect.width - 2 * _MARGIN
-    y = _MARGIN
-    used_page_height = page.rect.height - _MARGIN
-    # Kelime genişliği ölçümü için font nesnesi (özel fontlarla get_text_length çalışmaz)
-    measure_font = (
-        pymupdf.Font("stuhub", fontfile=regular_font)
-        if regular_font != "helv"
-        else pymupdf.Font("helv")
+_MD = MarkdownIt("commonmark")
+
+
+def _markdown_to_html(title: str, content_md: str) -> str:
+    # CommonMark: uygulamadaki react-markdown ile aynı ayrıştırma — iki boşlukla girintili
+    # iç içe listeler PDF'te de iç içe kalır (Python-Markdown bunları düzleştiriyordu).
+    body = _MD.render(content_md)
+    # Atıf numaraları gövde metninden görsel olarak ayrılsın (tıklanabilir değiller).
+    body = _CITATION_RE.sub(r'<span class="citation">[\1]</span>', body)
+    # Notun ilk başlığı zaten bölüm adıysa belge başlığını tekrar basma.
+    first_line = content_md.lstrip().split("\n", 1)[0].lstrip("#").strip()
+    duplicate = title.casefold() == first_line.casefold()
+    heading = "" if not title or duplicate else f"<h1>{html.escape(title)}</h1>"
+    return f"<html><body>{heading}{body}</body></html>"
+
+
+def note_markdown_to_pdf(content_md: str, title: str = "") -> bytes:
+    """Markdown notu PDF baytlarına çevirir (A4, beyaz zemin, siyah metin)."""
+    archive, family = _story_assets()
+    story = pymupdf.Story(
+        html=_markdown_to_html(title, content_md),
+        user_css=_CSS.format(family=family),
+        em=_EM,
+        archive=archive,
     )
 
-    def ensure_space(needed: float) -> None:
-        nonlocal page, y
-        if y + needed > used_page_height:
-            page = doc.new_page()
-            y = _MARGIN
+    buffer = io.BytesIO()
+    writer = pymupdf.DocumentWriter(buffer)
+    page_rect = pymupdf.paper_rect("a4")
+    content_rect = page_rect + (_MARGIN, _MARGIN, -_MARGIN, -_MARGIN)
 
-    def write_line(text: str, size: float, font: str, indent: float = 0) -> None:
-        nonlocal y
-        page.insert_text(
-            (_MARGIN + indent, y),
-            text,
-            fontsize=size,
-            fontname="stuhub" if font != "helv" else font,
-            fontfile=font if font != "helv" else None,
-        )
-        y += size + 3.5
-
-    def write_wrapped(text: str, size: float, font: str, indent: float = 0) -> None:
-        """Kelime bazlı satır kaydırma — uzun paragraflar sayfadan taşmaz."""
-        words = text.split()
-        current = ""
-        for word in words:
-            candidate = f"{current} {word}".strip()
-            width = measure_font.text_length(candidate, fontsize=int(size))
-            if width > max_width - indent and current:
-                ensure_space(size + 4)
-                write_line(current, size, font, indent)
-                current = word
-            else:
-                current = candidate
-        if current:
-            ensure_space(size + 4)
-            write_line(current, size, font, indent)
-
-    for raw_line in content_md.split("\n"):
-        line = raw_line.rstrip()
-        if not line.strip():
-            y += 3
-            continue
-
-        heading = _HEADING_RE.match(line)
-        if heading:
-            size = _HEADING_SIZES.get(len(heading.group(1)), 11)
-            ensure_space(size + 8)
-            write_wrapped(_clean_inline(heading.group(2)), size, bold_font)
-            y += 4
-            continue
-
-        quote = _QUOTE_RE.match(line)
-        if quote:
-            write_wrapped("› " + _clean_inline(quote.group(1)), 10.5, regular_font, indent=14)
-            continue
-
-        if _RULE_RE.match(line):
-            ensure_space(10)
-            page.draw_line(
-                pymupdf.Point(_MARGIN, y),
-                pymupdf.Point(page.rect.width - _MARGIN, y),
-                color=(0.6, 0.6, 0.6),
-                width=0.7,
-            )
-            y += 12
-            continue
-
-        list_item = _LIST_RE.match(line)
-        if list_item:
-            bullet = list_item.group(2)
-            text = list_item.group(3)
-            prefix = "• " if bullet in ("-", "*") else f"{bullet} "
-            write_wrapped(prefix + _clean_inline(text), 11, regular_font, indent=18)
-            continue
-
-        write_wrapped(_clean_inline(line), 11, regular_font)
-
-    pdf_bytes = doc.tobytes()
-    doc.close()
-    return pdf_bytes
+    more = True
+    while more:
+        device = writer.begin_page(page_rect)
+        more, _ = story.place(content_rect)
+        story.draw(device)
+        writer.end_page()
+    writer.close()
+    return buffer.getvalue()
 
 
 def note_markdown_to_md(title: str, content_md: str) -> str:

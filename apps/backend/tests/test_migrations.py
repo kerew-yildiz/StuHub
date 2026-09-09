@@ -7,8 +7,10 @@ idempotent yeniden çalıştırma.
 from __future__ import annotations
 
 import re
+import sqlite3
 
 import aiosqlite
+import pytest
 
 from src.config import settings
 from src.db import MIGRATIONS_DIR, init_db
@@ -133,15 +135,33 @@ async def test_upgrade_preserves_existing_data(tmp_path, monkeypatch):
         slides = list(await cursor.fetchall())
         assert len(slides) == 1 and slides[0]["slide_no"] == 1
 
-        # Yeni medya türü artık CHECK'ten geçmeli
+        # Yeni medya türü artık CHECK'ten geçmeli (youtube: v2, syllabus: migration 0012)
         await db.execute(
             "INSERT INTO materials (course_id, type, filepath) "
             "VALUES (1, 'youtube', 'https://youtu.be/abc')"
         )
+        await db.execute(
+            "INSERT INTO materials (course_id, type, filepath) "
+            "VALUES (1, 'syllabus', 'izlence.pdf')"
+        )
         await db.commit()
         cursor = await db.execute("SELECT COUNT(*) AS c FROM materials")
         row = await cursor.fetchone()
-        assert row is not None and row["c"] == 2
+        assert row is not None and row["c"] == 3
+
+        # saved_questions (migration 0012): aynı (tenant_id, feed_question_id) iki kez kaydedilemez
+        await db.execute(
+            "INSERT INTO feed_questions (id, course_id, question, options_json, correct_index) "
+            "VALUES (1, 1, 'Soru?', '[]', 0)"
+        )
+        await db.execute(
+            "INSERT INTO saved_questions (tenant_id, feed_question_id) VALUES ('local', 1)"
+        )
+        await db.commit()
+        with pytest.raises(sqlite3.IntegrityError):
+            await db.execute(
+                "INSERT INTO saved_questions (tenant_id, feed_question_id) VALUES ('local', 1)"
+            )
 
         cursor = await db.execute("SELECT COUNT(*) AS c FROM schema_migrations")
         row = await cursor.fetchone()

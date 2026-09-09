@@ -23,9 +23,9 @@ from . import (
     notes,
     overall,
     quiz_review,
-    quizzes,
     recall,
     retention_progress,
+    saved_questions,
     slides,
     study_sessions,
     terms,
@@ -51,7 +51,6 @@ api_router.include_router(slides.router)
 api_router.include_router(indexing.router)
 api_router.include_router(notes.router)
 api_router.include_router(chat.router)
-api_router.include_router(quizzes.router)
 api_router.include_router(flashcards.router)
 api_router.include_router(overall.router)
 api_router.include_router(exports.router)
@@ -62,3 +61,4 @@ api_router.include_router(study_sessions.router)
 api_router.include_router(essay_draft.router)
 api_router.include_router(retention_progress.router)
 api_router.include_router(recall.router)
+api_router.include_router(saved_questions.router)

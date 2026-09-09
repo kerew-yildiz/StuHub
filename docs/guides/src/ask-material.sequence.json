@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Asking a Question About Your Material",
+    "output": "stuhub-ask-material.html",
+    "viewBox": [1080, 620],
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "question-path", "label": "Question to evidence", "focus": ["student", "chat", "brain", "memory"], "note": "Before any answer is written, the memory search finds the passages that matter." },
+      { "id": "writing", "label": "Answer with receipts", "focus": ["brain", "ai", "chat"], "note": "The AI writes only from the retrieved passages and must attach their sources." },
+      { "id": "streaming", "label": "Word by word", "focus": ["chat", "student"], "note": "The answer streams back live, like a friend typing, and ends with a done signal." }
+    ]
+  },
+  "participants": [
+    { "id": "student", "type": "external", "label": "Student", "sublabel": "curious at 2 a.m." },
+    { "id": "chat", "type": "frontend", "label": "Chat Window", "sublabel": "Ask the Material" },
+    { "id": "brain", "type": "backend", "label": "StuHub Brain", "sublabel": "search + guards" },
+    { "id": "memory", "type": "database", "label": "Memory Search", "sublabel": "LanceDB passages" },
+    { "id": "ai", "type": "external", "label": "AI Helper", "sublabel": "fallback chain" }
+  ],
+  "segments": [
+    { "from": 150, "to": 260, "label": "Question" },
+    { "from": 270, "to": 380, "label": "Evidence" },
+    { "from": 390, "to": 560, "label": "Answer + citations" }
+  ],
+  "messages": [
+    { "id": "ask", "from": "student", "to": "chat", "y": 163, "label": "types a question", "variant": "default" },
+    { "id": "forward", "from": "chat", "to": "brain", "y": 190, "label": "send question", "variant": "emphasis" },
+    { "id": "search", "from": "brain", "to": "memory", "y": 220, "label": "find passages by meaning", "variant": "emphasis" },
+    { "id": "hits", "from": "memory", "to": "brain", "y": 250, "label": "best passages + locations", "variant": "return" },
+    { "id": "compose", "from": "brain", "to": "ai", "y": 292, "label": "question + passages", "variant": "default" },
+    { "id": "tokens", "from": "ai", "to": "chat", "y": 330, "label": "answer streams word by word", "variant": "emphasis", "note": "passed through the brain, never stored answers" },
+    { "id": "citations", "from": "brain", "to": "chat", "y": 366, "label": "citation chips", "variant": "security" },
+    { "id": "done", "from": "brain", "to": "chat", "y": 402, "label": "done signal", "variant": "dashed" },
+    { "id": "read", "from": "chat", "to": "student", "y": 440, "label": "read answer, tap a chip to verify", "variant": "return" }
+  ],
+  "activations": [
+    { "participant": "chat", "from": 178, "to": 452, "type": "frontend" },
+    { "participant": "brain", "from": 192, "to": 412, "type": "backend" },
+    { "participant": "memory", "from": 222, "to": 258, "type": "database" },
+    { "participant": "ai", "from": 294, "to": 342, "type": "external" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "RAG in one glance", "items": ["Retrieval first: the brain finds proof before writing", "The AI answers only from those passages - no guessing beyond them"] },
+    { "dot": "rose", "title": "Receipts attached", "items": ["Citation chips show which file, page or minute each claim came from", "Tap a chip and StuHub shows the exact quoted text"] },
+    { "dot": "orange", "title": "Live typing feel", "items": ["Words stream in as they are generated, not after a long silence", "Errors arrive as friendly events, never as a frozen screen"] }
+  ]
+}

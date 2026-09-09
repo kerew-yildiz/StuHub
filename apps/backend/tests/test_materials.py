@@ -28,6 +28,26 @@ async def test_upload_and_list(client):
     assert len(resp.json()) == 1
 
 
+async def test_upload_syllabus_type(client):
+    """syllabus (müfredat/izlence) türü PDF kabul eder, desteklenmeyen uzantıyı reddeder."""
+    course_id = await _make_course(client)
+    resp = await client.post(
+        f"/api/courses/{course_id}/materials",
+        files={"file": ("izlence.pdf", PDF_BYTES, "application/pdf")},
+        data={"type": "syllabus"},
+    )
+    assert resp.status_code == 201
+    assert resp.json()["type"] == "syllabus"
+
+    # desteklenmeyen uzantı (syllabus yalnızca .pdf/.docx kabul eder)
+    resp = await client.post(
+        f"/api/courses/{course_id}/materials",
+        files={"file": ("izlence.txt", b"merhaba", "text/plain")},
+        data={"type": "syllabus"},
+    )
+    assert resp.status_code == 422
+
+
 async def test_upload_validation(client):
     course_id = await _make_course(client)
     # yanlış uzantı

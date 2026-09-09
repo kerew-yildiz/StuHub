@@ -13,3 +13,15 @@ def dil_talimati(not_dili: str) -> str:
     if not_dili == "auto":
         return "Çıktı dilini kaynak içeriğin diliyle eşleştir (kaynak Türkçeyse Türkçe yaz)."
     return "Tüm çıktıları Türkçe yaz."
+
+
+def kazanimlar_blok(kazanimlar: str) -> str:
+    """Müfredat/kazanım metnini prompt'a eklenecek bölüm bloğuna çevirir.
+
+    Ders için syllabus materyali yüklenmemişse `kazanimlar` boştur ve bu fonksiyon
+    boş string döner — placeholder yerine hiçbir şey basılmaz, prompt cümle akışı
+    bozulmaz (bkz. note_generator._load_kazanimlar, quiz_generator._generate_feed_topic).
+    """
+    if not kazanimlar.strip():
+        return ""
+    return f"\nKAZANIMLAR (müfredat hedefleri — varsa önceliklendir):\n{kazanimlar}\n"

@@ -18,6 +18,7 @@ mevcut sorgularıyla feed cevaplarını da görür.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import sqlite3
@@ -29,7 +30,7 @@ from ..auth import LOCAL_TENANT_ID, AuthError
 from ..config import settings
 from ..db import get_db
 from ..quota import enforce_quota
-from . import quiz_generator, streak_service
+from . import note_generator, quiz_generator, streak_service
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +87,17 @@ def _public(row: dict) -> dict:
     }
 
 
+async def _saved_ids(db, tenant_id: str, feed_ids: list[int]) -> set[int]:
+    """Verilen feed_id'lerden kaydedilmiş olanları döner (tek sorgu, N+1 yok)."""
+    placeholders = ", ".join(["?"] * len(feed_ids))
+    cursor = await db.execute(
+        "SELECT feed_question_id FROM saved_questions "  # nosec B608 - yer tutucu sayısı sabit `feed_ids` uzunluğudur, değerler parametreyle geçer
+        f"WHERE tenant_id = ? AND feed_question_id IN ({placeholders})",
+        (tenant_id, *feed_ids),
+    )
+    return {int(dict(row)["feed_question_id"]) for row in await cursor.fetchall()}
+
+
 def _flatten_quiz(questions_json: dict) -> list[tuple[str, dict]]:
     """quiz `questions_json` → [(qid, soru)]; qid biçimi routers/quizzes.py `_flatten` ile aynı."""
     flattened: list[tuple[str, dict]] = []
@@ -98,13 +110,21 @@ def _flatten_quiz(questions_json: dict) -> list[tuple[str, dict]]:
     return flattened
 
 
-async def pool_size(course_id: int, tenant_id: str = LOCAL_TENANT_ID) -> int:
-    """Servis edilmeyi bekleyen (henüz gösterilmemiş) soru sayısı."""
+async def pool_size(
+    course_id: int, tenant_id: str = LOCAL_TENANT_ID, chapter_id: int | None = None
+) -> int:
+    """Servis edilmeyi bekleyen (henüz gösterilmemiş) soru sayısı; `chapter_id` verilirse
+    o bölümle sınırlanır."""
+    where = _POOL_WHERE
+    params: tuple = (tenant_id, course_id)
+    if chapter_id is not None:
+        where += " AND chapter_id = ?"
+        params = (*params, chapter_id)
     db = await get_db()
     try:
         cursor = await db.execute(
-            f"SELECT COUNT(*) AS n FROM feed_questions WHERE {_POOL_WHERE}",  # nosec B608 - araya giren metin sabit `?` yer tutucularıdır; değerler parametreyle geçer
-            (tenant_id, course_id),
+            f"SELECT COUNT(*) AS n FROM feed_questions WHERE {where}",  # nosec B608 - araya giren metin sabit `?` yer tutucularıdır; değerler parametreyle geçer
+            params,
         )
         row = await cursor.fetchone()
     finally:
@@ -113,9 +133,13 @@ async def pool_size(course_id: int, tenant_id: str = LOCAL_TENANT_ID) -> int:
 
 
 async def serve_batch(
-    course_id: int, tenant_id: str = LOCAL_TENANT_ID, limit: int = DEFAULT_LIMIT
+    course_id: int,
+    tenant_id: str = LOCAL_TENANT_ID,
+    limit: int = DEFAULT_LIMIT,
+    chapter_id: int | None = None,
 ) -> list[dict]:
-    """Havuzdan `limit` soru claim edip döner (doğru cevap/açıklama YOK).
+    """Havuzdan `limit` soru claim edip döner (doğru cevap/açıklama YOK). `chapter_id`
+    verilirse yalnızca o bölümün soruları servis edilir.
 
     Yarış koşulu: aday satırlar tek SELECT ile okunur, sonra her aday
     `UPDATE ... SET served_at = CURRENT_TIMESTAMP WHERE id = ? AND served_at IS NULL`
@@ -127,13 +151,18 @@ async def serve_batch(
     döndürmez — bkz. src/pg_compat.py).
     """
     limit = max(1, min(limit, MAX_LIMIT))
+    where = _POOL_WHERE
+    params: tuple = (tenant_id, course_id)
+    if chapter_id is not None:
+        where += " AND chapter_id = ?"
+        params = (*params, chapter_id)
     db = await get_db()
     try:
         cursor = await db.execute(
             "SELECT id, question, options_json, topic, chapter_id, difficulty "  # nosec B608 - araya giren metin sabit `?` yer tutucularıdır; değerler parametreyle geçer
-            f"FROM feed_questions WHERE {_POOL_WHERE} ORDER BY id LIMIT ?",
+            f"FROM feed_questions WHERE {where} ORDER BY id LIMIT ?",
             # Kaybedilen claim'lere karşı fazladan aday okunur (tek ekstra roundtrip yok).
-            (tenant_id, course_id, limit * 3),
+            (*params, limit * 3),
         )
         candidates = [dict(row) for row in await cursor.fetchall()]
 
@@ -148,6 +177,10 @@ async def serve_batch(
             )
             if update.rowcount == 1:
                 served.append(_public(row))
+        if served:
+            saved_ids = await _saved_ids(db, tenant_id, [item["feed_id"] for item in served])
+            for item in served:
+                item["saved"] = item["feed_id"] in saved_ids
         await db.commit()
     finally:
         await db.close()
@@ -226,10 +259,14 @@ async def _insert_from_quiz(
 
 
 async def backfill_from_existing(
-    course_id: int, tenant_id: str = LOCAL_TENANT_ID, limit: int | None = None
+    course_id: int,
+    tenant_id: str = LOCAL_TENANT_ID,
+    limit: int | None = None,
+    chapter_id: int | None = None,
 ) -> int:
     """Dersin mevcut quiz sorularından havuza girmemiş olanları kopyalar (LLM'siz).
 
+    `chapter_id` verilirse yalnızca o bölümün quizlerinden kopyalanır.
     `origin_question_id` ('<quiz_id>:<qid>') üzerinden çift kopyalama engellenir;
     en yeni quizler önce taranır. Eklenen soru sayısını döner.
     """
@@ -239,11 +276,16 @@ async def backfill_from_existing(
     db = await get_db()
     try:
         taken = await _existing_origins(db, course_id, tenant_id)
+        where = "c.course_id = ? AND q.tenant_id = ?"
+        params: tuple = (course_id, tenant_id)
+        if chapter_id is not None:
+            where += " AND q.chapter_id = ?"
+            params = (*params, chapter_id)
         cursor = await db.execute(
-            "SELECT q.id, q.chapter_id, q.questions_json FROM quizzes q "
+            "SELECT q.id, q.chapter_id, q.questions_json FROM quizzes q "  # nosec B608 - araya giren metin sabit `?` yer tutucularıdır; değerler parametreyle geçer
             "JOIN chapters c ON c.id = q.chapter_id AND c.tenant_id = q.tenant_id "
-            "WHERE c.course_id = ? AND q.tenant_id = ? ORDER BY q.id DESC",
-            (course_id, tenant_id),
+            f"WHERE {where} ORDER BY q.id DESC",
+            params,
         )
         quizzes = [dict(row) for row in await cursor.fetchall()]
 
@@ -363,9 +405,13 @@ async def _persist_generated(
     return inserted
 
 
-async def ensure_pool(course_id: int, tenant_id: str = LOCAL_TENANT_ID) -> int:
+async def ensure_pool(
+    course_id: int, tenant_id: str = LOCAL_TENANT_ID, chapter_id: int | None = None
+) -> int:
     """Havuzu `TARGET_POOL`'a yaklaştırır; eklenen soru sayısını döner.
 
+    `chapter_id` verilirse havuz büyüklüğü/dolgu o bölümle sınırlanır ve üretim
+    doğrudan o bölüm için yapılır (`_pick_chapter` round-robin'i atlanır).
     Sıra: (1) mevcut quiz sorularından kopyalama — bedava ve anında, (2) hâlâ eksikse
     LLM ile `BATCH_SIZE`'lık parti. Kota aşılmışsa üretim sessizce atlanır (feed
     yine havuzdan servis edilir, kullanıcıya 402 gösterilmez).
@@ -375,10 +421,12 @@ async def ensure_pool(course_id: int, tenant_id: str = LOCAL_TENANT_ID) -> int:
         return 0
     _filling.add(key)
     try:
-        size = await pool_size(course_id, tenant_id)
+        size = await pool_size(course_id, tenant_id, chapter_id)
         if size >= TARGET_POOL:
             return 0
-        added = await backfill_from_existing(course_id, tenant_id, TARGET_POOL - size)
+        added = await backfill_from_existing(
+            course_id, tenant_id, TARGET_POOL - size, chapter_id
+        )
         if size + added >= TARGET_POOL:
             return added
 
@@ -388,19 +436,23 @@ async def ensure_pool(course_id: int, tenant_id: str = LOCAL_TENANT_ID) -> int:
             logger.info("feed havuzu: kota dolu, üretim atlandı (course=%s)", course_id)
             return added
 
-        chapter_id = await _pick_chapter(course_id, tenant_id)
-        if chapter_id is None:
+        target_chapter_id = chapter_id
+        if target_chapter_id is None:
+            target_chapter_id = await _pick_chapter(course_id, tenant_id)
+        if target_chapter_id is None:
             return added
         questions = await quiz_generator.generate_feed_batch(
-            chapter_id,
+            target_chapter_id,
             tenant_id,
             count=BATCH_SIZE,
             avoid=await _recent_questions(course_id, tenant_id),
-            topic_offset=await _chapter_pool_count(chapter_id, tenant_id),
+            topic_offset=await _chapter_pool_count(target_chapter_id, tenant_id),
         )
         if not questions:
             return added
-        return added + await _persist_generated(questions, chapter_id, course_id, tenant_id)
+        return added + await _persist_generated(
+            questions, target_chapter_id, course_id, tenant_id
+        )
     except Exception:
         logger.exception("feed havuzu doldurma başarısız: course=%s", course_id)
         return 0
@@ -411,9 +463,9 @@ async def ensure_pool(course_id: int, tenant_id: str = LOCAL_TENANT_ID) -> int:
 _pending_tasks: set[asyncio.Task] = set()
 
 
-def spawn_topup(course_id: int, tenant_id: str) -> None:
+def spawn_topup(course_id: int, tenant_id: str, chapter_id: int | None = None) -> None:
     """Doldurmayı fire-and-forget başlatır — istek BEKLEMEZ (havuz zaten servis edildi)."""
-    task = asyncio.create_task(ensure_pool(course_id, tenant_id))
+    task = asyncio.create_task(ensure_pool(course_id, tenant_id, chapter_id))
     # Referansı düşürmemek için görev tamamlanınca kendini temizler (GC koruması).
     _pending_tasks.add(task)
     task.add_done_callback(_pending_tasks.discard)
@@ -559,3 +611,231 @@ async def active_course_ids(hours: int = 24) -> list[tuple[str, int]]:
     finally:
         await db.close()
     return [(str(dict(r)["tenant_id"]), int(dict(r)["course_id"])) for r in rows]
+
+
+# ── Ustalık ilerlemesi (Plan: kaydırmalı quiz #7) ───────────────────────
+
+def _topic_from_qid(qid: object, topic_names: list[str]) -> str:
+    """qid '<topic_idx>-<q_idx>' → konu adı (routers/errors.py `_topic_from_qid` ile aynı desen)."""
+    prefix = str(qid or "").split("-", 1)[0]
+    if prefix.isdigit():
+        index = int(prefix)
+        if 0 <= index < len(topic_names) and topic_names[index]:
+            return topic_names[index]
+    return "Genel"
+
+
+async def _chapter_topic_names(db, chapter_id: int, tenant_id: str) -> list[str]:
+    """Bölümün en son notundaki konu adları (ustalık çubuğunun paydası)."""
+    cursor = await db.execute(
+        "SELECT topics_json FROM notes WHERE chapter_id = ? AND tenant_id = ? "
+        "ORDER BY id DESC LIMIT 1",
+        (chapter_id, tenant_id),
+    )
+    row = await cursor.fetchone()
+    if row is None:
+        return []
+    topics = _loads_list(dict(row)["topics_json"])
+    return [str(t["topic"]) for t in topics if isinstance(t, dict) and t.get("topic")]
+
+
+async def _topic_correct_counts(
+    db, tenant_id: str, *, chapter_id: int | None, course_id: int | None
+) -> dict[int, dict[str, int]]:
+    """chapter_id → {konu etiketi: doğru sayılan FARKLI soru sayısı}.
+
+    Aynı soru (quiz_id, qid) birden çok kez cevaplanmışsa (chapter quiz yeniden
+    çözüldüğünde) yalnızca EN SON denemesi sayılır — `a.id ASC` sırayla iterasyonda
+    sonraki satır öncekinin üzerine yazar.
+    """
+    if chapter_id is not None:
+        cursor = await db.execute(
+            "SELECT a.id, a.quiz_id, a.feedback_json, q.chapter_id, q.questions_json "
+            "FROM quiz_attempts a JOIN quizzes q ON q.id = a.quiz_id AND q.tenant_id = a.tenant_id "
+            "WHERE q.chapter_id = ? AND a.tenant_id = ? ORDER BY a.id ASC",
+            (chapter_id, tenant_id),
+        )
+    else:
+        cursor = await db.execute(
+            "SELECT a.id, a.quiz_id, a.feedback_json, q.chapter_id, q.questions_json "
+            "FROM quiz_attempts a "
+            "JOIN quizzes q ON q.id = a.quiz_id AND q.tenant_id = a.tenant_id "
+            "JOIN chapters c ON c.id = q.chapter_id AND c.tenant_id = q.tenant_id "
+            "WHERE c.course_id = ? AND a.tenant_id = ? ORDER BY a.id ASC",
+            (course_id, tenant_id),
+        )
+    rows = [dict(r) for r in await cursor.fetchall()]
+
+    latest: dict[tuple[int, int, str], tuple[str, bool]] = {}
+    for row in rows:
+        try:
+            questions_json = json.loads(row["questions_json"] or "{}")
+        except (TypeError, ValueError):
+            questions_json = {}
+        topic_names = [
+            str(t.get("topic", ""))
+            for t in questions_json.get("topics", [])
+            if isinstance(t, dict)
+        ]
+        try:
+            feedback = json.loads(row["feedback_json"] or "{}")
+        except (TypeError, ValueError):
+            feedback = {}
+        results = feedback.get("results", []) if isinstance(feedback, dict) else []
+        for result in results:
+            if not isinstance(result, dict) or result.get("qid") is None:
+                continue
+            qid = str(result["qid"])
+            label = _topic_from_qid(qid, topic_names)
+            latest[(row["chapter_id"], row["quiz_id"], qid)] = (
+                label,
+                bool(result.get("correct")),
+            )
+
+    per_chapter: dict[int, dict[str, int]] = {}
+    for (chap_id, _quiz_id, _qid), (label, correct) in latest.items():
+        if not correct:
+            continue
+        bucket = per_chapter.setdefault(chap_id, {})
+        bucket[label] = bucket.get(label, 0) + 1
+    return per_chapter
+
+
+def _mastery_payload(topic_names: list[str], topic_correct: dict[str, int]) -> dict:
+    """Konu listesi + {etiket: doğru sayısı} → ustalık yüzdesi.
+
+    Yüzde = sum(min(dogru_t, 5)) / (konu_sayısı * 5); konu 0 ise 0. Etiket eşlemesi
+    ham `==` değil `note_generator.topic_matches` (fuzzy, LLM başlık sapmalarına
+    tolerans) ile yapılır.
+    """
+    topics = []
+    total_correct = 0
+    for name in topic_names:
+        correct = sum(
+            count
+            for label, count in topic_correct.items()
+            if note_generator.topic_matches(label, name)
+        )
+        capped = min(correct, 5)
+        total_correct += capped
+        topics.append({"topic": name, "correct": capped, "target": 5})
+    total = len(topic_names) * 5
+    percent = min(100.0, round(100 * total_correct / total, 2)) if total else 0.0
+    return {"percent": percent, "correct": total_correct, "total": total, "topics": topics}
+
+
+async def chapter_mastery(chapter_id: int, tenant_id: str = LOCAL_TENANT_ID) -> dict:
+    """Bir bölümün ustalık ilerlemesi (GET /api/chapters/{chapter_id}/mastery)."""
+    db = await get_db()
+    try:
+        topic_names = await _chapter_topic_names(db, chapter_id, tenant_id)
+        topic_correct = (
+            await _topic_correct_counts(db, tenant_id, chapter_id=chapter_id, course_id=None)
+        ).get(chapter_id, {})
+    finally:
+        await db.close()
+    return _mastery_payload(topic_names, topic_correct)
+
+
+async def course_mastery(course_id: int, tenant_id: str = LOCAL_TENANT_ID) -> dict:
+    """Bir dersin ustalık ilerlemesi — tüm bölümlerin toplamı.
+
+    GET /api/courses/{course_id}/mastery tarafından çağrılır.
+    """
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT id FROM chapters WHERE course_id = ? AND tenant_id = ?",
+            (course_id, tenant_id),
+        )
+        chapter_ids = [int(dict(row)["id"]) for row in await cursor.fetchall()]
+        per_chapter_correct = await _topic_correct_counts(
+            db, tenant_id, chapter_id=None, course_id=course_id
+        )
+        topics: list[dict] = []
+        total_correct = 0
+        total = 0
+        for cid in chapter_ids:
+            names = await _chapter_topic_names(db, cid, tenant_id)
+            chapter_payload = _mastery_payload(names, per_chapter_correct.get(cid, {}))
+            topics.extend(chapter_payload["topics"])
+            total_correct += chapter_payload["correct"]
+            total += chapter_payload["total"]
+    finally:
+        await db.close()
+    percent = min(100.0, round(100 * total_correct / total, 2)) if total else 0.0
+    return {"percent": percent, "correct": total_correct, "total": total, "topics": topics}
+
+
+# ── Kaydedilen sorular (Plan: kaydırmalı quiz #8) ───────────────────────
+
+async def save_question(feed_id: int, tenant_id: str) -> bool:
+    """Feed sorusunu kaydeder (idempotent — zaten kayıtlıysa hata vermez).
+
+    Soru bulunamaz/başka kiracıya aitse False döner (router 404 verir).
+    """
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT id FROM feed_questions WHERE id = ? AND tenant_id = ?", (feed_id, tenant_id)
+        )
+        if await cursor.fetchone() is None:
+            return False
+        with contextlib.suppress(sqlite3.IntegrityError, UniqueViolationError):
+            await db.execute(
+                "INSERT INTO saved_questions (tenant_id, feed_question_id) VALUES (?, ?)",
+                (tenant_id, feed_id),
+            )
+        await db.commit()
+    finally:
+        await db.close()
+    return True
+
+
+async def unsave_question(feed_id: int, tenant_id: str) -> None:
+    """Kaydı kaldırır — kayıtlı değilse sessizce no-op (idempotent)."""
+    db = await get_db()
+    try:
+        await db.execute(
+            "DELETE FROM saved_questions WHERE tenant_id = ? AND feed_question_id = ?",
+            (tenant_id, feed_id),
+        )
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def list_saved(tenant_id: str, limit: int = 200) -> list[dict]:
+    """Kaydedilen sorular — en yeni önce (GET /api/saved-questions)."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT s.feed_question_id AS feed_id, s.created_at AS saved_at, "
+            "f.question, f.options_json, f.correct_index, f.explanation, f.topic, "
+            "f.chapter_id, c.title AS chapter_title, c.course_id, co.name AS course_name "
+            "FROM saved_questions s "
+            "JOIN feed_questions f ON f.id = s.feed_question_id AND f.tenant_id = s.tenant_id "
+            "JOIN chapters c ON c.id = f.chapter_id AND c.tenant_id = f.tenant_id "
+            "JOIN courses co ON co.id = c.course_id AND co.tenant_id = f.tenant_id "
+            "WHERE s.tenant_id = ? ORDER BY s.created_at DESC LIMIT ?",
+            (tenant_id, limit),
+        )
+        rows = [dict(row) for row in await cursor.fetchall()]
+    finally:
+        await db.close()
+    return [
+        {
+            "feed_id": row["feed_id"],
+            "question": row["question"],
+            "options": _loads_list(row["options_json"]),
+            "correct_index": row["correct_index"],
+            "explanation": row["explanation"],
+            "topic": row["topic"],
+            "chapter_id": row["chapter_id"],
+            "chapter_title": row["chapter_title"],
+            "course_id": row["course_id"],
+            "course_name": row["course_name"],
+            "saved_at": row["saved_at"],
+        }
+        for row in rows
+    ]

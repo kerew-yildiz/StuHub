@@ -18,7 +18,7 @@ import time
 from ..auth import LOCAL_TENANT_ID
 from ..config import settings
 from ..db import get_db
-from ..prompts.common import dil_talimati
+from ..prompts.common import dil_talimati, kazanimlar_blok
 from ..prompts.note_prompts import (
     COVERAGE_CHECK_PROMPT,
     NOTE_GENERATION_PROMPT,
@@ -32,6 +32,9 @@ logger = logging.getLogger(__name__)
 
 MAX_COVERAGE_ITERATIONS = 3
 MAX_TOPICS = 12
+# Ders için yüklenmiş syllabus/müfredat materyalinin prompt'a eklenecek azami karakter
+# sayısı — dev bir PDF metni tüm topic/section promptlarını şişirmesin diye kırpılır.
+KAZANIMLAR_MAX_CHARS = 4000
 QUOTE_WINDOW_CHARS = 240
 SLIDES_CONTEXT_CHARS = 8000
 NOTE_CONTEXT_CHARS = 6000
@@ -145,6 +148,22 @@ def _section_for_topic(content_md: str, topic_name: str) -> str:
     return content_md[start:end].strip()
 
 
+async def load_kazanimlar(db, course_id: int, tenant_id: str) -> str:
+    """Dersin en son yüklenen syllabus/müfredat materyalinin metnini döner.
+
+    Materyal yoksa (ya da metni boşsa) boş string döner — not/quiz üretimi
+    kazanımsız da normal şekilde çalışmaya devam eder.
+    """
+    cursor = await db.execute(
+        "SELECT extracted_text FROM materials WHERE course_id = ? AND tenant_id = ? "
+        "AND type = 'syllabus' ORDER BY id DESC LIMIT 1",
+        (course_id, tenant_id),
+    )
+    row = await cursor.fetchone()
+    text = (row["extracted_text"] if row else None) or ""
+    return text[:KAZANIMLAR_MAX_CHARS]
+
+
 async def _safe_hybrid_search(course_id: int, query: str, keywords: list[str]) -> list[dict]:
     """`retrieval.hybrid_search` sarmalayıcısı — embedding/lancedb hatasında boş liste döner.
 
@@ -194,7 +213,7 @@ def _chunk_to_citation(number: int, chunk: dict) -> dict:
 # ── LLM adımları ───────────────────────────────────────────────────────
 
 async def _extract_topics(
-    slide_text: str, course_id: int, chapter_id: int, tenant_id: str
+    slide_text: str, course_id: int, chapter_id: int, tenant_id: str, kazanimlar: str
 ) -> list[dict]:
     async def _attempt() -> list[dict]:
         data = await llm_service.chat_json(
@@ -204,6 +223,7 @@ async def _extract_topics(
                     "content": TOPIC_EXTRACTION_PROMPT.format(
                         slides=slide_text[:SLIDES_CONTEXT_CHARS],
                         dil_talimati=dil_talimati(settings.not_dili),
+                        kazanimlar=kazanimlar_blok(kazanimlar),
                     ),
                 }
             ],
@@ -313,12 +333,13 @@ def _web_sources_to_chunks(web_sources: list[dict]) -> list[dict]:
     ]
 
 
-def _build_prompt(topic: dict, slides: list[dict], chunks: list[dict]) -> str:
+def _build_prompt(topic: dict, slides: list[dict], chunks: list[dict], kazanimlar: str) -> str:
     return NOTE_GENERATION_PROMPT.format(
         topic=topic["topic"],
         slide_content=_slide_content_for_topic(topic, slides),
         numbered_sources=_numbered_sources(chunks),
         dil_talimati=dil_talimati(settings.not_dili),
+        kazanimlar=kazanimlar_blok(kazanimlar),
     )
 
 
@@ -357,6 +378,7 @@ async def _generate_fallback_section(
     course_name: str,
     tenant_id: str,
     deadline: float,
+    kazanimlar: str,
     allow_web: bool = True,
 ) -> tuple[str, list[dict], list[str], str]:
     """Kitapta kaynak yokken (ya da atıf sorunu giderilirken) kaynak zinciri.
@@ -383,6 +405,7 @@ async def _generate_fallback_section(
                 topic=name,
                 numbered_sources=_numbered_web_sources(chunks),
                 dil_talimati=dil_talimati(settings.not_dili),
+                kazanimlar=kazanimlar_blok(kazanimlar),
             )
             try:
                 parts: list[str] = []
@@ -415,6 +438,7 @@ async def _generate_fallback_section(
             topic=name,
             slide_content=_slide_content_for_topic(topic, slides),
             dil_talimati=dil_talimati(settings.not_dili),
+            kazanimlar=kazanimlar_blok(kazanimlar),
         )
         try:
             parts = []
@@ -459,6 +483,7 @@ async def _regen_topic(
     course_name: str,
     tenant_id: str,
     deadline: float,
+    kazanimlar: str,
 ) -> tuple[str | None, list[dict]]:
     """Kapsama/atıf düzeltme turu için konuyu yeniden üretir (stream'siz).
 
@@ -471,10 +496,10 @@ async def _regen_topic(
     chunks = await _safe_hybrid_search(course_id, topic["topic"], topic.get("keywords", []))
     if not chunks:
         section, citations, _deltas, _msg = await _generate_fallback_section(
-            topic, slides, course_id, chapter_id, course_name, tenant_id, deadline
+            topic, slides, course_id, chapter_id, course_name, tenant_id, deadline, kazanimlar
         )
         return _strip_own_heading(section, topic["topic"]), citations
-    prompt = _build_prompt(topic, slides, chunks)
+    prompt = _build_prompt(topic, slides, chunks, kazanimlar)
     parts: list[str] = []
     try:
         async for delta in _stream_with_deadline(
@@ -626,6 +651,7 @@ async def _generate(chapter_id: int, tenant_id: str):
             (chapter_id, tenant_id),
         )
         slides = [dict(r) for r in await cursor.fetchall()]
+        kazanimlar = await load_kazanimlar(db, course_id, tenant_id)
     finally:
         await db.close()
 
@@ -640,7 +666,7 @@ async def _generate(chapter_id: int, tenant_id: str):
     yield {"type": "status", "percent": 6, "message": "Konular belirleniyor…"}
     try:
         topics = await asyncio.wait_for(
-            _extract_topics(slide_text, course_id, chapter_id, tenant_id),
+            _extract_topics(slide_text, course_id, chapter_id, tenant_id, kazanimlar),
             timeout=max(1.0, _remaining(deadline)),
         )
     except TimeoutError:
@@ -670,7 +696,7 @@ async def _generate(chapter_id: int, tenant_id: str):
                 "percent": base + 3,
                 "message": f"“{topic['topic']}” notu yazılıyor…",
             }
-            prompt = _build_prompt(topic, slides, chunks)
+            prompt = _build_prompt(topic, slides, chunks, kazanimlar)
             parts: list[str] = []
             try:
                 async for delta in _stream_with_deadline(
@@ -701,7 +727,7 @@ async def _generate(chapter_id: int, tenant_id: str):
         if not chunks:
             # Kitapta kaynak yok → web → slayt yedeği → deterministik slayt (her koşulda not)
             result = await _safe_fallback_section(
-                topic, slides, course_id, chapter_id, course_name, tenant_id, deadline
+                topic, slides, course_id, chapter_id, course_name, tenant_id, deadline, kazanimlar
             )
             if result is None:
                 # Beklenmeyen hata (LLM dışı) — anında biten deterministik yedeğe düş,
@@ -755,7 +781,7 @@ async def _generate(chapter_id: int, tenant_id: str):
             if topic["topic"] not in missing:
                 continue
             section, citations = await _safe_regen_topic(
-                topic, slides, course_id, chapter_id, course_name, tenant_id, deadline
+                topic, slides, course_id, chapter_id, course_name, tenant_id, deadline, kazanimlar
             )
             if section is None:
                 continue
@@ -782,8 +808,6 @@ async def _generate(chapter_id: int, tenant_id: str):
                 "kapsama doğrulaması başarısız oldu, atlanıyor: chapter=%s", chapter_id
             )
             missing = []
-    if missing:
-        content_md += "\n\n> ⚠️ Eksik konular (kaynak bulunamadı): " + ", ".join(missing)
 
     # 5) Atıf doğrulama — çözümsüz atıf kabul edilmez (Yetenek 06)
     yield {"type": "status", "percent": 93, "message": "Atıflar doğrulanıyor…"}
@@ -795,7 +819,7 @@ async def _generate(chapter_id: int, tenant_id: str):
             if topic["topic"] not in problems:
                 continue
             section, citations = await _safe_regen_topic(
-                topic, slides, course_id, chapter_id, course_name, tenant_id, deadline
+                topic, slides, course_id, chapter_id, course_name, tenant_id, deadline, kazanimlar
             )
             if section is None:
                 continue
@@ -828,6 +852,7 @@ async def _generate(chapter_id: int, tenant_id: str):
                 course_name,
                 tenant_id,
                 deadline,
+                kazanimlar,
                 allow_web=True,
             )
             if result is None:
@@ -857,6 +882,7 @@ async def _generate(chapter_id: int, tenant_id: str):
                 course_name,
                 tenant_id,
                 deadline,
+                kazanimlar,
                 allow_web=False,
             )
             if result is None:

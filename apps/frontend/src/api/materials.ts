@@ -4,7 +4,7 @@ import { apiFetch } from './client'
 export interface Material {
   id: number
   course_id: number
-  type: 'textbook' | 'slides'
+  type: 'textbook' | 'slides' | 'syllabus'
   filepath: string
   display_name: string
   extracted_text: string | null
@@ -16,7 +16,7 @@ export interface Material {
 export const materialsApi = {
   listByCourse: (courseId: number) => apiFetch<Material[]>(`/courses/${courseId}/materials`),
   get: (id: number) => apiFetch<Material>(`/materials/${id}`),
-  upload: (courseId: number, type: 'textbook' | 'slides', file: File) => {
+  upload: (courseId: number, type: 'textbook' | 'slides' | 'syllabus', file: File) => {
     const form = new FormData()
     form.append('type', type)
     form.append('file', file)

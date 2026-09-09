@@ -16,7 +16,16 @@ from pathlib import Path
 
 from ..config import settings
 from ..db import get_db
-from . import chunking, embed_service, media_extractors, pdf_service, slides_service, vector_store
+from ..quota import QuotaExceededError, enforce_quota
+from . import (
+    chunking,
+    embed_service,
+    media_extractors,
+    note_generator,
+    pdf_service,
+    slides_service,
+    vector_store,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +54,18 @@ def _extract_slides(path: str) -> tuple[list[dict], str]:
     return [{"slide": p["page"], "text": p["text"]} for p in pages], "slides"
 
 
+def _extract_syllabus(path: str) -> tuple[list[dict], str]:
+    """Syllabus .pdf ya da .docx olabilir (materials.py ALLOWED_EXTENSIONS) — uzantıya
+    göre uygun çıkarıcıya yönlendirir."""
+    if Path(path).suffix.lower() == ".docx":
+        return media_extractors.extract_for("docx", path), "segments"
+    return pdf_service.extract_pdf_pages(path), "pages"
+
+
 EXTRACTORS: dict[str, ExtractorFn] = {
     "textbook": _extract_textbook,
     "slides": _extract_slides,
+    "syllabus": _extract_syllabus,
 }
 
 
@@ -144,16 +162,20 @@ async def run_indexing_job(job_id: int, tenant_id: str) -> None:
             chunks = chunking.chunk_slides(course_id, material_id, extracted)
             page_count = len(extracted)
 
-        await db.execute(
-            "UPDATE materials SET page_count = ? WHERE id = ? AND tenant_id = ?",
-            (page_count, material_id, tenant_id),
-        )
-        await db.commit()
-
         if not chunks:
             raise RuntimeError(
                 "Materyalden metin çıkarılamadı (dosya boş ya da taranmış olabilir)."
             )
+
+        # extracted_text: chunk'lanmış tam metin — LanceDB'ye özgü, DB'de de tutulur ki
+        # kazanımlar (syllabus) gibi özellikler chunk aramasına gitmeden düz metin okuyabilsin.
+        full_text = "\n\n".join(chunk["text"] for chunk in chunks)
+        await db.execute(
+            "UPDATE materials SET page_count = ?, extracted_text = ? "
+            "WHERE id = ? AND tenant_id = ?",
+            (page_count, full_text, material_id, tenant_id),
+        )
+        await db.commit()
 
         # embed — batch'ler arası ilerleme raporlanır
         total = len(chunks)
@@ -186,6 +208,10 @@ async def run_indexing_job(job_id: int, tenant_id: str) -> None:
         )
         await db.commit()
         logger.info("indexing done: job=%s chunks=%s", job_id, count)
+        try:
+            await maybe_start_auto_notes(course_id, tenant_id)
+        except Exception:
+            logger.exception("otomatik not tetikleme başarısız: course=%s", course_id)
     except Exception as exc:
         logger.exception("indexing failed: job=%s", job_id)
         await db.execute(
@@ -216,6 +242,80 @@ async def create_indexing_job(
     finally:
         await db.close()
     return row_id
+
+
+# Aynı chapter için not üretiminin arka planda ikinci kez başlamaması adına in-flight
+# anahtar kümesi (tenant_id, chapter_id). `asyncio.create_task`'ın dönüşü ayrıca
+# `_note_tasks`'ta tutulur — tutulmazsa görev iş ortasında çöp toplanabilir
+# (asyncio'nun bilinen tuzağı, bkz. workers/indexer.py._running).
+_note_inflight: set[tuple[str, int]] = set()
+_note_tasks: set[asyncio.Task] = set()
+
+
+async def _consume_auto_note(chapter_id: int, tenant_id: str) -> None:
+    """`generate_notes_stream`i sonuna kadar tüketir; hata loglanır, yutulur.
+
+    Bu bir sunucu tarafı arka plan tetiği — akışı okuyan bir SSE istemcisi yok.
+    """
+    try:
+        async for event in note_generator.generate_notes_stream(chapter_id, tenant_id):
+            if event.get("type") == "error":
+                logger.warning(
+                    "otomatik not üretimi hata event'i: chapter=%s tenant=%s msg=%s",
+                    chapter_id,
+                    tenant_id,
+                    event.get("message"),
+                )
+    except Exception:
+        logger.exception("otomatik not üretimi başarısız: chapter=%s", chapter_id)
+    finally:
+        _note_inflight.discard((tenant_id, chapter_id))
+
+
+async def maybe_start_auto_notes(course_id: int, tenant_id: str) -> None:
+    """Chapter için gerekli her şey hazır olduğunda not üretimini arka planda başlatır.
+
+    Tetik: dersin pending/processing indexing_job'u YOK AND chapter'ın slaytı VAR
+    AND chapter'ın notu YOK AND üretim zaten koşmuyor. Kota aşımında sessizce
+    atlanır (loglanır) — bu bir arka plan tetiği, 402 döndürecek bir istek yok.
+    """
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT 1 FROM indexing_jobs WHERE course_id = ? AND tenant_id = ? "
+            "AND status IN ('pending', 'processing') LIMIT 1",
+            (course_id, tenant_id),
+        )
+        if await cursor.fetchone() is not None:
+            return
+        cursor = await db.execute(
+            "SELECT c.id FROM chapters c WHERE c.course_id = ? AND c.tenant_id = ? "
+            "AND EXISTS (SELECT 1 FROM slides s WHERE s.chapter_id = c.id AND s.tenant_id = ?) "
+            "AND NOT EXISTS (SELECT 1 FROM notes n WHERE n.chapter_id = c.id AND n.tenant_id = ?)",
+            (course_id, tenant_id, tenant_id, tenant_id),
+        )
+        rows = await cursor.fetchall()
+    finally:
+        await db.close()
+
+    for row in rows:
+        chapter_id = dict(row)["id"]
+        key = (tenant_id, chapter_id)
+        if key in _note_inflight:
+            continue
+        try:
+            await enforce_quota(tenant_id)
+        except QuotaExceededError:
+            logger.info(
+                "otomatik not üretimi atlandı — kota aşıldı: tenant=%s chapter=%s",
+                tenant_id,
+                chapter_id,
+            )
+            continue
+        _note_inflight.add(key)
+        task = asyncio.create_task(_consume_auto_note(chapter_id, tenant_id))
+        _note_tasks.add(task)
+        task.add_done_callback(_note_tasks.discard)
 
 
 async def _run_transcribe_job(job_id: int, material: dict, tenant_id: str) -> None:

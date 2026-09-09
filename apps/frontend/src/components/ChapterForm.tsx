@@ -1,15 +1,17 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 interface ChapterFormProps {
-  onSubmit: (title: string) => Promise<void>
+  onSubmit: (title: string, slideFile: File) => Promise<void>
   onCancel: () => void
 }
 
-/** Yeni chapter formu (guide slides yükleme Faz 2.1'de). */
+/** Yeni chapter formu — sunum (guide slides) zorunlu, not üretiminin rehberi olur. */
 export function ChapterForm({ onSubmit, onCancel }: ChapterFormProps) {
   const [title, setTitle] = useState('')
+  const [slideFile, setSlideFile] = useState<File | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const slideInputRef = useRef<HTMLInputElement>(null)
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -18,13 +20,19 @@ export function ChapterForm({ onSubmit, onCancel }: ChapterFormProps) {
       setError('Chapter başlığı boş olamaz.')
       return
     }
+    if (!slideFile) {
+      setError('Sunum dosyası (PDF/PPTX) zorunlu.')
+      return
+    }
     setBusy(true)
     setError('')
     try {
-      await onSubmit(trimmed)
+      await onSubmit(trimmed, slideFile)
       setTitle('')
-    } catch {
-      setError('Chapter kaydedilemedi. Lütfen tekrar deneyin.')
+      setSlideFile(null)
+      if (slideInputRef.current) slideInputRef.current.value = ''
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Chapter kaydedilemedi. Lütfen tekrar deneyin.')
     } finally {
       setBusy(false)
     }
@@ -47,6 +55,31 @@ export function ChapterForm({ onSubmit, onCancel }: ChapterFormProps) {
           placeholder="Örn. Bağlı Listeler"
           className="w-full rounded-control border border-stuhub-border bg-stuhub-glass-2 px-3 py-2 text-sm text-stuhub-text outline-none transition-colors duration-[var(--duration-micro)] placeholder:text-stuhub-text-secondary focus:border-stuhub-accent"
         />
+      </div>
+      <div>
+        <label htmlFor="chapter-slide" className="mb-1 block text-sm font-medium">
+          Sunum dosyası (PDF/PPTX, zorunlu)
+        </label>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <button
+            type="button"
+            onClick={() => slideInputRef.current?.click()}
+            className="btn-primary shrink-0"
+          >
+            Dosya Seç
+          </button>
+          <span className="min-w-0 truncate text-sm text-stuhub-text-secondary">
+            {slideFile ? slideFile.name : 'Dosya seçilmedi'}
+          </span>
+          <input
+            id="chapter-slide"
+            ref={slideInputRef}
+            type="file"
+            accept=".pdf,.pptx,.ppt"
+            onChange={(e) => setSlideFile(e.target.files?.[0] ?? null)}
+            className="hidden"
+          />
+        </div>
       </div>
       {error && <p className="text-sm text-stuhub-error">{error}</p>}
       <div className="flex gap-3">

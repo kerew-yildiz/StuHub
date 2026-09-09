@@ -1,0 +1,42 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Building the Study Guide and Concept Map",
+    "output": "stuhub-study-guide.html",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "guide-path", "label": "Chapter to cheat sheet", "focus": ["request", "gather", "summarize", "terms", "deliver"], "note": "One chapter becomes a one-page summary, key terms and exam focus points." },
+      { "id": "map-path", "label": "Concept map wiring", "focus": ["terms", "relate", "map"], "note": "Key terms become boxes; AI-drawn links become arrows that show what depends on what." }
+    ]
+  },
+  "lanes": [
+    { "id": "student", "label": "Student" },
+    { "id": "hub", "label": "StuHub" },
+    { "id": "ai", "label": "AI helpers" }
+  ],
+  "mainPath": ["request", "gather", "summarize", "terms", "deliver"],
+  "nodes": [
+    { "id": "request", "lane": "student", "col": 0, "type": "external", "label": "Make a Guide", "sublabel": "for this chapter or course", "width": 140 },
+    { "id": "gather", "lane": "hub", "col": 1, "type": "backend", "label": "Read Everything", "sublabel": "notes, citations, quiz history", "width": 150 },
+    { "id": "summarize", "lane": "ai", "col": 2, "type": "external", "label": "AI Distills", "sublabel": "summary, exam focus, questions", "width": 150 },
+    { "id": "terms", "lane": "hub", "col": 3, "type": "backend", "label": "Pick Key Terms", "sublabel": "the vocabulary you must own", "width": 150 },
+    { "id": "relate", "lane": "ai", "col": 3, "type": "external", "label": "Link the Concepts", "sublabel": "which idea feeds which", "width": 150 },
+    { "id": "map", "lane": "hub", "col": 4, "type": "frontend", "label": "Concept Map", "sublabel": "boxes and arrows, a dependency tree", "width": 155 },
+    { "id": "deliver", "lane": "student", "col": 4, "type": "frontend", "label": "Guide Panel", "sublabel": "one screen before the exam", "width": 140 }
+  ],
+  "edges": [
+    { "id": "ask", "from": "request", "to": "gather", "label": "request", "variant": "emphasis" },
+    { "id": "sources", "from": "gather", "to": "summarize", "label": "your own material", "variant": "emphasis" },
+    { "id": "draft", "from": "summarize", "to": "terms", "label": "distilled summary" },
+    { "id": "term-list", "from": "terms", "to": "relate", "label": "term list" },
+    { "id": "arrows", "from": "relate", "to": "map", "label": "concept links" },
+    { "id": "final", "from": "terms", "to": "deliver", "label": "guide sections", "variant": "emphasis" },
+    { "id": "map-to-guide", "from": "map", "to": "deliver", "label": "visual overview", "variant": "dashed" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Why a guide", "items": ["Revision needs one page, not twenty tabs", "Exam focus points are derived from your own materials, not generic lists"] },
+    { "dot": "emerald", "title": "Concept map logic", "items": ["Arrows mean 'you should understand this before that'", "The map is a dependency tree, so studying follows the arrows from the roots up"] },
+    { "dot": "rose", "title": "Grounded again", "items": ["Every term and link traces back to your cited notes", "Nothing invents concepts your course never covered"] }
+  ]
+}

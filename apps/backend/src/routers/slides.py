@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from pathlib import Path
 
@@ -11,7 +12,9 @@ from pydantic import BaseModel
 from ..auth import get_tenant_id
 from ..config import settings
 from ..db import get_db
-from ..services import pdf_service, slides_service
+from ..services import indexer, pdf_service, slides_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["slides"])
 
@@ -122,6 +125,10 @@ async def upload_guide_slides(
                     content_text=slide_data["text"],
                 )
             )
+        try:
+            await indexer.maybe_start_auto_notes(course_id, tenant_id)
+        except Exception:
+            logger.exception("otomatik not tetikleme başarısız: course=%s", course_id)
         return out
     finally:
         await db.close()

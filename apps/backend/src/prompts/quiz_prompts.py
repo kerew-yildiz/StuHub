@@ -17,4 +17,4 @@ NOT BÖLÜMÜ:
 
 ATIF LİSTESİ:
 {citations_json}
-"""
+{kazanimlar}"""

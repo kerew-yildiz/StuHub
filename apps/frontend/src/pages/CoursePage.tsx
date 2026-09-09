@@ -26,11 +26,9 @@ import { FilePreviewModal } from '../components/FilePreviewModal'
 import { FlashcardPlayer } from '../components/FlashcardPlayer'
 import { GlossaryPanel } from '../components/GlossaryPanel'
 import { GuidePanel } from '../components/GuidePanel'
-import { GuideSlidesForm } from '../components/GuideSlidesForm'
 import { MaterialUploadForm } from '../components/MaterialUploadForm'
 import { NextActionCard } from '../components/NextActionCard'
 import { OverallQuizPlayer } from '../components/OverallQuizPlayer'
-import { PostCreatePrompt } from '../components/PostCreatePrompt'
 import { QuizFeed } from '../components/QuizFeed'
 import { RetentionCurve } from '../components/RetentionCurve'
 import { RetentionProgressBadge } from '../components/RetentionProgressBadge'
@@ -197,7 +195,6 @@ export function CoursePage() {
   const [showChapterForm, setShowChapterForm] = useState(false)
   const [editingChapter, setEditingChapter] = useState<Chapter | null>(null)
   const [previewMaterial, setPreviewMaterial] = useState<Material | null>(null)
-  const [newChapter, setNewChapter] = useState<Chapter | null>(null)
   const [tab, setTab] = useState<CourseTab>('overview')
 
   // Klavye kısayolu 1-4: ders bölümleri arasında geçiş (Öğren/Pratik Yap/Sınava
@@ -309,18 +306,34 @@ export function CoursePage() {
     void load()
   }, [load])
 
-  // İşlenen iş varsa 2 saniyede bir durumu tazele
+  // İşlenen iş varsa 2 saniyede bir durumu tazele. Zincirleme setTimeout kullanılır:
+  // setInterval, backend yavaşladığında biten isteği beklemeden yenisini kuyruğa
+  // ekliyordu ve tarayıcının bağlantı bütçesi dolunca sayfa komple donuyordu.
   const hasActiveJobs = jobs.some((j) => j.status === 'pending' || j.status === 'processing')
   useEffect(() => {
     if (!hasActiveJobs) return
-    const id = setInterval(() => void refreshJobs(), 2000)
-    return () => clearInterval(id)
+    let cancelled = false
+    let timer = 0
+    const tick = async () => {
+      await refreshJobs()
+      if (!cancelled) timer = window.setTimeout(tick, 2000)
+    }
+    timer = window.setTimeout(tick, 2000)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
   }, [hasActiveJobs, refreshJobs])
 
-  const handleCreateChapter = async (title: string) => {
+  const handleCreateChapter = async (title: string, slideFile: File) => {
     const created = await chaptersApi.create(numericId, title)
+    try {
+      await slidesApi.upload(created.id, slideFile)
+    } catch {
+      await chaptersApi.remove(created.id)
+      throw new Error('Sunum yüklenemedi, chapter geri alındı. Lütfen tekrar deneyin.')
+    }
     setShowChapterForm(false)
-    setNewChapter(created)
     await load()
   }
 
@@ -340,7 +353,7 @@ export function CoursePage() {
     }
   }
 
-  const handleUploadMaterial = async (type: 'textbook' | 'slides', file: File) => {
+  const handleUploadMaterial = async (type: 'textbook' | 'slides' | 'syllabus', file: File) => {
     await materialsApi.upload(numericId, type, file)
     await load()
   }
@@ -520,7 +533,11 @@ export function CoursePage() {
                   <span className="min-w-0">
                     <span className="font-medium">{material.display_name}</span>
                     <span className="ml-2 text-stuhub-text-secondary">
-                      {material.type === 'textbook' ? 'Kitap' : 'Sunum'}
+                      {material.type === 'textbook'
+                        ? 'Kitap'
+                        : material.type === 'slides'
+                          ? 'Sunum'
+                          : 'Müfredat'}
                       {material.page_count ? ` · ${material.page_count} sayfa` : ''}
                     </span>
                   </span>
@@ -587,21 +604,6 @@ export function CoursePage() {
           title={previewMaterial.display_name}
           onClose={() => setPreviewMaterial(null)}
         />
-      )}
-
-      {newChapter && (
-        <PostCreatePrompt
-          title="Chapter sunumunu yükle"
-          description={`"${newChapter.title}" eklendi. Şimdi hocanın sunumunu (guide slides) yükleyebilirsin — bu, not üretiminin rehberi olur. İstersen sonra da yapabilirsin.`}
-          onClose={() => setNewChapter(null)}
-        >
-          <GuideSlidesForm
-            onUpload={async (file) => {
-              await slidesApi.upload(newChapter.id, file)
-              setNewChapter(null)
-            }}
-          />
-        </PostCreatePrompt>
       )}
 
       {tab === 'quiz' && (

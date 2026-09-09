@@ -23,11 +23,20 @@ export function useHealthPolling(): HealthStatus {
 
   useEffect(() => {
     let cancelled = false
+    // Backend yavaşladığında 5sn'lik tetikleyici, uçuştaki isteği beklemeden yenisini
+    // ekliyordu: tarayıcının origin başına 6 bağlantısı dolduğunda kuyruk hiç boşalmıyor.
+    let inFlight = false
 
     const check = async () => {
-      const ok = await getHealth()
-      if (!cancelled) {
-        useAppStore.getState().setHealth(ok ? 'ok' : 'down')
+      if (inFlight) return
+      inFlight = true
+      try {
+        const ok = await getHealth()
+        if (!cancelled) {
+          useAppStore.getState().setHealth(ok ? 'ok' : 'down')
+        }
+      } finally {
+        inFlight = false
       }
     }
 

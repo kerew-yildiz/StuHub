@@ -136,7 +136,9 @@ async def test_servis_edilen_soru_dogru_cevap_sizdirmaz(client):
         "topic",
         "chapter_id",
         "difficulty",
+        "saved",
     }
+    assert data["items"][0]["saved"] is False
     # Doğru cevap/açıklama gövdede hiçbir biçimde yer almaz
     assert "correct_index" not in resp.text
     assert "Açıklama 1." not in resp.text
@@ -322,16 +324,16 @@ async def test_uretilen_parti_havuza_ve_quizzes_a_yazilir(client, monkeypatch):
 
 async def test_get_feed_dolduruyu_fire_and_forget_tetikler(client, monkeypatch):
     course_id = await _seeded_course(client)
-    calls: list[tuple[int, str]] = []
+    calls: list[tuple[int, str, int | None]] = []
     monkeypatch.setattr(
         feed_router.feed_service,
         "spawn_topup",
-        lambda cid, tid: calls.append((cid, tid)),
+        lambda cid, tid, chid=None: calls.append((cid, tid, chid)),
     )
 
     resp = await client.get(f"/api/courses/{course_id}/feed?limit=1")
     assert resp.status_code == 200
-    assert calls == [(course_id, "local")]
+    assert calls == [(course_id, "local", None)]
 
 
 async def test_generate_feed_batch_konulari_round_robin_gezer(client, monkeypatch):
@@ -404,3 +406,102 @@ async def test_worker_aktif_dersin_havuzunu_doldurur(client):
     assert added == 2
     assert await feed_service.pool_size(course_id, "local") == 3
     assert await feed_topup.topup_active_courses() == 0  # kopyalanacak soru kalmadı
+
+
+async def test_feed_chapter_id_filtresi_zincirin_tamaminda_tutarli(client):
+    """chapter_id verilince serve_batch/backfill/pool_size aynı bölümle sınırlanır."""
+    course_id = await _make_course(client)
+    chapter_a = await _make_chapter(client, course_id)
+    resp = await client.post(f"/api/courses/{course_id}/chapters", json={"title": "Konu B"})
+    chapter_b = resp.json()["id"]
+    await _insert_quiz(chapter_a, "A")
+    await _insert_quiz(chapter_b, "B")
+
+    assert await feed_service.backfill_from_existing(course_id, "local") == 4
+
+    resp_a = await client.get(f"/api/courses/{course_id}/feed?limit=10&chapter_id={chapter_a}")
+    items_a = resp_a.json()["items"]
+    assert len(items_a) == 2
+    assert all(i["chapter_id"] == chapter_a for i in items_a)
+    assert {i["question"] for i in items_a} == {
+        "A1 Bağlı listeler nedir?",
+        "A2 Sıralama yöntemi?",
+    }
+    # Bir bölüm için servis edilen sorular o bölümün havuzunu tüketir, diğerini etkilemez
+    assert await feed_service.pool_size(course_id, "local", chapter_a) == 0
+    assert await feed_service.pool_size(course_id, "local", chapter_b) == 2
+
+    items_b = (
+        await client.get(f"/api/courses/{course_id}/feed?limit=10&chapter_id={chapter_b}")
+    ).json()["items"]
+    assert len(items_b) == 2
+    assert all(i["chapter_id"] == chapter_b for i in items_b)
+
+
+async def test_feed_chapter_id_baska_derse_aitse_404(client):
+    course_id = await _seeded_course(client)
+    other_course_id = await _make_course(client)
+    other_chapter_id = await _make_chapter(client, other_course_id)
+
+    resp = await client.get(
+        f"/api/courses/{course_id}/feed?chapter_id={other_chapter_id}"
+    )
+    assert resp.status_code == 404
+
+
+async def test_ensure_pool_chapter_id_pick_chapteri_atlar(client, monkeypatch):
+    """`chapter_id` verilirse round-robin `_pick_chapter` atlanır, doğrudan o bölüm kullanılır."""
+    course_id = await _make_course(client)
+    chapter_a = await _make_chapter(client, course_id)
+    resp = await client.post(f"/api/courses/{course_id}/chapters", json={"title": "Konu B"})
+    chapter_b = resp.json()["id"]
+    async with aiosqlite.connect(settings.db_path) as conn:
+        for cid in (chapter_a, chapter_b):
+            await conn.execute(
+                "INSERT INTO notes (tenant_id, chapter_id, content_md, citations_json, "
+                "topics_json) VALUES ('local', ?, '# Konu\nmetin', '{}', '[]')",
+                (cid,),
+            )
+        await conn.commit()
+
+    calls: list[int] = []
+
+    async def _fake_batch(chapter_id, _tenant_id, **_kwargs):
+        calls.append(chapter_id)
+        return []
+
+    monkeypatch.setattr(feed_service.quiz_generator, "generate_feed_batch", _fake_batch)
+
+    await feed_service.ensure_pool(course_id, "local", chapter_id=chapter_b)
+    assert calls == [chapter_b]
+
+
+async def test_get_feed_chapter_id_spawn_topup_a_gecer(client, monkeypatch):
+    course_id = await _seeded_course(client)
+    chapter_id = (await _rows("SELECT id FROM chapters"))[0]["id"]
+    calls: list[tuple[int, str, int | None]] = []
+    monkeypatch.setattr(
+        feed_router.feed_service,
+        "spawn_topup",
+        lambda cid, tid, chid=None: calls.append((cid, tid, chid)),
+    )
+
+    resp = await client.get(
+        f"/api/courses/{course_id}/feed?limit=1&chapter_id={chapter_id}"
+    )
+    assert resp.status_code == 200
+    assert calls == [(course_id, "local", chapter_id)]
+
+
+async def test_feed_saved_bayragi_servis_oncesi_kaydedilmisse_true(client):
+    course_id = await _seeded_course(client)
+    await feed_service.backfill_from_existing(course_id, "local")
+    unserved_id = (
+        await _rows("SELECT id FROM feed_questions WHERE served_at IS NULL ORDER BY id LIMIT 1")
+    )[0]["id"]
+    assert await feed_service.save_question(unserved_id, "local") is True
+
+    items = (await client.get(f"/api/courses/{course_id}/feed?limit=10")).json()["items"]
+    target = next(i for i in items if i["feed_id"] == unserved_id)
+    assert target["saved"] is True
+    assert all(i["saved"] is False for i in items if i["feed_id"] != unserved_id)

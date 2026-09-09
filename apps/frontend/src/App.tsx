@@ -29,7 +29,9 @@ const NotebookPage = lazy(() =>
 const SettingsPage = lazy(() =>
   import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })),
 )
-const QuizFeedPreview = lazy(() => import('./dev/QuizFeedPreview'))
+const SavedQuestionsPage = lazy(() =>
+  import('./pages/SavedQuestionsPage').then((m) => ({ default: m.SavedQuestionsPage })),
+)
 
 export default function App() {
   const loading = useAuthStore((s) => s.loading)
@@ -47,14 +49,6 @@ export default function App() {
       <div className="flex min-h-screen items-center justify-center text-stuhub-text">
         <p className="text-sm text-stuhub-text-secondary">Yükleniyor…</p>
       </div>
-    )
-  }
-
-  if (window.location.pathname === '/preview-quizfeed') {
-    return (
-      <Suspense fallback={null}>
-        <QuizFeedPreview />
-      </Suspense>
     )
   }
 
@@ -110,6 +104,7 @@ export default function App() {
                 element={<NotebookPage />}
               />
               <Route path="/ayarlar" element={<SettingsPage />} />
+              <Route path="/kaydedilenler" element={<SavedQuestionsPage />} />
             </Routes>
           </Suspense>
         </main>

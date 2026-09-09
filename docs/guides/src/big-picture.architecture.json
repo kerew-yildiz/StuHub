@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "StuHub at a Glance",
+    "output": "stuhub-big-picture.html",
+    "quality_profile": "showcase",
+    "viewBox": [1140, 580],
+    "views": [
+      { "id": "main-path", "label": "Your study loop", "focus": ["student", "app", "api", "db"], "note": "Everything you click travels from the screen to the brain to your saved study data." },
+      { "id": "ai-side", "label": "Where the AI lives", "focus": ["api", "vectors", "llm"], "note": "The brain searches your materials and asks outside AI helpers to write." },
+      { "id": "accounts", "label": "Sign-in and plans", "focus": ["auth", "payments", "api"], "note": "Only in the online service: sign-in checks and plan limits." }
+    ]
+  },
+  "components": [
+    { "id": "student", "type": "external", "label": "Student", "sublabel": "you, at your desk", "pos": [30, 280], "size": [120, 56] },
+    { "id": "app", "type": "frontend", "label": "StuHub App", "sublabel": "runs in your browser", "pos": [250, 280], "size": [140, 56] },
+    { "id": "api", "type": "backend", "label": "StuHub Brain", "sublabel": "API Server (FastAPI)", "pos": [490, 275], "size": [150, 60] },
+    { "id": "db", "type": "database", "label": "Study Database", "sublabel": "SQLite (local) or Supabase", "pos": [930, 275], "size": [170, 60] },
+    { "id": "vectors", "type": "database", "label": "Memory Search", "sublabel": "LanceDB vector store", "pos": [930, 120], "size": [170, 60] },
+    { "id": "llm", "type": "external", "label": "AI Helpers", "sublabel": "5 free AI providers", "pos": [930, 430], "size": [170, 64], "tag": "fallback chain" },
+    { "id": "media", "type": "external", "label": "Media Tools", "sublabel": "yt-dlp · Whisper · OCR", "pos": [490, 440], "size": [150, 56] },
+    { "id": "auth", "type": "security", "label": "Supabase Sign-in", "sublabel": "SaaS mode only", "pos": [250, 110], "size": [140, 56], "tag": "checks who you are" },
+    { "id": "payments", "type": "external", "label": "Lemon Squeezy", "sublabel": "plans and monthly limits", "pos": [250, 440], "size": [140, 56] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Your computer — Local mode", "wraps": ["api", "db", "vectors", "media"] }
+  ],
+  "connections": [
+    { "id": "open-app", "from": "student", "to": "app", "label": "opens the app", "variant": "emphasis" },
+    { "id": "clicks", "from": "app", "to": "api", "label": "saves and asks", "variant": "emphasis" },
+    { "id": "study-data", "from": "api", "to": "db", "label": "courses · notes · scores" },
+    { "id": "meaning-search", "from": "api", "to": "vectors", "label": "find by meaning", "fromSide": "top", "toSide": "bottom" },
+    { "id": "ai-request", "from": "api", "to": "llm", "label": "ask AI to write", "variant": "dashed", "fromSide": "bottom", "toSide": "top" },
+    { "id": "text-out", "from": "api", "to": "media", "label": "pull out text", "labelDy": 30, "labelDx": -34 },
+    { "id": "signin", "from": "auth", "to": "api", "label": "verify sign-in (SaaS)", "variant": "security", "fromSide": "bottom", "toSide": "top", "via": [[320, 225], [565, 225]] },
+    { "id": "quota", "from": "payments", "to": "api", "label": "plan limits (SaaS)", "variant": "dashed", "fromSide": "right", "toSide": "left" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "What you touch", "items": ["You use StuHub in your browser - nothing to install", "The screen only shows; the thinking happens in the brain behind it"] },
+    { "dot": "emerald", "title": "How it thinks", "items": ["Your files and videos become searchable passages in LanceDB", "Free AI helpers take turns writing so one busy service never blocks you"] },
+    { "dot": "rose", "title": "Two ways to run", "items": ["Local mode: everything stays on your computer, no account", "SaaS mode: Supabase sign-in plus Lemon Squeezy plan limits"] }
+  ]
+}

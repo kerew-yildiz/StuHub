@@ -2,10 +2,15 @@ import { create } from 'zustand'
 
 import {
   answerFeed,
+  fetchChapterMastery,
+  fetchCourseMastery,
   fetchFeed,
+  saveQuestion,
   skipFeed,
+  unsaveQuestion,
   type AnswerResult,
   type FeedQuestion,
+  type Mastery,
 } from '../api/feed'
 
 /** İstemci tamponundaki azami cevaplanmamış/atlanmamış soru sayısı ("sırada" bekleyen).
@@ -21,6 +26,8 @@ export type FeedPhase = 'idle' | 'loading' | 'ready' | 'waiting' | 'error'
 
 interface FeedState {
   courseId: number | null
+  /** `null` = ders geneli; verilirse akış bu chapter'a daraltılır. */
+  chapterId: number | null
   /** Çekilmiş sorular; hiç kısaltılmaz (geri kaydırma çalışsın). */
   queue: FeedQuestion[]
   /** Aktif kartın kuyruk indeksi; `queue.length` = kuyruk tükendi (kuyruk sonu kartı). */
@@ -41,11 +48,14 @@ interface FeedState {
   submitting: boolean
   poolReady: number
   generating: boolean
+  /** Aktif scope (courseId/chapterId) için ustalık ilerlemesi; alınamadıysa `null`. */
+  mastery: Mastery | null
 }
 
 interface FeedStore extends FeedState {
-  /** Ders için ilk partiyi çeker; aynı ders için tekrar çağrılırsa yalnızca tamponu tazeler. */
-  loadInitial: (courseId: number) => Promise<void>
+  /** Ders (+opsiyonel chapter) için ilk partiyi çeker; aynı scope için tekrar çağrılırsa
+   * yalnızca tamponu tazeler. */
+  loadInitial: (courseId: number, chapterId?: number | null) => Promise<void>
   /** Görünür kartı bildirir (IntersectionObserver / klavye) — prefetch tetikleyicisi. */
   setIndex: (index: number) => void
   /** Kullanıcı isteğiyle yeniden dene (hata durumundaki düğme). */
@@ -53,6 +63,8 @@ interface FeedStore extends FeedState {
   submitAnswer: (feedId: number, selectedIndex: number, elapsedMs: number) => Promise<void>
   /** Aktif soruyu cevaplamadan geçer (sunucuya bildirir, kartı ilerletmez). */
   skipQuestion: (feedId: number) => Promise<void>
+  /** Kaydet/kaydı kaldır — optimistik günceller, sunucu hatasında geri alır. */
+  toggleSave: (feedId: number) => Promise<void>
   /** Bileşen ayrılırken bekleyen yeniden denemeyi iptal eder (arka planda yoklama kalmaz). */
   suspend: () => void
   /** Tüm durumu sıfırlar (test / ders değişimi). */
@@ -61,6 +73,7 @@ interface FeedStore extends FeedState {
 
 const initialState: FeedState = {
   courseId: null,
+  chapterId: null,
   queue: [],
   index: 0,
   answers: {},
@@ -72,6 +85,7 @@ const initialState: FeedState = {
   submitting: false,
   poolReady: 0,
   generating: false,
+  mastery: null,
 }
 
 /* Prefetch mekaniği bilinçli olarak store state'i DIŞINDA: bunlar render'ı
@@ -107,12 +121,12 @@ export const useFeedStore = create<FeedStore>((set, get) => {
   /** Tek parti çeker (`limit` = eksik olan tampon miktarı). Aynı anda EN FAZLA BİR çağrı
    * (in-flight kilidi). */
   const loadBatch = async (limit: number = MAX_BUFFER): Promise<void> => {
-    const courseId = get().courseId
+    const { courseId, chapterId } = get()
     if (courseId === null || inFlight) return
     inFlight = true
     const gen = generation
     try {
-      const batch = await fetchFeed(courseId, limit)
+      const batch = await fetchFeed(courseId, limit, chapterId ?? undefined)
       if (gen !== generation) return
 
       if (batch.items.length === 0) {
@@ -148,6 +162,23 @@ export const useFeedStore = create<FeedStore>((set, get) => {
     }
   }
 
+  /** Aktif scope için ustalık ilerlemesini çeker; en iyi çaba — hata sessizce yutulur
+   * (çubuk zaten `mastery === null`/`total === 0` iken gizlenir). */
+  const loadMastery = async (): Promise<void> => {
+    const { courseId, chapterId } = get()
+    if (courseId === null) return
+    const gen = generation
+    try {
+      const mastery = chapterId !== null
+        ? await fetchChapterMastery(chapterId)
+        : await fetchCourseMastery(courseId)
+      if (gen !== generation) return
+      set({ mastery })
+    } catch {
+      // Ustalık en iyi çaba: kullanıcı akışı hata yüzünden durmaz.
+    }
+  }
+
   /** Tampon (aktif karttan itibaren henüz etkileşim görmemiş soru sayısı) `MAX_BUFFER`
    * altındaysa eksik kadarını arka planda çeker. */
   const ensureBuffer = (): void => {
@@ -162,9 +193,10 @@ export const useFeedStore = create<FeedStore>((set, get) => {
   return {
     ...initialState,
 
-    loadInitial: async (courseId) => {
-      if (get().courseId === courseId && get().phase !== 'idle') {
-        // Aynı ders: durumu koru, yalnızca tamponu tazele (bileşen yeniden bağlandı).
+    loadInitial: async (courseId, chapterId = null) => {
+      const state = get()
+      if (state.courseId === courseId && state.chapterId === chapterId && state.phase !== 'idle') {
+        // Aynı scope: durumu koru, yalnızca tamponu tazele (bileşen yeniden bağlandı).
         ensureBuffer()
         return
       }
@@ -172,8 +204,8 @@ export const useFeedStore = create<FeedStore>((set, get) => {
       generation += 1
       inFlight = false
       retryDelay = RETRY_BASE_MS
-      set({ ...initialState, courseId, phase: 'loading' })
-      await loadBatch()
+      set({ ...initialState, courseId, chapterId, phase: 'loading' })
+      await Promise.all([loadBatch(), loadMastery()])
     },
 
     setIndex: (index) => {
@@ -215,6 +247,8 @@ export const useFeedStore = create<FeedStore>((set, get) => {
           submitting: false,
         }))
         ensureBuffer()
+        // Konu ustalığı yalnızca doğru cevaplarda değişebilir — yanlışta boşuna çekilmez.
+        if (result.correct) void loadMastery()
       } catch {
         set({ submitting: false, answerError: 'Cevap gönderilemedi. Lütfen tekrar deneyin.' })
       }
@@ -230,6 +264,24 @@ export const useFeedStore = create<FeedStore>((set, get) => {
         await skipFeed(courseId, feedId)
       } catch {
         // Atlama en iyi çaba: kullanıcı akışı hata yüzünden durmaz.
+      }
+    },
+
+    toggleSave: async (feedId) => {
+      const question = get().queue.find((q) => q.feed_id === feedId)
+      if (!question) return
+      const wasSaved = question.saved
+      set((state) => ({
+        queue: state.queue.map((q) => (q.feed_id === feedId ? { ...q, saved: !wasSaved } : q)),
+      }))
+      try {
+        if (wasSaved) await unsaveQuestion(feedId)
+        else await saveQuestion(feedId)
+      } catch {
+        // Sunucu isteği başarısız — optimistik güncelleme geri alınır.
+        set((state) => ({
+          queue: state.queue.map((q) => (q.feed_id === feedId ? { ...q, saved: wasSaved } : q)),
+        }))
       }
     },
 

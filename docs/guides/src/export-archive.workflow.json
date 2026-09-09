@@ -1,0 +1,43 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Exporting and Backing Up Your Work",
+    "output": "stuhub-export-archive.html",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "export-path", "label": "Taking work out", "focus": ["choose", "render", "package", "save"], "note": "Notes, cards and whole semesters can leave StuHub in formats other apps understand." },
+      { "id": "move", "label": "Moving devices", "focus": ["package", "archive", "import"], "note": "The semester zip is the suitcase: packed on one computer, unpacked on another." },
+      { "id": "anki", "label": "Into Anki", "focus": ["choose", "render", "package"], "note": "Flashcards become an .apkg deck Anki can open directly." }
+    ]
+  },
+  "lanes": [
+    { "id": "student", "label": "Student" },
+    { "id": "hub", "label": "StuHub" },
+    { "id": "outside", "label": "Other apps" }
+  ],
+  "mainPath": ["choose", "render", "package", "save"],
+  "nodes": [
+    { "id": "choose", "lane": "student", "col": 0, "type": "external", "label": "Pick What to Export", "sublabel": "a note, a deck, or a semester", "width": 160 },
+    { "id": "render", "lane": "hub", "col": 1, "type": "backend", "label": "Convert", "sublabel": "PDF · Markdown · CSV · .apkg", "width": 160 },
+    { "id": "package", "lane": "hub", "col": 2, "type": "backend", "label": "Bundle", "sublabel": "semester archive as a zip", "width": 155 },
+    { "id": "save", "lane": "student", "col": 3, "type": "frontend", "label": "Download", "sublabel": "lands in your Downloads folder", "width": 160 },
+    { "id": "apps", "lane": "outside", "col": 3, "type": "external", "label": "Other Apps", "sublabel": "Anki · Word · any editor", "width": 160 },
+    { "id": "archive", "lane": "outside", "col": 1, "type": "database", "label": "New Device", "sublabel": "laptop, another machine", "width": 155 },
+    { "id": "import", "lane": "outside", "col": 2, "type": "backend", "label": "Import Archive", "sublabel": "unpack, materials included", "width": 160 }
+  ],
+  "edges": [
+    { "id": "start-export", "from": "choose", "to": "render", "label": "select format", "variant": "emphasis" },
+    { "id": "convert", "from": "render", "to": "package", "label": "files ready" },
+    { "id": "bundle", "from": "package", "to": "save", "label": "zip", "variant": "emphasis" },
+    { "id": "use-elsewhere", "from": "save", "to": "apps", "label": "open outside StuHub", "variant": "dashed" },
+    { "id": "carry", "from": "save", "to": "archive", "label": "copy to new device", "variant": "emphasis" },
+    { "id": "restore", "from": "archive", "to": "import", "label": "upload the zip", "variant": "emphasis" },
+    { "id": "done", "from": "import", "to": "render", "label": "courses rebuilt", "variant": "dashed", "role": "return" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "No lock-in", "items": ["Notes leave as PDF or Markdown that any app opens", "Flashcards leave as a real Anki deck, not a dead format"] },
+    { "dot": "emerald", "title": "The zip suitcase", "items": ["A semester archive packs courses, notes and material files together", "Import rebuilds everything, so switching computers is a copy-paste"] },
+    { "dot": "rose", "title": "Local by design", "items": ["In local mode your study life never leaves your machine unless you export it", "The archive is your own backup - keep a copy in cloud storage if you like"] }
+  ]
+}

@@ -138,7 +138,7 @@ async def export_note(
             },
         )
 
-    pdf_bytes = note_markdown_to_pdf(row["content_md"])
+    pdf_bytes = note_markdown_to_pdf(row["content_md"], row["title"])
     return Response(
         pdf_bytes,
         media_type="application/pdf",

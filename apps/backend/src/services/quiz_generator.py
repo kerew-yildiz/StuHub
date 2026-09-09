@@ -15,20 +15,15 @@ import re
 from ..auth import LOCAL_TENANT_ID
 from ..config import settings
 from ..db import get_db
-from ..prompts.common import dil_talimati
+from ..prompts.common import dil_talimati, kazanimlar_blok
 from ..prompts.quiz_prompts import QUIZ_BATCH_PROMPT
 from . import llm_service
-from .note_generator import topic_matches
+from .note_generator import load_kazanimlar, topic_matches
 
 logger = logging.getLogger(__name__)
 
-MAX_BATCH_ATTEMPTS = 3
 MAX_QUESTIONS_PER_TOPIC = 5
 MAX_CORRECT_PER_INDEX = 2
-
-
-class QuizGenerationError(Exception):
-    """Kullanıcıya gösterilecek Türkçe hata."""
 
 
 def _split_topics(content_md: str, topics: list[dict]) -> list[dict]:
@@ -153,167 +148,6 @@ def _enrich_citations(questions: list[dict], allowed: list[dict]) -> list[dict]:
     return questions
 
 
-async def _generate_batch(
-    topic: dict,
-    course_id: int,
-    chapter_id: int,
-    tenant_id: str = LOCAL_TENANT_ID,
-) -> list[dict] | None:
-    """Bir konu için 5 soruluk zarf üretir; şema/denge/atıf denetimlerinden geçerse döner."""
-    allowed = topic.get("citations", [])
-    allowed_text = json.dumps(
-        [{"id": c.get("id")} for c in allowed if c.get("id") is not None],
-        ensure_ascii=False,
-    )
-    prompt = QUIZ_BATCH_PROMPT.format(
-        topic=topic["topic"],
-        note_section=topic["section"][:4000],
-        citations_json=allowed_text,
-        dil_talimati=dil_talimati(settings.not_dili),
-    )
-
-    last_data: dict | None = None
-    for _ in range(MAX_BATCH_ATTEMPTS):
-        try:
-            data = await llm_service.chat_json(
-                [{"role": "user", "content": prompt}],
-                kind="quiz_batch",
-                tenant_id=tenant_id,
-                course_id=course_id,
-                chapter_id=chapter_id,
-            )
-        except llm_service.LLMError:
-            # API/JSON hatası: konu sessizce atlanır — kullanıcıya hata gösterilmez
-            return None
-        last_data = data
-        questions = data.get("questions", [])
-        if not isinstance(questions, list) or len(questions) != MAX_QUESTIONS_PER_TOPIC:
-            continue
-        if not all(_validate_question(q) for q in questions):
-            continue
-        if allowed:
-            # atıf zorunlu: her sorunun en az bir İZİNLİ listeden geçerli atfı olmalı
-            questions = _enrich_citations(questions, allowed)
-            if not all(q["citations"] for q in questions):
-                continue
-        else:
-            # izinli atıf yoksa (kaynak bulunamadı bölümü) sorular atıfsız kabul edilir
-            for q in questions:
-                q["citations"] = []
-        # doğru cevap dağılımını deterministik yeniden dengele (Yetenek 03 §3)
-        questions = _rebalance(questions)
-        return questions
-
-    # YUMUŞAK GEÇİŞ — asla başarısız olma (kullanıcı isteği):
-    # katı denetimlerden geçemeyen son çıktıdan şema-geçerli sorular kabul edilir,
-    # atıflar bölümün ilk geçerli kaynağıyla kendi kendine onarılır, denge yeniden kurulur.
-    questions = (last_data or {}).get("questions", [])
-    if not isinstance(questions, list):
-        return None
-    questions = [q for q in questions if _validate_question(q)]
-    if len(questions) < 3:
-        return None  # yeterli soru yok — üst katman konuyu atlayıp devam eder
-    questions = questions[:MAX_QUESTIONS_PER_TOPIC]
-    if allowed:
-        questions = _enrich_citations(questions, allowed)
-        first_citation = next((c for c in allowed if c.get("id") is not None), None)
-        for q in questions:
-            if not q["citations"] and first_citation is not None:
-                q["citations"] = [dict(first_citation)]
-    else:
-        for q in questions:
-            q["citations"] = []
-    return _rebalance(questions)
-
-
-async def generate_quiz_stream(chapter_id: int, tenant_id: str = LOCAL_TENANT_ID):
-    """Bölüm quizi üretim hattı — SSE olayları yield eder (Faz 4.1)."""
-    try:
-        async for event in _generate(chapter_id, tenant_id):
-            yield event
-    except QuizGenerationError as exc:
-        yield {"type": "error", "message": str(exc)}
-    except llm_service.LLMError as exc:
-        yield {"type": "error", "message": str(exc)}
-    except Exception:
-        logger.exception("quiz üretimi başarısız: chapter=%s", chapter_id)
-        yield {
-            "type": "error",
-            "message": "Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.",
-        }
-
-
-async def _generate(chapter_id: int, tenant_id: str = LOCAL_TENANT_ID):
-    db = await get_db()
-    try:
-        cursor = await db.execute(
-            "SELECT id, course_id FROM chapters WHERE id = ? AND tenant_id = ?",
-            (chapter_id, tenant_id),
-        )
-        chapter = await cursor.fetchone()
-        if chapter is None:
-            raise QuizGenerationError("Chapter bulunamadı")
-        course_id = chapter["course_id"]
-        cursor = await db.execute(
-            "SELECT content_md, citations_json, topics_json FROM notes "
-            "WHERE chapter_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1",
-            (chapter_id, tenant_id),
-        )
-        note_row = await cursor.fetchone()
-    finally:
-        await db.close()
-
-    if note_row is None:
-        raise QuizGenerationError("Önce not oluştur — quiz notların üzerinden üretilir.")
-
-    content_md = note_row["content_md"]
-    citations_json = json.loads(note_row["citations_json"] or "{}")
-
-    topics_meta = citations_json.get("topics", [])
-    sections = _split_topics(content_md, topics_meta)
-    if not sections:
-        raise QuizGenerationError("Not içeriğinden konu bölümü çıkarılamadı.")
-
-    quizzes_topics: list[dict] = []
-    warnings: list[str] = []
-    total = len(sections)
-    for i, topic in enumerate(sections):
-        percent = int(5 + 90 * i / max(total, 1))
-        yield {
-            "type": "status",
-            "percent": percent,
-            "message": f"“{topic['topic']}” için sorular hazırlanıyor…",
-        }
-        questions = await _generate_batch(topic, course_id, chapter_id, tenant_id)
-        if questions is None:
-            # Asla başarısız olma: sorunlu konu uyarıyla atlanır, quiz yine teslim edilir.
-            warnings.append(f"“{topic['topic']}” için soru üretilemedi (atlandı).")
-            continue
-        quizzes_topics.append({"topic": topic["topic"], "questions": questions})
-
-    yield {"type": "status", "percent": 97, "message": "Quiz kaydediliyor…"}
-    questions_json = {"topics": quizzes_topics}
-
-    db = await get_db()
-    try:
-        cursor = await db.execute(
-            "INSERT INTO quizzes (tenant_id, chapter_id, questions_json) VALUES (?, ?, ?)",
-            (tenant_id, chapter_id, json.dumps(questions_json, ensure_ascii=False)),
-        )
-        await db.commit()
-        row_id = cursor.lastrowid
-        if row_id is None:
-            raise RuntimeError("quiz kimliği alınamadı")
-    finally:
-        await db.close()
-
-    yield {
-        "type": "done",
-        "quiz": {"id": row_id, "chapter_id": chapter_id, "questions_json": questions_json},
-        "warnings": warnings,
-    }
-
-
 # ── Sonsuz kaydırma feed'i için parti üretimi (Plan: feed) ──────────────
 # Feed, bölüm quiziyle AYNI üretim hattını kullanır: aynı prompt, aynı doğrulama,
 # aynı atıf zenginleştirme, aynı denge düzeltmesi. Fark yalnızca (a) tekrar yasağı
@@ -347,6 +181,7 @@ async def _generate_feed_topic(
     chapter_id: int,
     tenant_id: str,
     avoid: list[str],
+    kazanimlar: str,
 ) -> list[dict]:
     """Bir konu için feed sorusu partisi üretir (bölüm quiziyle aynı doğrulama zinciri)."""
     allowed = topic.get("citations", [])
@@ -360,6 +195,7 @@ async def _generate_feed_topic(
         note_section=topic["section"][:4000],
         citations_json=allowed_text,
         dil_talimati=dil_talimati(settings.not_dili),
+        kazanimlar=kazanimlar_blok(kazanimlar),
     ) + _FEED_EXTRA_PROMPT.format(avoid_list=avoid_list)
 
     try:
@@ -429,6 +265,7 @@ async def generate_feed_batch(
             (chapter_id, tenant_id),
         )
         note_row = await cursor.fetchone()
+        kazanimlar = await load_kazanimlar(db, course_id, tenant_id)
     finally:
         await db.close()
 
@@ -455,6 +292,7 @@ async def generate_feed_batch(
             chapter_id,
             tenant_id,
             avoid_texts + [q["question"] for q in collected],
+            kazanimlar,
         )
         collected.extend(batch)
     return collected[:count]
@@ -493,6 +331,7 @@ async def generate_from_errors(
             (course_id, tenant_id, tenant_id, tenant_id),
         )
         note_rows = [dict(row) for row in await cursor.fetchall()]
+        kazanimlar = await load_kazanimlar(db, course_id, tenant_id)
     finally:
         await db.close()
 
@@ -509,6 +348,7 @@ async def generate_from_errors(
                 note_row["chapter_id"],
                 tenant_id,
                 avoid + [q["question"] for q in collected],
+                kazanimlar,
             )
             collected.extend(batch)
     return collected

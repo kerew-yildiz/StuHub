@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 import httpx
 import pytest
@@ -11,7 +12,25 @@ from src.config import settings
 from src.db import init_db
 from src.main import app
 from src.services import llm_service
+from src.services.export_service import FONT_CANDIDATES
 from src.services.llm_providers import PROVIDER_CHAIN
+
+
+def _find_turkish_font() -> str:
+    """Türkçe glif destekli sistem fontu — testler için, `export_service.FONT_CANDIDATES`
+    ile aynı liste (Windows→Linux fallback zinciri). Sabit Windows yolu (`C:\\Windows\\
+    Fonts\\arial.ttf`) test fixture'larında hardcode edilmişti; yerelde her zaman vardı
+    ama CI'ın Linux runner'ında yoktu — 5 test `FzErrorSystem` ile patlıyordu (2026-09-09).
+    """
+    for path in FONT_CANDIDATES:
+        if Path(path).exists():
+            return path
+    raise RuntimeError(
+        "Türkçe glif destekli sistem fontu bulunamadı, denenenler: " + ", ".join(FONT_CANDIDATES)
+    )
+
+
+TURKISH_FONT_FILE = _find_turkish_font()
 
 
 @pytest.fixture(autouse=True)

@@ -30,11 +30,6 @@ vi.mock('../api/notes', () => ({
   exportNotePdf: vi.fn(),
 }))
 
-vi.mock('../api/quizzes', () => ({
-  listQuizzes: vi.fn(async () => []),
-  removeQuiz: vi.fn(),
-}))
-
 vi.mock('../api/flashcards', () => ({
   listFlashcardSets: vi.fn(async () => []),
   deleteFlashcardSet: vi.fn(),
@@ -63,7 +58,7 @@ describe('NotebookPage sekmeleri', () => {
 
     const notlar = await screen.findByRole('tab', { name: 'Notlar' })
     const kartlar = screen.getByRole('tab', { name: 'Kartlar' })
-    const quiz = screen.getByRole('tab', { name: 'Quiz' })
+    const quiz = screen.getByRole('tab', { name: 'Kaydırarak Quiz' })
 
     expect(notlar).toHaveAttribute('aria-selected', 'true')
     expect(kartlar).toHaveAttribute('aria-selected', 'false')

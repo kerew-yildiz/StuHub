@@ -4,8 +4,10 @@ import pymupdf
 
 from src.services.pdf_service import PdfError, extract_pdf_pages, likely_scanned_pages
 
+from conftest import TURKISH_FONT_FILE
+
 # Türkçe karakter destekli sistem fontu (varsayılan Helvetica Türkçe glif içermez)
-FONT_FILE = r"C:\Windows\Fonts\arial.ttf"
+FONT_FILE = TURKISH_FONT_FILE
 
 
 def _make_pdf(path, texts):

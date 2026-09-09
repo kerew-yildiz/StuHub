@@ -40,8 +40,9 @@ def _display_name(filepath: str) -> str:
         return name[33:]
     return name
 
-ALLOWED_TYPES = {"textbook", "slides", "audio", "docx", "epub", "image"}
+ALLOWED_TYPES = {"textbook", "slides", "audio", "docx", "epub", "image", "syllabus"}
 # textbook: PDF; slides: PDF/PPTX; v2 medya türleri kendi uzantı kümeleriyle (Yetenek 11)
+# syllabus: ders izlencesi/müfredat belgesi — not/quiz üretiminde {kazanimlar} olarak kullanılır
 ALLOWED_EXTENSIONS = {
     "textbook": {".pdf"},
     "slides": {".pdf", ".pptx", ".ppt"},
@@ -49,6 +50,7 @@ ALLOWED_EXTENSIONS = {
     "docx": {".docx"},
     "epub": {".epub"},
     "image": {".png", ".jpg", ".jpeg", ".webp", ".bmp"},
+    "syllabus": {".pdf", ".docx"},
 }
 
 

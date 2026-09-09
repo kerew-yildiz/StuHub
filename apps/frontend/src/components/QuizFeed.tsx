@@ -6,6 +6,7 @@ import { QuizFeedCard } from './QuizFeedCard'
 
 interface QuizFeedProps {
   courseId: number
+  chapterId?: number
 }
 
 /** Pencereleme yarıçapı: aktif kart + 1 alt + 1 üst mount edilir. */
@@ -19,7 +20,7 @@ const WINDOW_RADIUS = 1
  * Pencereleme: her soru için kaydırma geometrisini bozmayan boş bir `snap` yuvası
  * kalır, ancak yalnızca aktif kart ±1 için kart içeriği mount edilir — DOM birikmez,
  * kaydırma konumu kaymaz (harici sanallaştırma kütüphanesi kullanılmaz). */
-export function QuizFeed({ courseId }: QuizFeedProps) {
+export function QuizFeed({ courseId, chapterId }: QuizFeedProps) {
   const queue = useFeedStore((s) => s.queue)
   const index = useFeedStore((s) => s.index)
   const answers = useFeedStore((s) => s.answers)
@@ -29,6 +30,7 @@ export function QuizFeed({ courseId }: QuizFeedProps) {
   const answerError = useFeedStore((s) => s.answerError)
   const submitting = useFeedStore((s) => s.submitting)
   const generating = useFeedStore((s) => s.generating)
+  const mastery = useFeedStore((s) => s.mastery)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const slotRefs = useRef(new Map<number, HTMLElement>())
@@ -39,10 +41,10 @@ export function QuizFeed({ courseId }: QuizFeedProps) {
   const tailIndex = total
 
   useEffect(() => {
-    void useFeedStore.getState().loadInitial(courseId)
+    void useFeedStore.getState().loadInitial(courseId, chapterId ?? null)
     // Bileşen ayrılırken arka planda yoklama bırakma.
     return () => useFeedStore.getState().suspend()
-  }, [courseId])
+  }, [courseId, chapterId])
 
   /** Verilen yuvaya kaydırır — TikTok/Reels tarzı hızlı geçiş için tarayıcının varsayılan
    * `smooth` kaydırması (mesafeye göre değişken, genelde 300-500ms) yerine sabit kısa
@@ -231,24 +233,57 @@ export function QuizFeed({ courseId }: QuizFeedProps) {
 
   const busy = phase === 'loading' || generating
 
+  const showMastery = mastery !== null && mastery.total > 0
+
   return (
-    <div
-      ref={containerRef}
-      role="feed"
-      aria-label="Soru akışı"
-      aria-busy={busy}
-      tabIndex={0}
-      onKeyDown={handleKeyDown}
-      className="no-scrollbar h-[calc(100dvh-12rem)] min-h-[24rem] w-full snap-y snap-mandatory overflow-y-auto overscroll-contain rounded-panel outline-none"
-    >
+    <>
+      {showMastery && mastery && (
+        <div className="glass-panel mb-3 p-4">
+          <div className="flex items-center justify-between text-xs text-stuhub-text-secondary">
+            <span>Ustalık</span>
+            <span>%{Math.round(mastery.percent)}</span>
+          </div>
+          <div
+            role="progressbar"
+            aria-label="Konu ustalığı"
+            aria-valuenow={Math.round(mastery.percent)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            className="mt-2 h-1.5 w-full overflow-hidden rounded-pill bg-stuhub-border"
+          >
+            <div
+              className="h-full rounded-pill bg-stuhub-accent transition-[width] duration-[var(--duration-state)] ease-[var(--ease-out-expo)]"
+              style={{ width: `${Math.max(mastery.percent, 2)}%` }}
+            />
+          </div>
+        </div>
+      )}
+      <div
+        ref={containerRef}
+        role="feed"
+        aria-label="Soru akışı"
+        aria-busy={busy}
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+        className={`no-scrollbar min-h-[24rem] w-full snap-y snap-mandatory overflow-y-auto overscroll-contain rounded-panel outline-none ${
+          showMastery ? 'h-[calc(100dvh-16rem)]' : 'h-[calc(100dvh-12rem)]'
+        }`}
+      >
       {queue.map((question, slot) => {
         const mounted = Math.abs(slot - index) <= WINDOW_RADIUS
+        const isActiveSlot = slot === index
         return (
           <section
             key={question.feed_id}
             ref={(element) => registerSlot(slot, element)}
             data-feed-slot={slot}
-            className="h-full snap-start snap-always py-2"
+            // Komşu (aktif olmayan) kartlar WINDOW_RADIUS için mount edilmiş kalır (pürüzsüz
+            // geçiş) ama kaydırma sırasında viewport'a birkaç piksel taşabilirler — `disabled`
+            // olmayan Atla/cevap butonları o an tıklanabilir kalıyordu, kullanıcı görmediği bir
+            // soruyu yanlışlıkla cevaplıyor/atlıyordu (2026-09-08 canlı bulgu, ekran seçici ile
+            // doğrulandı: komşu kartın butonu viewport'un 37px üstünde ama hâlâ `disabled` değildi).
+            // `pointer-events-none`: yalnızca aktif kart tıklama alabilir.
+            className={`h-full snap-start snap-always py-2 ${isActiveSlot ? '' : 'pointer-events-none'}`}
             aria-label={`Soru ${slot + 1}`}
           >
             {mounted && (
@@ -268,6 +303,7 @@ export function QuizFeed({ courseId }: QuizFeedProps) {
                   goTo(slot + 1)
                 }}
                 onNext={() => goTo(slot + 1)}
+                onToggleSave={() => void useFeedStore.getState().toggleSave(question.feed_id)}
               />
             )}
           </section>
@@ -341,6 +377,7 @@ export function QuizFeed({ courseId }: QuizFeedProps) {
           </div>
         )}
       </section>
-    </div>
+      </div>
+    </>
   )
 }

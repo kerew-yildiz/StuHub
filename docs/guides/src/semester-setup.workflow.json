@@ -1,0 +1,37 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Setting Up a Semester",
+    "output": "stuhub-semester-setup.html",
+    "quality_profile": "showcase",
+    "viewBox": [1240, 560],
+    "views": [
+      { "id": "setup-path", "label": "From blank to ready", "focus": ["open", "new-semester", "add-course", "add-chapters", "ready"], "note": "The three-step setup: term, courses, then the sections inside each course." },
+      { "id": "revisit", "label": "Change it later", "focus": ["add-course", "add-chapters", "ready"], "note": "Courses and chapters stay editable at any time." }
+    ]
+  },
+  "lanes": [
+    { "id": "student", "label": "Student" },
+    { "id": "hub", "label": "StuHub" }
+  ],
+  "mainPath": ["open", "new-semester", "add-course", "add-chapters", "ready"],
+  "nodes": [
+    { "id": "open", "lane": "student", "col": 0, "type": "external", "label": "Open StuHub", "sublabel": "first visit", "width": 132 },
+    { "id": "new-semester", "lane": "hub", "col": 1, "type": "backend", "label": "Create Semester", "sublabel": "a folder for the term", "width": 140 },
+    { "id": "add-course", "lane": "hub", "col": 2, "type": "backend", "label": "Add Course", "sublabel": "e.g. BIO 201", "width": 132 },
+    { "id": "add-chapters", "lane": "hub", "col": 3, "type": "backend", "label": "Add Chapters", "sublabel": "as the lecturer splits it", "width": 140 },
+    { "id": "ready", "lane": "hub", "col": 4, "type": "frontend", "label": "Notebook Ready", "sublabel": "waiting for materials", "width": 140 }
+  ],
+  "edges": [
+    { "id": "start", "from": "open", "to": "new-semester", "label": "begins the term", "variant": "emphasis" },
+    { "id": "term-to-course", "from": "new-semester", "to": "add-course", "label": "inside the term" },
+    { "id": "course-to-chapters", "from": "add-course", "to": "add-chapters", "label": "inside the course" },
+    { "id": "chapters-to-ready", "from": "add-chapters", "to": "ready", "label": "shell created" },
+    { "id": "edit-later", "from": "ready", "to": "add-chapters", "label": "edit anytime", "variant": "dashed", "role": "return", "route": "bottom-channel", "labelSegment": 1 }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Why folders", "items": ["A semester is a folder, a course is a notebook inside it", "Chapters split the course the way your lecturer does"] },
+    { "dot": "emerald", "title": "After setup", "items": ["Each chapter is ready to receive PDFs, slides, videos or audio", "Everything you generate later lands inside the right chapter"] }
+  ]
+}

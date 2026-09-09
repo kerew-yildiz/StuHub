@@ -1,0 +1,40 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Making a Chapter Quiz",
+    "output": "stuhub-chapter-quiz.html",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "quiz-path", "label": "From note to quiz", "focus": ["ask", "split", "draft", "balanced", "quiz"], "note": "Each topic in your note becomes five fair multiple-choice questions." },
+      { "id": "quality-gate", "label": "Fairness checks", "focus": ["draft", "balanced", "quiz"], "note": "Badly formed or lopsided questions are thrown out and rewritten." }
+    ]
+  },
+  "lanes": [
+    { "id": "student", "label": "Student" },
+    { "id": "hub", "label": "StuHub" },
+    { "id": "ai", "label": "AI helpers" }
+  ],
+  "mainPath": ["ask", "split", "draft", "balanced", "quiz"],
+  "nodes": [
+    { "id": "ask", "lane": "student", "col": 0, "type": "external", "label": "Quiz Me", "sublabel": "on this chapter", "width": 125 },
+    { "id": "split", "lane": "hub", "col": 1, "type": "backend", "label": "Follow the Note", "sublabel": "one batch per topic", "width": 145 },
+    { "id": "draft", "lane": "ai", "col": 2, "type": "external", "label": "AI Writes Questions", "sublabel": "5 per topic, cited", "width": 150 },
+    { "id": "balanced", "lane": "hub", "col": 3, "type": "backend", "label": "Quality Check", "sublabel": "fair answers, valid wording", "width": 150 },
+    { "id": "quiz", "lane": "student", "col": 4, "type": "frontend", "label": "Ready to Play", "sublabel": "instant feedback", "width": 135 },
+    { "id": "regen", "lane": "ai", "col": 3, "type": "messagebus", "label": "Rewrite Batch", "sublabel": "up to 3 attempts", "width": 140 }
+  ],
+  "edges": [
+    { "id": "start", "from": "ask", "to": "split", "label": "request", "variant": "emphasis" },
+    { "id": "batches", "from": "split", "to": "draft", "label": "topic + citations", "variant": "emphasis" },
+    { "id": "drafts", "from": "draft", "to": "balanced", "label": "candidate questions" },
+    { "id": "pass", "from": "balanced", "to": "quiz", "label": "approved", "variant": "emphasis" },
+    { "id": "fail", "from": "balanced", "to": "regen", "label": "bad batch", "variant": "dashed", "role": "error" },
+    { "id": "retry", "from": "regen", "to": "draft", "label": "try again", "variant": "dashed", "role": "return" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Where questions come from", "items": ["Your own cited note is the question source - never random internet content", "Every question carries a citation back to the material"] },
+    { "dot": "emerald", "title": "Instant teaching", "items": ["Explanations are written when the quiz is made, not after", "Wrong answers are a lesson, not just a red cross"] },
+    { "dot": "rose", "title": "Fair play", "items": ["Correct letters are spread across A-D so patterns cannot be gamed", "Invalid or unbalanced questions never reach you"] }
+  ]
+}

@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { authFetch } from '../api/client'
-import type { AnswerResult, FeedBatch, FeedQuestion } from '../api/feed'
+import type { AnswerResult, FeedBatch, FeedQuestion, Mastery } from '../api/feed'
 import { useFeedStore } from '../stores/feedStore'
 import { QuizFeed } from './QuizFeed'
 
@@ -36,11 +36,35 @@ function batch(startId: number, count: number, extra: Partial<FeedBatch> = {}): 
     topic: 'Konu A',
     chapter_id: 1,
     difficulty: 'medium',
+    saved: false,
   }))
   return { items, pool_ready: 25, generating: false, ...extra }
 }
 
-/** Yalnızca feed parti isteklerini sayar (cevap/atlama POST'ları hariç). */
+const DEFAULT_MASTERY: Mastery = { percent: 0, correct: 0, total: 0, topics: [] }
+
+/** Feed/cevap/atlama/kaydetme istekleri yol bazlı ayrı kuyruklarda tutulur — aksi halde
+ * her `loadInitial`/doğru cevaptan sonra araya giren ustalık çağrıları, sıradaki
+ * `mockResolvedValueOnce` değerini (tek global FIFO'dan) çalardı. Ustalık kuyruğu
+ * boşsa varsayılan (boş) yanıt döner, testler onu elle beslemek zorunda kalmaz. */
+const queues: {
+  feed: Response[]
+  answer: Response[]
+  skip: Response[]
+  save: Response[]
+  mastery: Response[]
+} = { feed: [], answer: [], skip: [], save: [], mastery: [] }
+
+function classify(path: string): keyof typeof queues {
+  if (path.includes('/mastery')) return 'mastery'
+  if (path.endsWith('/answer')) return 'answer'
+  if (path.endsWith('/feed/skip')) return 'skip'
+  if (path.endsWith('/save')) return 'save'
+  if (path.includes('/feed?')) return 'feed'
+  throw new Error(`Test mock'u yolu sınıflandıramadı: ${path}`)
+}
+
+/** Yalnızca feed parti isteklerini sayar (cevap/atlama/kaydetme POST'ları hariç). */
 function feedCalls(): string[] {
   return mockFetch.mock.calls.map((call) => String(call[0])).filter((path) => path.includes('/feed?'))
 }
@@ -57,6 +81,18 @@ async function flush(): Promise<void> {
 beforeEach(() => {
   useFeedStore.getState().reset()
   mockFetch.mockReset()
+  queues.feed = []
+  queues.answer = []
+  queues.skip = []
+  queues.save = []
+  queues.mastery = []
+  mockFetch.mockImplementation(async (path) => {
+    const key = classify(String(path))
+    if (key === 'mastery') return queues.mastery.shift() ?? jsonResponse(DEFAULT_MASTERY)
+    const response = queues[key].shift()
+    if (!response) throw new Error(`${key} kuyruğu boş: ${path}`)
+    return response
+  })
 })
 
 afterEach(() => {
@@ -66,7 +102,7 @@ afterEach(() => {
 
 describe('QuizFeed', () => {
   it('ilk yükte 5 soru ister ve ilk kartı gösterir', async () => {
-    mockFetch.mockResolvedValueOnce(jsonResponse(batch(1, 5)))
+    queues.feed.push(jsonResponse(batch(1, 5)))
 
     render(<QuizFeed courseId={7} />)
 
@@ -80,8 +116,35 @@ describe('QuizFeed', () => {
     expect(screen.queryByText('Yanlış')).not.toBeInTheDocument()
   })
 
+  it('chapterId verilince akış chapter_id ile daraltılır', async () => {
+    queues.feed.push(jsonResponse(batch(1, 5)))
+
+    render(<QuizFeed courseId={7} chapterId={3} />)
+
+    expect(await screen.findByText('Soru 1?')).toBeInTheDocument()
+    expect(feedCalls()).toEqual(['/courses/7/feed?limit=5&chapter_id=3'])
+  })
+
+  it('scope (courseId/chapterId) değişince eski kuyruk sızmadan sıfırlanır', async () => {
+    queues.feed.push(jsonResponse(batch(1, 5)))
+    const { rerender } = render(<QuizFeed courseId={7} />)
+    expect(await screen.findByText('Soru 1?')).toBeInTheDocument()
+
+    // Aynı ders, farklı chapter → yeni bir scope; eski kuyruk (Soru 1..5) sızmamalı.
+    queues.feed.push(jsonResponse(batch(101, 3)))
+    rerender(<QuizFeed courseId={7} chapterId={9} />)
+
+    expect(await screen.findByText('Soru 101?')).toBeInTheDocument()
+    expect(screen.queryByText('Soru 1?')).not.toBeInTheDocument()
+    expect(feedCalls()).toEqual([
+      '/courses/7/feed?limit=5',
+      '/courses/7/feed?limit=5&chapter_id=9',
+    ])
+    expect(useFeedStore.getState().queue).toHaveLength(3)
+  })
+
   it('aktif soruyla etkileşime girmeden sıradaki soruya geçilemez', async () => {
-    mockFetch.mockResolvedValueOnce(jsonResponse(batch(1, 5)))
+    queues.feed.push(jsonResponse(batch(1, 5)))
     render(<QuizFeed courseId={7} />)
     await screen.findByText('Soru 1?')
 
@@ -90,7 +153,7 @@ describe('QuizFeed', () => {
     expect(useFeedStore.getState().index).toBe(0)
 
     // Etkileşim (cevap/atla) işaretlenince artık ilerlenebilir; tampon eksiği de tamamlanır.
-    mockFetch.mockResolvedValueOnce(jsonResponse(batch(6, 1)))
+    queues.feed.push(jsonResponse(batch(6, 1)))
     useFeedStore.setState((state) => ({ interacted: { ...state.interacted, [1]: true } }))
     await act(async () => useFeedStore.getState().setIndex(1))
     expect(useFeedStore.getState().index).toBe(1)
@@ -99,7 +162,7 @@ describe('QuizFeed', () => {
   })
 
   it('bir soruyla etkileşime girilince tampon eksik kadar tamamlanır (azami 5)', async () => {
-    mockFetch.mockResolvedValueOnce(jsonResponse(batch(1, 5)))
+    queues.feed.push(jsonResponse(batch(1, 5)))
     render(<QuizFeed courseId={7} />)
     await screen.findByText('Soru 1?')
     expect(feedCalls()).toHaveLength(1)
@@ -109,10 +172,17 @@ describe('QuizFeed', () => {
     expect(feedCalls()).toHaveLength(1)
 
     // Soru 1'i cevaplayınca tampon 4'e iner → eksik olan 1 soru arka planda çekilir.
-    mockFetch.mockResolvedValueOnce(
-      jsonResponse({ correct: true, correct_index: 0, explanation: '', citations: null, note_id: null, chapter_id: null }),
+    queues.answer.push(
+      jsonResponse({
+        correct: true,
+        correct_index: 0,
+        explanation: '',
+        citations: null,
+        note_id: null,
+        chapter_id: null,
+      }),
     )
-    mockFetch.mockResolvedValueOnce(jsonResponse(batch(6, 1)))
+    queues.feed.push(jsonResponse(batch(6, 1)))
     await act(async () => useFeedStore.getState().submitAnswer(1, 0, 100))
     await flush()
 
@@ -125,14 +195,12 @@ describe('QuizFeed', () => {
     // 2026-09-08 canlı bulgu: "Atla" sonrası tampon tamamlama isteği (ensureBuffer)
     // ile goTo() aynı anda tetiklenince, IntersectionObserver'ın her tampon
     // güncellemesinde yeniden kurulması index'i en son eklenen soruya kaydırıyordu.
-    mockFetch.mockResolvedValueOnce(jsonResponse(batch(1, 5)))
+    queues.feed.push(jsonResponse(batch(1, 5)))
     render(<QuizFeed courseId={7} />)
     await screen.findByText('Soru 1?')
 
-    // skipQuestion() önce ensureBuffer()'ı (senkron tetiklenen GET .../feed) çağırır,
-    // `await skipFeed(...)` (POST .../feed/skip) ondan SONRA başlar — mock sırası buna göre.
-    mockFetch.mockResolvedValueOnce(jsonResponse(batch(6, 1))) // tampon tamamlama
-    mockFetch.mockResolvedValueOnce(jsonResponse({ ok: true })) // POST .../feed/skip
+    queues.feed.push(jsonResponse(batch(6, 1))) // tampon tamamlama
+    queues.skip.push(jsonResponse({ ok: true })) // POST .../feed/skip
 
     const card = within(screen.getByLabelText('Soru 1'))
     fireEvent.click(card.getByRole('button', { name: 'Atla' }))
@@ -142,8 +210,23 @@ describe('QuizFeed', () => {
     expect(useFeedStore.getState().queue).toHaveLength(6)
   })
 
+  it('komşu (aktif olmayan) kartlar tıklamaya kapalıdır (pointer-events-none)', async () => {
+    // 2026-09-08 canlı bulgu: WINDOW_RADIUS penceresi mount ettiği komşu kartların
+    // Atla/cevap butonları `disabled` değildi — kaydırma sırasında ekrana taşan bir
+    // komşu karta tıklama denk gelirse kullanıcının görmediği bir soru
+    // cevaplanıyor/atlanıyordu. Yalnızca aktif kart tıklama alabilmeli.
+    queues.feed.push(jsonResponse(batch(1, 5)))
+    render(<QuizFeed courseId={7} />)
+    await screen.findByText('Soru 1?')
+
+    const activeSection = screen.getByLabelText('Soru 1')
+    const neighborSection = screen.getByLabelText('Soru 2')
+    expect(activeSection).not.toHaveClass('pointer-events-none')
+    expect(neighborSection).toHaveClass('pointer-events-none')
+  })
+
   it('cevap sonrası sunucudan gelen geri bildirimi gösterir', async () => {
-    mockFetch.mockResolvedValueOnce(jsonResponse(batch(1, 10)))
+    queues.feed.push(jsonResponse(batch(1, 10)))
     render(<QuizFeed courseId={7} />)
     await screen.findByText('Soru 1?')
 
@@ -165,7 +248,7 @@ describe('QuizFeed', () => {
       note_id: 5,
       chapter_id: 1,
     }
-    mockFetch.mockResolvedValueOnce(jsonResponse(result))
+    queues.answer.push(jsonResponse(result))
 
     const card = within(screen.getByLabelText('Soru 1'))
     fireEvent.click(card.getByRole('button', { name: 'B' }))
@@ -186,7 +269,12 @@ describe('QuizFeed', () => {
   })
 
   it('boş parti + generating durumunda hazırlanıyor gösterir, istek döngüsü patlamaz', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({ items: [], pool_ready: 0, generating: true }))
+    mockFetch.mockImplementation(async (path) => {
+      const key = classify(String(path))
+      if (key === 'mastery') return jsonResponse(DEFAULT_MASTERY)
+      if (key === 'feed') return jsonResponse({ items: [], pool_ready: 0, generating: true })
+      throw new Error(`beklenmeyen istek: ${path}`)
+    })
 
     render(<QuizFeed courseId={3} />)
 
@@ -200,7 +288,12 @@ describe('QuizFeed', () => {
   it('havuz boşken üstel geri çekilmeyle yeniden dener (3 sn, sonra 6 sn)', async () => {
     vi.useFakeTimers()
     try {
-      mockFetch.mockResolvedValue(jsonResponse({ items: [], pool_ready: 0, generating: true }))
+      mockFetch.mockImplementation(async (path) => {
+        const key = classify(String(path))
+        if (key === 'mastery') return jsonResponse(DEFAULT_MASTERY)
+        if (key === 'feed') return jsonResponse({ items: [], pool_ready: 0, generating: true })
+        throw new Error(`beklenmeyen istek: ${path}`)
+      })
 
       await act(async () => {
         await useFeedStore.getState().loadInitial(4)
@@ -235,11 +328,13 @@ describe('QuizFeed', () => {
   })
 
   it('ağ hatasında kuyruk korunur ve Türkçe hata durumu yayınlanır', async () => {
-    mockFetch.mockResolvedValueOnce(jsonResponse(batch(1, 5)))
+    queues.feed.push(jsonResponse(batch(1, 5)))
     render(<QuizFeed courseId={7} />)
     await screen.findByText('Soru 1?')
 
-    mockFetch.mockRejectedValueOnce(new Error('offline'))
+    mockFetch.mockImplementationOnce(async () => {
+      throw new Error('offline')
+    })
     await act(async () => useFeedStore.getState().retry())
     await flush()
 
@@ -248,5 +343,103 @@ describe('QuizFeed', () => {
     expect(state.phase).toBe('error')
     expect(state.error).toBe('Sorular alınamadı. Bağlantını kontrol et.')
     expect(screen.getByText('Soru 1?')).toBeInTheDocument()
+  })
+
+  describe('ustalık çubuğu', () => {
+    it('konu sayısı 0 iken gizlenir', async () => {
+      queues.feed.push(jsonResponse(batch(1, 5)))
+      render(<QuizFeed courseId={7} />)
+      await screen.findByText('Soru 1?')
+      await flush()
+
+      // Varsayılan ustalık (total: 0) — çubuk render edilmez.
+      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
+    })
+
+    it('sunucudan ustalık verisi gelince ilerleme çubuğunu ve yüzdesini gösterir', async () => {
+      queues.feed.push(jsonResponse(batch(1, 5)))
+      queues.mastery.push(
+        jsonResponse({
+          percent: 40,
+          correct: 4,
+          total: 10,
+          topics: [{ topic: 'Konu A', correct: 4, target: 5 }],
+        }),
+      )
+      render(<QuizFeed courseId={7} />)
+      await screen.findByText('Soru 1?')
+
+      const bar = await screen.findByRole('progressbar', { name: 'Konu ustalığı' })
+      expect(bar).toHaveAttribute('aria-valuenow', '40')
+    })
+
+    it('doğru cevaptan sonra ustalık yeniden çekilir', async () => {
+      queues.feed.push(jsonResponse(batch(1, 5)))
+      queues.mastery.push(
+        jsonResponse({
+          percent: 20,
+          correct: 2,
+          total: 10,
+          topics: [{ topic: 'Konu A', correct: 2, target: 5 }],
+        }),
+      )
+      render(<QuizFeed courseId={7} />)
+      await screen.findByText('Soru 1?')
+      expect(await screen.findByRole('progressbar')).toHaveAttribute('aria-valuenow', '20')
+
+      queues.answer.push(
+        jsonResponse({
+          correct: true,
+          correct_index: 0,
+          explanation: '',
+          citations: null,
+          note_id: null,
+          chapter_id: null,
+        }),
+      )
+      queues.mastery.push(
+        jsonResponse({
+          percent: 40,
+          correct: 4,
+          total: 10,
+          topics: [{ topic: 'Konu A', correct: 4, target: 5 }],
+        }),
+      )
+      await act(async () => useFeedStore.getState().submitAnswer(1, 0, 100))
+      await flush()
+
+      expect(await screen.findByRole('progressbar')).toHaveAttribute('aria-valuenow', '40')
+    })
+  })
+
+  describe('soru kaydetme', () => {
+    it('kaydet butonuna tıklayınca optimistik günceller ve sunucuya bildirir', async () => {
+      queues.feed.push(jsonResponse(batch(1, 5)))
+      render(<QuizFeed courseId={7} />)
+      await screen.findByText('Soru 1?')
+
+      queues.save.push(jsonResponse({ saved: true }))
+      const card = within(screen.getByLabelText('Soru 1'))
+      fireEvent.click(card.getByRole('button', { name: 'Soruyu kaydet' }))
+
+      // Optimistik: buton hemen "kaydı kaldır" etiketine döner.
+      expect(card.getByRole('button', { name: 'Kaydı kaldır' })).toBeInTheDocument()
+      await flush()
+      expect(mockFetch).toHaveBeenCalledWith('/feed/1/save', expect.objectContaining({ method: 'POST' }))
+    })
+
+    it('sunucu hatasında kaydetme geri alınır', async () => {
+      queues.feed.push(jsonResponse(batch(1, 5)))
+      render(<QuizFeed courseId={7} />)
+      await screen.findByText('Soru 1?')
+
+      // queues.save boş bırakılır → mock isteği reddeder, optimistik güncelleme geri alınmalı.
+      const card = within(screen.getByLabelText('Soru 1'))
+      fireEvent.click(card.getByRole('button', { name: 'Soruyu kaydet' }))
+      expect(card.getByRole('button', { name: 'Kaydı kaldır' })).toBeInTheDocument()
+
+      await flush()
+      expect(card.getByRole('button', { name: 'Soruyu kaydet' })).toBeInTheDocument()
+    })
   })
 })

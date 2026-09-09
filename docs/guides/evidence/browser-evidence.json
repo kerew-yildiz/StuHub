@@ -1,0 +1,422 @@
+[
+  {
+    "name": "stuhub-big-picture",
+    "viewports": [
+      {
+        "tag": "1440x900",
+        "sw": 1440,
+        "sh": 900,
+        "iw": 1440,
+        "ih": 900,
+        "title": "StuHub at a Glance Diagram",
+        "contained": true
+      },
+      {
+        "tag": "1600x1000@2x",
+        "sw": 1600,
+        "sh": 1000,
+        "iw": 1600,
+        "ih": 1000,
+        "title": "StuHub at a Glance Diagram",
+        "contained": true
+      },
+      {
+        "tag": "1920x1080",
+        "sw": 1920,
+        "sh": 1080,
+        "iw": 1920,
+        "ih": 1080,
+        "title": "StuHub at a Glance Diagram",
+        "contained": true
+      }
+    ],
+    "images": [
+      "docs\\guides\\evidence\\stuhub-big-picture.png"
+    ]
+  },
+  {
+    "name": "stuhub-semester-setup",
+    "viewports": [
+      {
+        "tag": "1440x900",
+        "sw": 1440,
+        "sh": 900,
+        "iw": 1440,
+        "ih": 900,
+        "title": "Setting Up a Semester Diagram",
+        "contained": true
+      },
+      {
+        "tag": "1600x1000@2x",
+        "sw": 1600,
+        "sh": 1000,
+        "iw": 1600,
+        "ih": 1000,
+        "title": "Setting Up a Semester Diagram",
+        "contained": true
+      },
+      {
+        "tag": "1920x1080",
+        "sw": 1920,
+        "sh": 1080,
+        "iw": 1920,
+        "ih": 1080,
+        "title": "Setting Up a Semester Diagram",
+        "contained": true
+      }
+    ],
+    "images": [
+      "docs\\guides\\evidence\\stuhub-semester-setup.png"
+    ]
+  },
+  {
+    "name": "stuhub-materials",
+    "viewports": [
+      {
+        "tag": "1440x900",
+        "sw": 1440,
+        "sh": 900,
+        "iw": 1440,
+        "ih": 900,
+        "title": "Turning Materials into Searchable Knowledge Diagram",
+        "contained": true
+      },
+      {
+        "tag": "1600x1000@2x",
+        "sw": 1600,
+        "sh": 1000,
+        "iw": 1600,
+        "ih": 1000,
+        "title": "Turning Materials into Searchable Knowledge Diagram",
+        "contained": true
+      },
+      {
+        "tag": "1920x1080",
+        "sw": 1920,
+        "sh": 1080,
+        "iw": 1920,
+        "ih": 1080,
+        "title": "Turning Materials into Searchable Knowledge Diagram",
+        "contained": true
+      }
+    ],
+    "images": [
+      "docs\\guides\\evidence\\stuhub-materials.png"
+    ]
+  },
+  {
+    "name": "stuhub-notes",
+    "viewports": [
+      {
+        "tag": "1440x900",
+        "sw": 1440,
+        "sh": 900,
+        "iw": 1440,
+        "ih": 900,
+        "title": "Writing Cited Notes from Your Materials Diagram",
+        "contained": true
+      },
+      {
+        "tag": "1600x1000@2x",
+        "sw": 1600,
+        "sh": 1000,
+        "iw": 1600,
+        "ih": 1000,
+        "title": "Writing Cited Notes from Your Materials Diagram",
+        "contained": true
+      },
+      {
+        "tag": "1920x1080",
+        "sw": 1920,
+        "sh": 1080,
+        "iw": 1920,
+        "ih": 1080,
+        "title": "Writing Cited Notes from Your Materials Diagram",
+        "contained": true
+      }
+    ],
+    "images": [
+      "docs\\guides\\evidence\\stuhub-notes.png"
+    ]
+  },
+  {
+    "name": "stuhub-chapter-quiz",
+    "viewports": [
+      {
+        "tag": "1440x900",
+        "sw": 1440,
+        "sh": 900,
+        "iw": 1440,
+        "ih": 900,
+        "title": "Making a Chapter Quiz Diagram",
+        "contained": true
+      },
+      {
+        "tag": "1600x1000@2x",
+        "sw": 1600,
+        "sh": 1000,
+        "iw": 1600,
+        "ih": 1000,
+        "title": "Making a Chapter Quiz Diagram",
+        "contained": true
+      },
+      {
+        "tag": "1920x1080",
+        "sw": 1920,
+        "sh": 1080,
+        "iw": 1920,
+        "ih": 1080,
+        "title": "Making a Chapter Quiz Diagram",
+        "contained": true
+      }
+    ],
+    "images": [
+      "docs\\guides\\evidence\\stuhub-chapter-quiz.png"
+    ]
+  },
+  {
+    "name": "stuhub-exam-quiz",
+    "viewports": [
+      {
+        "tag": "1440x900",
+        "sw": 1440,
+        "sh": 900,
+        "iw": 1440,
+        "ih": 900,
+        "title": "Taking the Big Exam Quiz Diagram",
+        "contained": true
+      },
+      {
+        "tag": "1600x1000@2x",
+        "sw": 1600,
+        "sh": 1000,
+        "iw": 1600,
+        "ih": 1000,
+        "title": "Taking the Big Exam Quiz Diagram",
+        "contained": true
+      },
+      {
+        "tag": "1920x1080",
+        "sw": 1920,
+        "sh": 1080,
+        "iw": 1920,
+        "ih": 1080,
+        "title": "Taking the Big Exam Quiz Diagram",
+        "contained": true
+      }
+    ],
+    "images": [
+      "docs\\guides\\evidence\\stuhub-exam-quiz.png"
+    ]
+  },
+  {
+    "name": "stuhub-essay-grader",
+    "viewports": [
+      {
+        "tag": "1440x900",
+        "sw": 1440,
+        "sh": 900,
+        "iw": 1440,
+        "ih": 900,
+        "title": "Getting Homework Graded Diagram",
+        "contained": true
+      },
+      {
+        "tag": "1600x1000@2x",
+        "sw": 1600,
+        "sh": 1000,
+        "iw": 1600,
+        "ih": 1000,
+        "title": "Getting Homework Graded Diagram",
+        "contained": true
+      },
+      {
+        "tag": "1920x1080",
+        "sw": 1920,
+        "sh": 1080,
+        "iw": 1920,
+        "ih": 1080,
+        "title": "Getting Homework Graded Diagram",
+        "contained": true
+      }
+    ],
+    "images": [
+      "docs\\guides\\evidence\\stuhub-essay-grader.png"
+    ]
+  },
+  {
+    "name": "stuhub-study-guide",
+    "viewports": [
+      {
+        "tag": "1440x900",
+        "sw": 1440,
+        "sh": 900,
+        "iw": 1440,
+        "ih": 900,
+        "title": "Building the Study Guide and Concept Map Diagram",
+        "contained": true
+      },
+      {
+        "tag": "1600x1000@2x",
+        "sw": 1600,
+        "sh": 1000,
+        "iw": 1600,
+        "ih": 1000,
+        "title": "Building the Study Guide and Concept Map Diagram",
+        "contained": true
+      },
+      {
+        "tag": "1920x1080",
+        "sw": 1920,
+        "sh": 1080,
+        "iw": 1920,
+        "ih": 1080,
+        "title": "Building the Study Guide and Concept Map Diagram",
+        "contained": true
+      }
+    ],
+    "images": [
+      "docs\\guides\\evidence\\stuhub-study-guide.png"
+    ]
+  },
+  {
+    "name": "stuhub-export-archive",
+    "viewports": [
+      {
+        "tag": "1440x900",
+        "sw": 1440,
+        "sh": 900,
+        "iw": 1440,
+        "ih": 900,
+        "title": "Exporting and Backing Up Your Work Diagram",
+        "contained": true
+      },
+      {
+        "tag": "1600x1000@2x",
+        "sw": 1600,
+        "sh": 1000,
+        "iw": 1600,
+        "ih": 1000,
+        "title": "Exporting and Backing Up Your Work Diagram",
+        "contained": true
+      },
+      {
+        "tag": "1920x1080",
+        "sw": 1920,
+        "sh": 1080,
+        "iw": 1920,
+        "ih": 1080,
+        "title": "Exporting and Backing Up Your Work Diagram",
+        "contained": true
+      }
+    ],
+    "images": [
+      "docs\\guides\\evidence\\stuhub-export-archive.png"
+    ]
+  },
+  {
+    "name": "stuhub-ask-material",
+    "viewports": [
+      {
+        "tag": "1440x900",
+        "sw": 1440,
+        "sh": 900,
+        "iw": 1440,
+        "ih": 900,
+        "title": "Asking a Question About Your Material Diagram",
+        "contained": true
+      },
+      {
+        "tag": "1600x1000@2x",
+        "sw": 1600,
+        "sh": 1000,
+        "iw": 1600,
+        "ih": 1000,
+        "title": "Asking a Question About Your Material Diagram",
+        "contained": true
+      },
+      {
+        "tag": "1920x1080",
+        "sw": 1920,
+        "sh": 1080,
+        "iw": 1920,
+        "ih": 1080,
+        "title": "Asking a Question About Your Material Diagram",
+        "contained": true
+      }
+    ],
+    "images": [
+      "docs\\guides\\evidence\\stuhub-ask-material.png"
+    ]
+  },
+  {
+    "name": "stuhub-flashcards",
+    "viewports": [
+      {
+        "tag": "1440x900",
+        "sw": 1440,
+        "sh": 900,
+        "iw": 1440,
+        "ih": 900,
+        "title": "Life of a Flashcard Diagram",
+        "contained": true
+      },
+      {
+        "tag": "1600x1000@2x",
+        "sw": 1600,
+        "sh": 1000,
+        "iw": 1600,
+        "ih": 1000,
+        "title": "Life of a Flashcard Diagram",
+        "contained": true
+      },
+      {
+        "tag": "1920x1080",
+        "sw": 1920,
+        "sh": 1080,
+        "iw": 1920,
+        "ih": 1080,
+        "title": "Life of a Flashcard Diagram",
+        "contained": true
+      }
+    ],
+    "images": [
+      "docs\\guides\\evidence\\stuhub-flashcards.png"
+    ]
+  },
+  {
+    "name": "stuhub-streak",
+    "viewports": [
+      {
+        "tag": "1440x900",
+        "sw": 1440,
+        "sh": 900,
+        "iw": 1440,
+        "ih": 900,
+        "title": "Keeping the Study Streak Alive Diagram",
+        "contained": true
+      },
+      {
+        "tag": "1600x1000@2x",
+        "sw": 1600,
+        "sh": 1000,
+        "iw": 1600,
+        "ih": 1000,
+        "title": "Keeping the Study Streak Alive Diagram",
+        "contained": true
+      },
+      {
+        "tag": "1920x1080",
+        "sw": 1920,
+        "sh": 1080,
+        "iw": 1920,
+        "ih": 1080,
+        "title": "Keeping the Study Streak Alive Diagram",
+        "contained": true
+      }
+    ],
+    "images": [
+      "docs\\guides\\evidence\\stuhub-streak.png"
+    ]
+  }
+]

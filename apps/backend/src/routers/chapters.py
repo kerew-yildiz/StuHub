@@ -1,4 +1,4 @@
-"""Chapter CRUD (minimal) — Faz 1.3 temeli; guide slides/çıkarım Faz 2.1'de."""
+"""Chapter CRUD (minimal) — guide slides slides.py'de, otomatik not tetiği indexer.py'de."""
 
 from __future__ import annotations
 

@@ -27,12 +27,13 @@ CREATE TABLE IF NOT EXISTS courses (
 );
 
 -- Materyaller: ders kitabı PDF'i, hoca sunumu ya da v2 medya türleri
--- (youtube, audio, docx, epub, image, text — YETENEKLER/11-medya-alimi.md)
+-- (youtube, audio, docx, epub, image, text, syllabus — YETENEKLER/11-medya-alimi.md;
+-- syllabus: ders izlencesi/müfredat, not/quiz üretiminde {kazanimlar} olarak kullanılır)
 CREATE TABLE IF NOT EXISTS materials (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     tenant_id      TEXT NOT NULL DEFAULT 'local',
     course_id      INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
-    type           TEXT NOT NULL CHECK (type IN ('textbook', 'slides', 'youtube', 'audio', 'docx', 'epub', 'image', 'text')),
+    type           TEXT NOT NULL CHECK (type IN ('textbook', 'slides', 'youtube', 'audio', 'docx', 'epub', 'image', 'text', 'syllabus')),
     filepath       TEXT NOT NULL,
     extracted_text TEXT,
     page_count     INTEGER,
@@ -294,6 +295,18 @@ CREATE INDEX IF NOT EXISTS idx_feed_questions_consume
     ON feed_questions(tenant_id, course_id, consumed_at);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_feed_questions_origin
     ON feed_questions(tenant_id, course_id, origin_question_id);
+
+-- Kullanıcının feed'den kaydettiği sorular (migration 0012 ile de kurulur); aynı soru
+-- bir kiracı için yalnızca bir kez kaydedilebilir (UNIQUE(tenant_id, feed_question_id)).
+CREATE TABLE IF NOT EXISTS saved_questions (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id        TEXT NOT NULL DEFAULT 'local',
+    feed_question_id INTEGER NOT NULL REFERENCES feed_questions(id) ON DELETE CASCADE,
+    created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(tenant_id, feed_question_id)
+);
+CREATE INDEX IF NOT EXISTS idx_saved_questions_tenant_created
+    ON saved_questions(tenant_id, created_at DESC);
 
 -- Uygulanan şema migration'larının kaydı (db.py migration runner'ı)
 CREATE TABLE IF NOT EXISTS schema_migrations (

@@ -1,0 +1,46 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Writing Cited Notes from Your Materials",
+    "output": "stuhub-notes.html",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "main-path", "label": "The writing pipeline", "focus": ["click", "topics", "collect", "write", "check", "note"], "note": "From one click to a finished note with clickable sources." },
+      { "id": "coverage-loop", "label": "Nothing gets skipped", "focus": ["check", "gaps", "collect"], "note": "A checker compares the note against your materials and sends the writer back for gaps." },
+      { "id": "no-book", "label": "When there is no book", "focus": ["slides-only", "note"], "note": "If only lecture slides exist, the note is written from slides and says so." }
+    ]
+  },
+  "lanes": [
+    { "id": "student", "label": "Student" },
+    { "id": "hub", "label": "StuHub" },
+    { "id": "ai", "label": "AI helpers" }
+  ],
+  "mainPath": ["click", "topics", "collect", "write", "check", "note"],
+  "nodes": [
+    { "id": "click", "lane": "student", "col": 0, "type": "external", "label": "Generate Notes", "sublabel": "one click on the chapter", "width": 140 },
+    { "id": "topics", "lane": "hub", "col": 1, "type": "backend", "label": "List the Topics", "sublabel": "AI finds up to 12 subjects", "width": 145 },
+    { "id": "collect", "lane": "hub", "col": 2, "type": "database", "label": "Gather Evidence", "sublabel": "search passages by meaning", "width": 150 },
+    { "id": "write", "lane": "ai", "col": 3, "type": "external", "label": "AI Writes a Draft", "sublabel": "per topic, quotes attached", "width": 145 },
+    { "id": "check", "lane": "hub", "col": 4, "type": "backend", "label": "Coverage Check", "sublabel": "every topic explained?", "width": 145 },
+    { "id": "slides-only", "lane": "hub", "col": 5, "type": "backend", "label": "Slides-Only Note", "sublabel": "honest note when no book", "width": 150 },
+    { "id": "gaps", "lane": "ai", "col": 5, "type": "messagebus", "label": "Missing Topics", "sublabel": "back for a second pass", "width": 145 },
+    { "id": "note", "lane": "student", "col": 5, "type": "frontend", "label": "Finished Note", "sublabel": "citations jump to source", "width": 145 }
+  ],
+  "edges": [
+    { "id": "start", "from": "click", "to": "topics", "label": "request", "variant": "emphasis" },
+    { "id": "topics-to-evidence", "from": "topics", "to": "collect", "label": "per topic" },
+    { "id": "evidence-to-write", "from": "collect", "to": "write", "label": "passages + page refs", "variant": "emphasis" },
+    { "id": "write-to-check", "from": "write", "to": "check", "label": "draft + quotes" },
+    { "id": "check-ok", "from": "check", "to": "note", "label": "all covered", "variant": "emphasis" },
+    { "id": "check-gaps", "from": "check", "to": "gaps", "label": "topics missing", "variant": "dashed", "role": "branch" },
+    { "id": "gaps-back", "from": "gaps", "to": "collect", "label": "fetch more evidence", "variant": "dashed", "role": "return", "route": "bottom-channel", "labelSegment": 1 },
+    { "id": "slides-path", "from": "slides-only", "to": "note", "label": "with notice", "variant": "dashed", "role": "branch" },
+    { "id": "check-slides", "from": "check", "to": "slides-only", "label": "no book text?", "variant": "dashed" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Map and reduce", "items": ["The chapter is split into topics; each gets its own focused draft", "Drafts are stitched into one clean chapter note"] },
+    { "dot": "emerald", "title": "Citations you can trust", "items": ["Every claim carries a quote from your own material", "Click a citation to jump to the exact passage"] },
+    { "dot": "rose", "title": "Honesty rules", "items": ["If the book text is missing, the note says it was written from slides", "A writer is sent back until coverage gaps are filled (max 3 rounds)"] }
+  ]
+}

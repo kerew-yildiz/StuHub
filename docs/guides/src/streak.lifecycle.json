@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "Keeping the Study Streak Alive",
+    "output": "stuhub-streak.html",
+    "quality_profile": "showcase",
+    "viewBox": [1080, 630],
+    "views": [
+      { "id": "day-loop", "label": "A study day", "focus": ["day-starts", "counting", "check", "healthy"], "note": "Each note, quiz, flashcard review or chat question adds one tick to today's progress." },
+      { "id": "risk", "label": "The dangerous evening", "focus": ["check", "risky", "healthy"], "note": "What happens when the day is almost over and the ring is still empty." },
+      { "id": "break", "label": "When a streak dies", "focus": ["risky", "missed", "cold"], "note": "A missed day resets the counter but never deletes your work." }
+    ]
+  },
+  "lanes": [
+    { "id": "main", "label": "Habit loop" }
+  ],
+  "states": [
+    { "id": "day-starts", "type": "start", "label": "New Day", "sublabel": "ring resets to zero", "lane": "main", "col": 0, "step": "01", "tag": "midnight" },
+    { "id": "counting", "type": "active", "label": "Studying", "sublabel": "note · quiz · card · chat", "lane": "main", "col": 1, "step": "02", "tag": "any counts" },
+    { "id": "check", "type": "decision", "label": "Goal Reached?", "sublabel": "today's target", "lane": "main", "col": 2, "step": "03", "tag": "ring fills" },
+    { "id": "healthy", "type": "success", "label": "Streak Grows", "sublabel": "tomorrow: +1 day", "lane": "main", "col": 3, "step": "04", "tag": "chain" },
+    { "id": "risky", "type": "waiting", "label": "Day Almost Over", "sublabel": "a reminder appears", "lane": "main", "col": 1, "yOffset": 130, "tag": "warning" },
+    { "id": "missed", "type": "failure", "label": "Day Missed", "sublabel": "nothing by midnight", "lane": "main", "col": 3, "yOffset": 130, "tag": "reset" },
+    { "id": "cold", "type": "neutral", "label": "Streak Broken", "sublabel": "notes stay, count resets", "lane": "main", "col": 1, "yOffset": 260, "tag": "restart" }
+  ],
+  "transitions": [
+    { "id": "wake", "from": "day-starts", "to": "counting", "route": "straight" },
+    { "id": "evaluate", "from": "counting", "to": "check", "route": "straight" },
+    { "id": "reach", "from": "check", "to": "healthy", "route": "straight" },
+    { "id": "not-yet", "from": "check", "to": "risky", "label": "evening comes", "variant": "security", "route": "drop", "fromSide": "bottom", "toSide": "top", "labelDx": -70 },
+    { "id": "save", "from": "risky", "to": "healthy", "label": "do one small task", "variant": "emphasis", "route": "drop", "labelDy": 40 },
+    { "id": "slip", "from": "risky", "to": "missed", "label": "midnight passes", "variant": "security", "route": "drop", "labelDy": 40 },
+    { "id": "restart", "from": "missed", "to": "cold", "label": "counter to zero", "variant": "dashed", "route": "drop", "fromSide": "bottom", "toSide": "top", "labelDx": 70 },
+    { "id": "fresh", "from": "cold", "to": "day-starts", "label": "day one, again", "variant": "default", "route": "left-channel", "labelSegment": 1 }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "What counts", "items": ["Notes, quizzes, flashcard reviews and chat questions all feed the ring", "The goal is yours to set; one honest review can save a day"] },
+    { "dot": "rose", "title": "Kind by design", "items": ["A broken streak only resets the counter - every note and score stays", "No leaderboards, no sharing: the streak competes with yesterday's you"] }
+  ]
+}

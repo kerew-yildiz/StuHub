@@ -12,9 +12,11 @@ import pymupdf
 import src.services.embed_service as embed_service
 from src.config import settings
 
+from conftest import TURKISH_FONT_FILE
+
 
 def _make_pdf_bytes() -> bytes:
-    font_file = r"C:\Windows\Fonts\arial.ttf"
+    font_file = TURKISH_FONT_FILE
     doc = pymupdf.open()
     for text in ["Giriş bölümü içeriği.", "Devam eden bölüm içeriği."]:
         page = doc.new_page()

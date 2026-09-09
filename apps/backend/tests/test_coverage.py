@@ -31,7 +31,7 @@ async def _add_textbook(course_id: int, page_count: int | None, tenant_id: str =
         cursor = await conn.execute(
             "INSERT INTO materials (tenant_id, course_id, type, filepath, page_count) "
             "VALUES (?, ?, 'textbook', ?, ?)",
-            (tenant_id, course_id, r"C:\kitaplar\algoritmalar.pdf", page_count),
+            (tenant_id, course_id, "/kitaplar/algoritmalar.pdf", page_count),
         )
         await conn.commit()
         assert cursor.lastrowid is not None

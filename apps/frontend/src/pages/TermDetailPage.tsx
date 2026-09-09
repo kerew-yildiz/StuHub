@@ -8,8 +8,6 @@ import { materialsApi } from '../api/materials'
 import { termsApi, type Term } from '../api/terms'
 import { Breadcrumb } from '../components/Breadcrumb'
 import { CourseForm } from '../components/CourseForm'
-import { MaterialUploadForm } from '../components/MaterialUploadForm'
-import { PostCreatePrompt } from '../components/PostCreatePrompt'
 import { confirmDialog } from '../stores/confirmStore'
 
 type LoadState = 'loading' | 'ready' | 'error'
@@ -113,7 +111,6 @@ export function TermDetailPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingCourse, setEditingCourse] = useState<Course | null>(null)
   const [includeFiles, setIncludeFiles] = useState(false)
-  const [newCourse, setNewCourse] = useState<Course | null>(null)
 
   const load = useCallback(async () => {
     if (!numericId) return
@@ -136,10 +133,26 @@ export function TermDetailPage() {
     void load()
   }, [load])
 
-  const handleCreate = async (input: CourseInput) => {
+  const handleCreate = async (
+    input: CourseInput,
+    textbookFile: File,
+    syllabusFile: File | null,
+  ) => {
     const created = await coursesApi.create(numericId, input)
+    try {
+      await materialsApi.upload(created.id, 'textbook', textbookFile)
+    } catch {
+      await coursesApi.remove(created.id)
+      throw new Error('Kitap yüklenemedi, ders geri alındı. Lütfen tekrar deneyin.')
+    }
+    if (syllabusFile) {
+      try {
+        await materialsApi.upload(created.id, 'syllabus', syllabusFile)
+      } catch {
+        setError('Ders ve kitap oluşturuldu ama müfredat yüklenemedi. Sonra tekrar deneyebilirsin.')
+      }
+    }
     setShowForm(false)
-    setNewCourse(created)
     await load()
   }
 
@@ -275,22 +288,6 @@ export function TermDetailPage() {
           </div>
         ))}
       </div>
-
-      {newCourse && (
-        <PostCreatePrompt
-          title="Ders kitabını yükle"
-          description={`"${newCourse.name}" eklendi. Şimdi kitap PDF'ini yükleyip indeksleyebilirsin — istersen sonra da yapabilirsin.`}
-          onClose={() => setNewCourse(null)}
-        >
-          <MaterialUploadForm
-            fixedType="textbook"
-            onUpload={async (type, file) => {
-              await materialsApi.upload(newCourse.id, type, file)
-              setNewCourse(null)
-            }}
-          />
-        </PostCreatePrompt>
-      )}
     </section>
   )
 }

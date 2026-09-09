@@ -1,15 +1,15 @@
 import { useRef, useState } from 'react'
 
 interface MaterialUploadFormProps {
-  onUpload: (type: 'textbook' | 'slides', file: File) => Promise<void>
+  onUpload: (type: 'textbook' | 'slides' | 'syllabus', file: File) => Promise<void>
   /** Verilirse tür seçici gizlenir, tür sabitlenir (örn. "ders oluşturunca kitap sor" akışı). */
-  fixedType?: 'textbook' | 'slides'
+  fixedType?: 'textbook' | 'slides' | 'syllabus'
 }
 
 /** Materyal yükleme formu — tür seçimi + dosya (Faz 1.2). Kendi kart zemini taşımaz —
- * çağıran yer (`glass-panel`/`PostCreatePrompt`) sağlar, iç içe kart olmasın. */
+ * çağıran yer (`glass-panel`) sağlar, iç içe kart olmasın. */
 export function MaterialUploadForm({ onUpload, fixedType }: MaterialUploadFormProps) {
-  const [type, setType] = useState<'textbook' | 'slides'>(fixedType ?? 'textbook')
+  const [type, setType] = useState<'textbook' | 'slides' | 'syllabus'>(fixedType ?? 'textbook')
   const [files, setFiles] = useState<File[]>([])
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -59,6 +59,7 @@ export function MaterialUploadForm({ onUpload, fixedType }: MaterialUploadFormPr
             [
               { value: 'textbook', label: 'Kitap (PDF)' },
               { value: 'slides', label: 'Sunum (PDF / PPTX)' },
+              { value: 'syllabus', label: 'Müfredat (PDF / DOCX)' },
             ] as const
           ).map((option) => (
             <button
@@ -98,7 +99,13 @@ export function MaterialUploadForm({ onUpload, fixedType }: MaterialUploadFormPr
           ref={inputRef}
           type="file"
           multiple
-          accept={type === 'textbook' ? '.pdf' : '.pdf,.pptx,.ppt'}
+          accept={
+            type === 'textbook'
+              ? '.pdf'
+              : type === 'slides'
+                ? '.pdf,.pptx,.ppt'
+                : '.pdf,.docx'
+          }
           onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
           className="hidden"
         />

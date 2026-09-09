@@ -8,7 +8,6 @@ import { downloadFile, flashcardSetExportUrl, noteMarkdownUrl } from '../api/exp
 import { deleteFlashcardSet, listFlashcardSets, type DueCard, type FlashcardSet } from '../api/flashcards'
 import { materialsApi } from '../api/materials'
 import { exportNotePdf, getNote, type SavedNote } from '../api/notes'
-import { listQuizzes, removeQuiz, type Quiz } from '../api/quizzes'
 import { slidesApi, type Slide } from '../api/slides'
 import { termsApi } from '../api/terms'
 import { Breadcrumb } from '../components/Breadcrumb'
@@ -18,7 +17,7 @@ import { FlashcardPlayer } from '../components/FlashcardPlayer'
 import { GuidePanel } from '../components/GuidePanel'
 import { GuideSlidesForm } from '../components/GuideSlidesForm'
 import { NoteViewer } from '../components/NoteViewer'
-import { QuizPlayer } from '../components/QuizPlayer'
+import { QuizFeed } from '../components/QuizFeed'
 import { SlidePreview } from '../components/SlidePreview'
 import { SpokenRecallRecorder } from '../components/SpokenRecallRecorder'
 import { TabBar } from '../components/TabBar'
@@ -32,7 +31,7 @@ type LoadState = 'loading' | 'ready' | 'error'
 const NOTEBOOK_TABS = [
   { id: 'notes', label: 'Notlar' },
   { id: 'cards', label: 'Kartlar' },
-  { id: 'quiz', label: 'Quiz' },
+  { id: 'quiz', label: 'Kaydırarak Quiz' },
   { id: 'recall', label: 'Sesli Tekrar' },
   { id: 'guide', label: 'Rehber' },
 ] as const
@@ -51,7 +50,6 @@ export function NotebookPage() {
   const [slides, setSlides] = useState<Slide[]>([])
   const [slidesPdfUrl, setSlidesPdfUrl] = useState<string | null>(null)
   const [note, setNote] = useState<SavedNote | null>(null)
-  const [quizzes, setQuizzes] = useState<Quiz[]>([])
   const [flashcardSets, setFlashcardSets] = useState<FlashcardSet[]>([])
   const [playingCards, setPlayingCards] = useState<DueCard[] | null>(null)
   const [state, setState] = useState<LoadState>('loading')
@@ -66,25 +64,20 @@ export function NotebookPage() {
   const noteJob = useGenerationStore((s) =>
     s.jobs.find((j) => j.kind === 'note' && j.targetId === numericChapterId),
   )
-  const quizJob = useGenerationStore((s) =>
-    s.jobs.find((j) => j.kind === 'quiz' && j.targetId === numericChapterId),
-  )
   const flashcardJob = useGenerationStore((s) =>
     s.jobs.find((j) => j.kind === 'flashcards' && j.targetId === numericChapterId),
   )
   const noteProgress = useAnimatedProgress(noteJob?.percent ?? 0)
-  const quizProgress = useAnimatedProgress(quizJob?.percent ?? 0)
   const flashcardProgress = useAnimatedProgress(flashcardJob?.percent ?? 0)
 
   const load = useCallback(async () => {
     if (!numericChapterId) return
     setState('loading')
     try {
-      const [chapterData, slideList, existingNote, quizList, flashcardSetList] = await Promise.all([
+      const [chapterData, slideList, existingNote, flashcardSetList] = await Promise.all([
         chaptersApi.get(numericChapterId),
         slidesApi.listByChapter(numericChapterId),
         getNote(numericChapterId),
-        listQuizzes(numericChapterId),
         listFlashcardSets(numericChapterId),
       ])
       setChapter(chapterData)
@@ -107,7 +100,6 @@ export function NotebookPage() {
       // Liste boşsa yükleme formunu açık, doluysa kapalı tut (çoklu sunum eklenebilir)
       setSlidesFormOpen(slideList.length === 0)
       setNote(existingNote)
-      setQuizzes(quizList)
       setFlashcardSets(flashcardSetList)
       // Slayt materyalinin PDF'i varsa önizleme URL'si hazırla (madde 1)
       const withMaterial = slideList.find((s) => s.material_id != null)
@@ -154,26 +146,7 @@ export function NotebookPage() {
     if (saved) {
       setNote(saved)
       setError('')
-      // Madde 5: quiz not bittikten sonra OTOMATİK üretilir
-      await useGenerationStore.getState().generateQuiz(numericChapterId, chapter?.title ?? 'Chapter')
       await load()
-    }
-  }
-
-  const handleGenerateQuiz = async () => {
-    await useGenerationStore
-      .getState()
-      .generateQuiz(numericChapterId, chapter?.title ?? 'Chapter')
-    await load()
-  }
-
-  const handleDeleteQuiz = async (quizId: number) => {
-    if (!(await confirmDialog('Bu quiz ve denemeleri silinecek. Emin misin?'))) return
-    try {
-      await removeQuiz(quizId)
-      setQuizzes((prev) => prev.filter((q) => q.id !== quizId))
-    } catch {
-      setError('Quiz silinemedi. Lütfen tekrar deneyin.')
     }
   }
 
@@ -225,7 +198,6 @@ export function NotebookPage() {
 
   const canGenerate = slides.length > 0
   const generatingNote = noteJob?.status === 'running'
-  const generatingQuiz = quizJob?.status === 'running'
   const generatingFlashcards = flashcardJob?.status === 'running'
 
   return (
@@ -504,80 +476,9 @@ export function NotebookPage() {
       )}
 
       {tab === 'quiz' && (
-        <>
-          {/* Bölüm quizleri — geçmiş korunur, hepsi listelenir (madde 3) */}
-          <div className="mt-8">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Quizler</h2>
-          <button
-            type="button"
-            onClick={() => void handleGenerateQuiz()}
-            disabled={generatingQuiz || generatingNote || !note}
-            className="btn-primary"
-            title={note ? '' : 'Önce not oluştur'}
-          >
-            {generatingQuiz ? 'Üretiliyor…' : 'Yeni Quiz Oluştur'}
-          </button>
+        <div className="mt-8">
+          {chapter && <QuizFeed courseId={chapter.course_id} chapterId={numericChapterId} />}
         </div>
-
-        {generatingQuiz && (
-          <div className="glass-panel mt-4 p-5">
-            <p className="text-sm font-medium">{quizJob?.message}</p>
-            <div className="mt-3 h-2 w-full overflow-hidden rounded-pill bg-stuhub-border">
-              <div
-                className="h-full rounded-pill bg-stuhub-accent transition-[width] duration-[var(--duration-state)] ease-[var(--ease-out-expo)]"
-                style={{ width: `${Math.max(quizProgress, 2)}%` }}
-              />
-            </div>
-            <p className="mt-2 text-xs text-stuhub-text-secondary">%{Math.round(quizProgress)} tamamlandı</p>
-          </div>
-        )}
-
-        <div className="mt-5 space-y-4">
-          {quizzes.length === 0 && !generatingQuiz && (
-            <p className="text-sm text-stuhub-text-secondary">
-              Henüz quiz yok. Not oluşturunca otomatik hazırlanır.
-            </p>
-          )}
-          {quizzes.map((quiz, index) => (
-            <details key={quiz.id} open={index === 0}>
-              <summary
-                className="glass-panel flex cursor-pointer items-center justify-between px-5 py-3 font-medium"
-              >
-                <span>
-                  Quiz {quizzes.length - index} ·{' '}
-                  {quiz.questions_json.topics.reduce(
-                    (n, t) => n + t.questions.length,
-                    0,
-                  )}{' '}
-                  soru ·{' '}
-                  {quiz.created_at ? new Date(quiz.created_at).toLocaleDateString('tr-TR') : ''}
-                </span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    void handleDeleteQuiz(quiz.id)
-                  }}
-                  className="rounded-control p-1.5 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10 hover:text-stuhub-error"
-                  title="Sil"
-                  aria-label="Quiz'i sil"
-                >
-                  <X className="h-4 w-4" aria-hidden="true" />
-                </button>
-              </summary>
-              <div className="mt-3">
-                <QuizPlayer
-                  key={quiz.id}
-                  quiz={quiz}
-                  onDelete={(id) => void handleDeleteQuiz(id)}
-                />
-              </div>
-            </details>
-          ))}
-        </div>
-      </div>
-        </>
       )}
 
       {tab === 'guide' && <GuidePanel scope="chapter" scopeId={numericChapterId} />}

@@ -1,0 +1,44 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Taking the Big Exam Quiz",
+    "output": "stuhub-exam-quiz.html",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "quiz-path", "label": "The 55-question rehearsal", "focus": ["start", "recipe", "draft", "paper", "score", "result"], "note": "Twenty multiple choice, fifteen true-false, fifteen fill-in and five written - a full dress rehearsal." },
+      { "id": "scoring", "label": "How points add up", "focus": ["score", "result"], "note": "Short answers are worth 1 point each; the five written answers are worth 10 and read by the AI." },
+      { "id": "retry", "label": "Practice again", "focus": ["result", "start"], "note": "A new attempt shuffles a fresh version from the same question bank." }
+    ]
+  },
+  "lanes": [
+    { "id": "student", "label": "Student" },
+    { "id": "hub", "label": "StuHub" },
+    { "id": "ai", "label": "AI helpers" }
+  ],
+  "mainPath": ["start", "recipe", "draft", "paper", "score", "result"],
+  "nodes": [
+    { "id": "start", "lane": "student", "col": 0, "type": "external", "label": "Start Exam Mode", "sublabel": "whole course, not one chapter", "width": 145 },
+    { "id": "recipe", "lane": "hub", "col": 1, "type": "backend", "label": "Follow the Recipe", "sublabel": "20 MCQ + 15 true-false + 15 fill-in + 5 written", "width": 190 },
+    { "id": "draft", "lane": "ai", "col": 2, "type": "external", "label": "AI Builds the Bank", "sublabel": "questions seeded from your cited notes", "width": 155 },
+    { "id": "paper", "lane": "hub", "col": 3, "type": "frontend", "label": "Mixed Exam Paper", "sublabel": "shuffled fresh each attempt", "width": 150 },
+    { "id": "score", "lane": "hub", "col": 4, "type": "backend", "label": "Marking", "sublabel": "47 quick answers checked instantly", "width": 150 },
+    { "id": "grade-open", "lane": "ai", "col": 4, "type": "external", "label": "AI Reads Essays", "sublabel": "5 written answers scored against the rubric", "width": 175 },
+    { "id": "result", "lane": "student", "col": 5, "type": "frontend", "label": "Score out of 100", "sublabel": "weak spots highlighted for review", "width": 145 }
+  ],
+  "edges": [
+    { "id": "kickoff", "from": "start", "to": "recipe", "label": "request", "variant": "emphasis" },
+    { "id": "bank", "from": "recipe", "to": "draft", "label": "category quotas", "variant": "emphasis" },
+    { "id": "assemble", "from": "draft", "to": "paper", "label": "question pool" },
+    { "id": "submit", "from": "paper", "to": "score", "label": "hand in", "variant": "emphasis" },
+    { "id": "open-answers", "from": "score", "to": "grade-open", "label": "written answers", "variant": "dashed" },
+    { "id": "open-grades", "from": "grade-open", "to": "result", "label": "essay scores", "variant": "dashed", "role": "return" },
+    { "id": "quick-grades", "from": "score", "to": "result", "label": "auto points", "variant": "emphasis" },
+    { "id": "practice-again", "from": "result", "to": "start", "label": "new shuffled attempt", "variant": "dashed", "role": "return", "route": "bottom-channel", "labelSegment": 1 }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "One exam, four skills", "items": ["Multiple choice and true-false test recognition", "Fill-in and written answers test real recall"] },
+    { "dot": "emerald", "title": "Scoring adds to 100", "items": ["47 short answers carry 1 point each", "The 5 written answers carry 10 points each and are graded by AI"] },
+    { "dot": "rose", "title": "Rehearsal effect", "items": ["Each attempt is shuffled from the same bank, so memory works harder", "Results point at the chapters that need another pass"] }
+  ]
+}
