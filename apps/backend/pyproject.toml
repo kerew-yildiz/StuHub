@@ -23,6 +23,7 @@ dependencies = [
     "asyncpg>=0.30",
     "pyjwt[crypto]>=2.9",
     "ppt2pptx>=0.4.2",
+    "torch>=2.13",
 ]
 
 [dependency-groups]
@@ -35,6 +36,21 @@ dev = [
     "bandit>=1.7",
     "pip-audit>=2.7",
 ]
+
+# torch, sentence-transformers'ın (embedding modeli) transitive bağımlılığı — uygulama
+# GPU KULLANMIYOR (Railway konteynerinde GPU yok, embed_service.py CPU-only inference
+# yapıyor). PyPI'nin Linux wheel'i varsayılan olarak TAM CUDA yığınını (cuda-toolkit,
+# nvidia-cudnn/nccl/nvshmem, triton) da çekiyor — bu 2026-09-09'da keşfedildi: GitHub
+# Actions runner'ı (14 GB disk) tam bu yüzden `docker build` sırasında disk doldurup
+# çöktü. `explicit = true`: bu index YALNIZCA torch için kullanılır, diğer paketler
+# (jinja2 vb.) PyPI'den gelmeye devam eder. Kaynak: docs.astral.sh/uv/guides/integration/pytorch
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.ruff]
 line-length = 100
