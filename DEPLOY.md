@@ -104,20 +104,19 @@ Bellek tüketiminin ana kalemi embedding modeli (MiniLM-L12-v2, ~460 MB disk,
   Yatay ölçekleme process çoğaltmakla değil, Railway replikasıyla yapılmalı — ve o da
   yol haritası Aşama 2'yi (paylaşımlı depolama) gerektirir.
 
-### 2.5 Şema
+### 2.5 Şema — ARTIK OTOMATİK (2026-09-08)
 
-Supabase SQL Editor'da `apps/backend/sql/schema_postgres.sql` uygulanmış olmalı
-(`KULLANIM-SAAS.md` §2). Zaten uygulanmışsa, bu turda eklenen migration için:
+`schema_postgres.sql` her açılışta backend tarafından kendisi uygulanır
+(`db.apply_pg_schema`, `init_db()`'de çağrılır). Dosyanın tamamı idempotent
+(`CREATE TABLE/INDEX IF NOT EXISTS`, policy'ler `DROP`+`CREATE`, seed
+`ON CONFLICT DO NOTHING`) olduğu için hedef durumu her boot'ta yeniden ilan etmek
+güvenli; rolling deploy'da paralel DDL riskine karşı bir Postgres advisory lock
+ile serileştirilir. **Supabase SQL Editor'a elle yapıştırma adımı gerekmiyor.**
 
-```sql
-ALTER TABLE indexing_jobs ADD COLUMN IF NOT EXISTS worker_id    TEXT;
-ALTER TABLE indexing_jobs ADD COLUMN IF NOT EXISTS heartbeat_at TIMESTAMPTZ;
-CREATE INDEX IF NOT EXISTS idx_indexing_jobs_recovery
-    ON indexing_jobs(status, heartbeat_at);
-```
-
-> Postgres tarafında hâlâ otomatik migration runner yok (SQLite'ta var). Yol
-> haritasının "ölçekten bağımsız" 1. maddesi; elle uygulama hatası riski sürüyor.
+Sınır: yalnızca eklemeli şema değişikliklerini kapsar (yeni tablo/kolon/indeks).
+Kolon yeniden adlandırma, tip daraltma ya da veri backfill'i gerektiren bir
+değişiklik gelirse (bugüne kadar hiç gerekmedi) numaralı bir Postgres migration
+listesi eklenmeli — SQLite tarafındaki `_apply_migrations` zaten bu deseni izliyor.
 
 ---
 

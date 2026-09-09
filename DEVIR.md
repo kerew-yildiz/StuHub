@@ -145,6 +145,23 @@ Entrypoint mantığı (root tespiti → devir → ayrıcalık bırakma → rol s
 bir harness ile 5 senaryoda davranışsal olarak doğrulandı. **Gerçek `chown`/`setpriv`
 semantiği değil, kontrol akışı doğrulandı** — Docker hâlâ yok.
 
+**Ardından: Postgres migration runner eklendi.** `schema_postgres.sql`'in tamamı
+zaten idempotent olduğu tespit edildi (26/26 tablo `CREATE TABLE IF NOT EXISTS`,
+22/22 indeks `CREATE INDEX IF NOT EXISTS`, policy'ler `DROP`+`CREATE`, seed
+`ON CONFLICT DO NOTHING`) — yani numaralı bir migration listesi yazmaya gerek
+kalmadan `db.apply_pg_schema()` (yeni fonksiyon, `db.py`) her açılışta dosyayı
+yeniden uygulayacak şekilde `init_db()`'ye bağlandı. Paralel DDL'e karşı bir
+Postgres advisory lock (`pg_advisory_lock`/`unlock`) ile serileştirildi. Sahte
+bağlantıyla iki test eklendi (`tests/test_db.py`): çağrı sırası (lock → şema →
+unlock) ve hata durumunda kilidin yine de bırakıldığı. `DEPLOY.md` §2.5 ve
+`KULLANIM-SAAS.md` elle-yapıştırma adımları kaldırılarak güncellendi.
+
+**Not:** bu turda `apps/backend/src/services/quiz_generator.py` üzerinde
+kullanıcının kendi editöründe aktif/yarım kalmış bir refactor bulundu (working
+tree'de `M`, `generate_quiz_stream` henüz tanımsız — `tests/conftest.py` import'ta
+patlıyor). Dokunulmadı; tam arka arkaya `pytest` bu yüzden şu an koşulamıyor,
+`apply_pg_schema` doğrudan Python ile (conftest'i atlayarak) ayrıca doğrulandı.
+
 ---
 
 ## 5. Yeni ajanın bilmesi gereken tuzaklar
@@ -215,10 +232,12 @@ doldurulabilir, ücretli modeller sonra config'den takılır.
 1. **İlk Railway deploy'u** — `DEPLOY.md` adım adım anlatıyor. Kritik noktalar:
    `/data` volume'u (izinler için §2.2), `STUHUB_EMBED_MODEL`, `VITE_*` build
    argümanları, EU-West bölgesi. Deploy sonrası 7 adımlık doğrulama listesi
-   `DEPLOY.md` §3'te. Bu aynı zamanda Dockerfile'ın ve `pg_compat`'in ilk gerçek testi.
-2. **Postgres migration runner** (yol haritası "ölçekten bağımsız" madde 1) — Postgres
-   şeması hâlâ elle uygulanıyor; `0011` migration'ının SQL karşılığı `DEPLOY.md` §2.5'te.
-3. **Sentry + object storage** (aynı bölüm, madde 2-3).
+   `DEPLOY.md` §3'te. Bu aynı zamanda Dockerfile'ın, `pg_compat`'in VE yeni
+   `apply_pg_schema`'nın gerçek Postgres'e karşı ilk testi.
+2. ~~Postgres migration runner~~ **ÇÖZÜLDÜ (2026-09-08).** `db.apply_pg_schema` her
+   açılışta `schema_postgres.sql`'i uyguluyor (idempotent, advisory lock'lu). Ayrıntı
+   ve sınır (yalnızca eklemeli değişiklikler) `DEPLOY.md` §2.5'te.
+3. **Sentry + object storage** (aynı yol haritası bölümü, madde 2-3).
 4. **Aşama 2** — pgvector (ANN indeksi + SQL-tarafı top-k; port değil yeniden yazım),
    Redis + Arq kuyruğu, ücretli LLM kademelendirmesi (§5.5), rate limiting.
    Bu iş bittiğinde §3.1'deki imaj ayrımı da mümkün hale gelir.

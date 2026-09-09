@@ -24,7 +24,14 @@ from .pg_compat import PgConnection
 logger = logging.getLogger(__name__)
 
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "sql" / "schema.sql"
+PG_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "sql" / "schema_postgres.sql"
 MIGRATIONS_DIR = Path(__file__).resolve().parents[1] / "sql" / "migrations"
+
+# Şema uygulaması için advisory lock anahtarı (rastgele sabit). Aynı anda açılan iki
+# instance DDL'i paralel çalıştırırsa Postgres `CREATE TABLE IF NOT EXISTS`ta bile
+# "duplicate key value violates unique constraint pg_type_typname_nsp_index" ile
+# patlayabiliyor; kilit, rolling deploy'da bir anda yalnızca birinin girmesini sağlar.
+_PG_SCHEMA_LOCK_KEY = 8471203
 
 _MIGRATION_NAME_RE = re.compile(r"^(\d{3,})_(.+)\.sql$")
 
@@ -120,16 +127,41 @@ async def _apply_migrations(db: aiosqlite.Connection) -> int:
     return applied_count
 
 
+async def apply_pg_schema(conn: asyncpg.Connection) -> None:
+    """Postgres şemasını açılışta uygular (`schema_postgres.sql` idempotenttir).
+
+    Neden ayrı bir migration çatısı yok: PG şema dosyasının TAMAMI zaten idempotent
+    (26/26 `CREATE TABLE IF NOT EXISTS`, 22/22 `CREATE INDEX IF NOT EXISTS`, policy'ler
+    `DROP`+`CREATE`, seed `ON CONFLICT DO NOTHING`), yani hedef durumu her açılışta
+    yeniden ilan etmek güvenli. Bu, şemanın Supabase SQL Editor'a elle yapıştırılması
+    zorunluluğunu kaldırır — elle uygulama unutulursa deploy sessizce eksik tabloyla
+    çalışıyordu.
+
+    SINIR: yalnızca EKLEMELİ değişiklikleri taşır. Kolon yeniden adlandırma, tip
+    daraltma veya veri backfill'i gerektiğinde numaralı bir PG migration listesi
+    (SQLite'taki `_apply_migrations` muadili) gerekir; o güne kadar bu yeterli.
+    """
+    # DDL'i tek instance çalıştırsın: rolling deploy'da eski ve yeni process bir süre
+    # birlikte yaşıyor ve paralel DDL, `IF NOT EXISTS` kullanılsa bile Postgres'te
+    # katalog yarışına (pg_type_typname_nsp_index) düşebiliyor.
+    await conn.execute("SELECT pg_advisory_lock($1)", _PG_SCHEMA_LOCK_KEY)
+    try:
+        await conn.execute(PG_SCHEMA_PATH.read_text(encoding="utf-8"))
+    finally:
+        await conn.execute("SELECT pg_advisory_unlock($1)", _PG_SCHEMA_LOCK_KEY)
+    logger.info("Postgres şeması uygulandı")
+
+
 async def init_db() -> None:
     """Yerel modda (SQLite): veri dizinini oluşturur, şemayı + migration'ları uygular.
 
-    SaaS modunda (settings.saas_mode): şema Supabase SQL Editor'da elle uygulanır
-    (bkz. sql/schema_postgres.sql) — burada yalnızca havuz bağlantısı doğrulanır.
+    SaaS modunda (settings.saas_mode): şema her açılışta `apply_pg_schema` ile
+    yeniden ilan edilir (idempotent — bkz. o fonksiyonun docstring'i).
     """
     if settings.saas_mode:
         pool = await _get_pg_pool()
         async with pool.acquire() as conn:
-            await conn.execute("SELECT 1")
+            await apply_pg_schema(conn)
         return
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     async with aiosqlite.connect(settings.db_path) as db:

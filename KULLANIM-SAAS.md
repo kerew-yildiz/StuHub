@@ -28,9 +28,10 @@ auth'suz çalışmaya devam eder — iki mod aynı kod tabanını paylaşır, da
    > ⚠️ **Direct connection (`db.<proje-ref>.supabase.co`) DEĞİL, Session pooler kullanın.**
    > Direct connection yalnızca IPv6 üzerinden çalışır; çoğu geliştirme/hosting ortamı
    > (bu makine dahil) IPv6 rotası olmadığı için `OSError: Network is unreachable` verir.
-3. **SQL Editor** → yeni sorgu → `apps/backend/sql/schema_postgres.sql`'in tüm içeriğini
-   yapıştır → çalıştır. 22 tablo (profiles/plans/subscriptions + 19 tenant-scoped içerik
-   tablosu) + RLS politikaları oluşur.
+3. Şemayı elle uygulamanıza gerek yok — backend `apps/backend/sql/schema_postgres.sql`'i
+   ilk açılışta kendisi uygular (`db.apply_pg_schema`, idempotent). 22 tablo
+   (profiles/plans/subscriptions + 19 tenant-scoped içerik tablosu) + RLS politikaları
+   backend ilk kez `DATABASE_URL` ile ayağa kalktığında otomatik oluşur.
 4. **Kimlik doğrulama — iki olası yöntem, kod ikisini de destekler:**
    - **Yeni projeler (varsayılan):** Supabase artık access token'ları **asimetrik anahtarla
      (ES256/JWKS)** imzalıyor, ayrıca bir "JWT Secret" ayarı YOKTUR. Bu durumda
@@ -106,9 +107,9 @@ UPDATE profiles SET is_admin = true WHERE email = '<sizin-e-postanız>';
   adımlar ve doğrulama listesi `DEPLOY.md`'de.
 - **Yerel disk = tek instance.** Materyaller ve LanceDB indeksi sunucu diskinde olduğu için
   ikinci bir replika açılamaz; yatay ölçekleme object storage + pgvector geçişine bağlı.
-- **Postgres şeması elle uygulanıyor** — SQLite tarafındaki otomatik migration runner'ın
-  Postgres karşılığı yok. Yeni migration'ların SQL karşılığı ilgili dosyanın başında yorum
-  olarak tutulur (örn. `sql/migrations/0011_indexing_jobs_worker.sql`).
+- ~~Postgres şeması elle uygulanıyor~~ **ÇÖZÜLDÜ (2026-09-08):** backend her açılışta
+  `schema_postgres.sql`'i kendisi uygular (idempotent, advisory lock ile serileştirilir).
+  Yalnızca eklemeli değişiklikleri kapsar — bkz. `DEPLOY.md` §2.5.
 - **Rate limiting yok** — aylık kota dışında istek sınırı bulunmuyor.
 
 ## 8. Sorun Giderme
