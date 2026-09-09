@@ -13,7 +13,7 @@ import logging
 import re
 import sqlite3
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import aiosqlite
 import asyncpg
@@ -127,8 +127,16 @@ async def _apply_migrations(db: aiosqlite.Connection) -> int:
     return applied_count
 
 
-async def apply_pg_schema(conn: asyncpg.Connection) -> None:
+async def apply_pg_schema(conn: Any) -> None:
     """Postgres şemasını açılışta uygular (`schema_postgres.sql` idempotenttir).
+
+    `conn: Any` bilinçli: çağıran yer `pool.acquire()`'dan `PoolConnectionProxy`
+    geçiriyor, testler sahte bir bağlantı geçiriyor — `PoolConnectionProxy.execute`
+    metaclass tarafından RUNTIME'da dinamik üretiliyor (`__getattr__` ile), statik
+    stub'da görünmüyor; ne `asyncpg.Connection` ne bir `Protocol` pyright'ı gerçek
+    hatasız geçirmeden tatmin edebiliyor. Aynı "aşırı dar tip pyright'ta yanlış
+    pozitif üretir" dersi `pg_compat._Row.__getitem__ -> Any` ve
+    `LLMProvider.extra_params: dict[str, Any]`'de zaten uygulanmıştı (bkz. DEVIR.md §4).
 
     Neden ayrı bir migration çatısı yok: PG şema dosyasının TAMAMI zaten idempotent
     (26/26 `CREATE TABLE IF NOT EXISTS`, 22/22 `CREATE INDEX IF NOT EXISTS`, policy'ler
