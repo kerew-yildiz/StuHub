@@ -91,6 +91,11 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     HF_HOME=/opt/hf \
+    # Konteyner root başlayıp entrypoint'te uid 10001'e düştüğü için HOME aksi halde
+    # `/root` kalıyor: asyncpg açılışta varsayılan SSL anahtarını ($HOME/.postgresql/
+    # postgresql.key) stat'lıyor ve `PermissionError` ile uygulamayı düşürüyor.
+    # (2026-09-09, ilk canlı Railway deploy'unda yakalandı.)
+    HOME=/home/stuhub \
     # Materyal dosyaları ve LanceDB için yol. Railway'de kalıcı bir volume buraya
     # bağlanmalı — aksi halde her deploy'da yüklenen materyaller ve indeks kaybolur.
     # (Object storage'a taşıma yol haritasının "ölçekten bağımsız" maddesi.)
