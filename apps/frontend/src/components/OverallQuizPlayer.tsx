@@ -260,6 +260,30 @@ export function OverallQuizPlayer({ quiz, onDelete }: OverallQuizPlayerProps) {
     )
   }
 
+  // Üretimi tamamen başarısız olmuş eski kayıtlar 0 soruyla veritabanında duruyor
+  // (kök neden backend'de kapatıldı: overall_generator artık boş quiz kaydetmiyor).
+  // Bu satırlarda `questions[current]` undefined olup `question.type` okunduğunda
+  // tüm CoursePage çöküyordu — boş quiz bir hata değil, gösterilecek bir durumdur.
+  if (questions.length === 0) {
+    return (
+      <div className="glass-panel mt-4 p-6">
+        <h3 className="text-lg font-semibold">Bu genel quizde hiç soru yok</h3>
+        <p className="mt-2 text-sm text-stuhub-text-secondary">
+          Üretim başarısız olmuş. Quizi silip yeniden üretebilirsin.
+        </p>
+        {onDelete && (
+          <button
+            type="button"
+            onClick={() => onDelete(quiz.id)}
+            className="mt-4 rounded-control px-3 py-1.5 text-sm font-medium text-stuhub-error transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10"
+          >
+            Quizi sil
+          </button>
+        )}
+      </div>
+    )
+  }
+
   const question = questions[current]
   const isLast = current === questions.length - 1
 

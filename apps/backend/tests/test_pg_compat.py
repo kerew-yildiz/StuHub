@@ -40,6 +40,8 @@ class FakeConnection:
 
     def __init__(self, fetchrow_result=None, fetch_result=None) -> None:
         self.log: list[str] = []
+        # Postgres'e gerçekte GİDEN SQL — dialekt çevirisini doğrulamak için.
+        self.sqls: list[str] = []
         self.transactions: list[FakeTransaction] = []
         self._fetchrow_result = fetchrow_result
         self._fetch_result = fetch_result or []
@@ -50,14 +52,17 @@ class FakeConnection:
         return tx
 
     async def execute(self, sql: str, *params):
+        self.sqls.append(sql)
         self.log.append(f"EXEC {sql.split()[0].upper()}")
         return "UPDATE 1"
 
     async def fetch(self, sql: str, *params):
+        self.sqls.append(sql)
         self.log.append("FETCH")
         return self._fetch_result
 
     async def fetchrow(self, sql: str, *params):
+        self.sqls.append(sql)
         self.log.append("FETCHROW")
         return self._fetchrow_result
 
@@ -199,3 +204,86 @@ async def test_insert_gets_returning_id_and_exposes_lastrowid():
     cursor = await conn.execute("INSERT INTO courses (name) VALUES (?)", ("x",))
     assert cursor.lastrowid == 42
     assert "FETCHROW" in raw.log
+
+
+async def test_json_each_is_translated_for_postgres():
+    """`json_each(?)` SQLite deyimi Postgres'te çalışmaz — çeviri ZORUNLU.
+
+    Postgres'in `json_each`'i yalnızca JSON *nesnesi* açar ve `json` tipinde `value`
+    döndürür; id listesiyle çağrıldığında `integer = json` operatörü olmadığı için sorgu
+    ölüyordu. Prod'da iki uç bu yüzden 500 veriyordu: `GET /api/courses/4/flashcards/due`
+    ve `GET /api/terms/7/archive`.
+    """
+    conn, raw, _ = _make_conn(fetch_result=[])
+    await conn.execute(
+        "SELECT set_id FROM card_reviews "
+        "WHERE set_id IN (SELECT value FROM json_each(?)) AND tenant_id = ?",
+        ("[1,2]", "t"),
+    )
+    assert raw.sqls == [
+        "SELECT set_id FROM card_reviews WHERE set_id IN "
+        "(SELECT value::bigint FROM json_array_elements_text($1::json)) AND tenant_id = $2"
+    ]
+    assert "json_each" not in raw.sqls[0]
+
+
+async def test_insert_without_id_column_falls_back_via_savepoint():
+    """`id` kolonu olmayan tabloya INSERT (ör. `settings`, PK `key`) çalışmalı.
+
+    `RETURNING id` denemesi `UndefinedColumnError` fırlatıyor; Postgres bu hatadan sonra
+    TÜM transaction'ı abort ettiği için fallback savepoint olmadan
+    `InFailedSQLTransactionError` ile patlıyordu — SaaS modunda ayar kaydetme her zaman
+    500 dönüyordu. Fallback'in savepoint'e dönmesi ZORUNLU.
+    """
+    import asyncpg
+
+    class NoIdColumn(FakeConnection):
+        async def fetchrow(self, sql: str, *params):
+            self.sqls.append(sql)
+            self.log.append("FETCHROW")
+            raise asyncpg.exceptions.UndefinedColumnError("column \"id\" does not exist")
+
+    raw = NoIdColumn()
+
+    async def release() -> None:
+        return None
+
+    conn = PgConnection(cast(Any, raw), release)
+    cursor = await conn.execute(
+        "INSERT INTO settings (key, value) VALUES (?, ?) "
+        "ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+        ("k", "v"),
+    )
+
+    assert cursor.lastrowid is None
+    assert cursor.rowcount == 1
+    assert "SAVEPOINT pg_compat_returning_id" in raw.sqls
+    assert "ROLLBACK TO SAVEPOINT pg_compat_returning_id" in raw.sqls
+    # Düz INSERT gerçekten çalıştı (RETURNING id eklenmemiş hâli).
+    assert any(s.startswith("INSERT INTO settings") and "RETURNING" not in s for s in raw.sqls)
+
+
+async def test_uuid_and_datetime_columns_become_json_serializable():
+    """`SELECT *` ile gelen `tenant_id` (Postgres'te UUID) JSON'a yazılabilmeli.
+
+    asyncpg `uuid.UUID` döndürüyordu; `archive_service._fetch_rows` 7 tabloyu `SELECT *`
+    ile okuyup `json.dumps` ettiği için `GET /api/terms/{id}/archive` 500 veriyordu
+    (SQLite yolunda aynı kolon TEXT olduğu için hiç görünmüyordu).
+    """
+    import json
+    from datetime import UTC, datetime
+    from uuid import UUID as _UUID
+
+    row = {
+        "id": 1,
+        "tenant_id": _UUID("11111111-2222-3333-4444-555555555555"),
+        "created_at": datetime(2026, 9, 10, 12, 0, tzinfo=UTC),
+    }
+    conn, _, _ = _make_conn(fetch_result=[row])
+    cursor = await conn.execute("SELECT * FROM chapters WHERE id = ?", (1,))
+    (fetched,) = await cursor.fetchall()
+
+    as_dict = dict(fetched)
+    assert as_dict["tenant_id"] == "11111111-2222-3333-4444-555555555555"
+    assert as_dict["created_at"] == "2026-09-10T12:00:00+00:00"
+    json.dumps(as_dict, ensure_ascii=False)

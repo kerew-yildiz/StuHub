@@ -1,0 +1,58 @@
+[
+  {
+    "id": 1,
+    "material_id": 1,
+    "kind": "index",
+    "status": "failed",
+    "error": "Sunum okunamadı, dosya bozuk olabilir.",
+    "sizinti": []
+  },
+  {
+    "id": 2,
+    "material_id": 2,
+    "kind": "index",
+    "status": "failed",
+    "error": "DOCX okunamadı, dosya bozuk olabilir.",
+    "sizinti": [
+      "iç kütüphane adı"
+    ]
+  },
+  {
+    "id": 3,
+    "material_id": 3,
+    "kind": "index",
+    "status": "failed",
+    "error": "EPUB okunamadı, dosya bozuk olabilir.",
+    "sizinti": []
+  },
+  {
+    "id": 4,
+    "material_id": 4,
+    "kind": "index",
+    "status": "processing",
+    "error": null,
+    "sizinti": []
+  },
+  {
+    "id": 5,
+    "material_id": 5,
+    "kind": "index",
+    "status": "pending",
+    "error": null,
+    "sizinti": []
+  },
+  {
+    "id": 6,
+    "material_id": 6,
+    "kind": "transcribe",
+    "status": "pending",
+    "error": null,
+    "sizinti": []
+  },
+  {
+    "senaryo": "K7 yarıda kesilme",
+    "yarim_disk": [],
+    "yarim_db": [],
+    "health": 200
+  }
+]

@@ -92,4 +92,18 @@ describe('OverallQuizPlayer', () => {
     expect(await screen.findByText('Genel quiz tamamlandı')).toBeInTheDocument()
     expect(screen.getByText('80 / 100')).toBeInTheDocument()
   })
+
+  it('0 soruluk quizde çökmez, boş durum ve silme seçeneği gösterir', async () => {
+    // Prod'da üretimi tamamen başarısız olmuş 1 kayıt vardı (questions: []); oynatıcı
+    // `questions[0].type` okuyup "Cannot read properties of undefined (reading 'type')"
+    // ile tüm CoursePage'i düşürüyordu.
+    const onDelete = vi.fn()
+    const empty: OverallQuiz = { ...quiz, questions_json: { seed: 1, questions: [] } }
+
+    render(<OverallQuizPlayer quiz={empty} onDelete={onDelete} />)
+
+    expect(await screen.findByText('Bu genel quizde hiç soru yok')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Quizi sil' }))
+    expect(onDelete).toHaveBeenCalledWith(empty.id)
+  })
 })

@@ -4,7 +4,12 @@ import type { LLMProviderStatus } from '../api/settings'
 import { settingsApi } from '../api/settings'
 
 /** Ücretsiz LLM sağlayıcı zinciri — geçici çözüm (Kerem kararı, 2026-09-02).
- * Sıra yetenek sırasıdır: biri kota sınırına ulaşınca otomatik sıradakine geçilir. */
+ * Sıra yetenek sırasıdır: biri kota sınırına ulaşınca otomatik sıradakine geçilir.
+ * Bu liste backend'deki `services/llm_providers.py` `PROVIDER_CHAIN` ile BİREBİR
+ * aynı sırada ve aynı uzunlukta olmalı: eksik bir girdi, yapılandırılmış ve fiilen
+ * kullanılan bir sağlayıcının Ayarlar sayfasında hiç görünmemesine yol açar
+ * (2026-09-10: `cerebras` burada yoktu, `/health/deep` 4 sağlayıcı sayarken UI 3
+ * rozet gösteriyordu). */
 const PROVIDER_FIELDS = [
   {
     providerName: 'gemini',
@@ -25,6 +30,12 @@ const PROVIDER_FIELDS = [
     hint: 'console.groq.com/keys — en yüksek hacim.',
   },
   {
+    providerName: 'cerebras',
+    settingKey: 'cerebras_api_key',
+    label: 'Cerebras API anahtarı',
+    hint: 'cloud.cerebras.ai — Groq ile aynı model, ayrı ücretsiz kota.',
+  },
+  {
     providerName: 'github',
     settingKey: 'github_token',
     label: 'GitHub Token',
@@ -33,6 +44,34 @@ const PROVIDER_FIELDS = [
 ] as const
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
+
+/** Sağlayıcı durum rozeti.
+ *
+ * Eskiden yalnızca `active` bakılıyordu ve aktif OLMAYAN her yapılandırılmış sağlayıcıya
+ * "Kota doldu — yedekte" deniyordu. Bu yanlıştı: zincirde aktif olan tek sağlayıcı
+ * BİRİNCİ sıradaki uygun olandır, arkasındakiler kotası dolduğu için değil sırası
+ * gelmediği için beklerler (2026-09-10: `cooldown_until` her ikisinde de `null` iken
+ * OpenRouter ve GitHub "Kota doldu" gösteriyordu). Gerçek kota tükenmesinin tek kanıtı
+ * `cooldown_until` alanıdır — backend onu yalnızca cooldown HÂLÂ sürüyorsa doldurur.
+ */
+function ProviderBadge({ status }: { status: LLMProviderStatus }) {
+  const tone = status.active
+    ? 'bg-stuhub-success/10 text-stuhub-success'
+    : status.cooldown_until
+      ? 'bg-stuhub-error/10 text-stuhub-error'
+      : 'bg-stuhub-text-secondary/10 text-stuhub-text-secondary'
+  const text = status.active
+    ? 'Aktif'
+    : status.cooldown_until
+      ? `Kota doldu — ${new Date(status.cooldown_until).toLocaleString('tr-TR', {
+          day: 'numeric',
+          month: 'short',
+          hour: '2-digit',
+          minute: '2-digit',
+        })} sonrası`
+      : 'Yedekte'
+  return <span className={`rounded-full px-2 py-0.5 text-xs ${tone}`}>{text}</span>
+}
 
 /** Ayarlar sayfası — ücretsiz LLM sağlayıcı zinciri anahtarları + çalışma alışkanlıkları. */
 export function SettingsPage() {
@@ -104,7 +143,7 @@ export function SettingsPage() {
       </p>
 
       <form onSubmit={handleSave} className="mt-8 space-y-6">
-        <div className="rounded-md border border-stuhub-border bg-stuhub-surface p-6">
+        <div className="glass-panel p-6">
           <h2 className="text-lg font-semibold">Yapay zeka — ücretsiz sağlayıcı zinciri</h2>
           <p className="mt-1 text-sm text-stuhub-text-secondary">
             Geçici çözüm: en az bir anahtar gerekli. Birden fazla anahtar girersen hepsi yedek
@@ -122,17 +161,7 @@ export function SettingsPage() {
                   <label htmlFor={field.settingKey} className="block text-sm font-medium">
                     {index + 1}. {field.label}
                   </label>
-                  {status?.configured && (
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs ${
-                        status.active
-                          ? 'bg-stuhub-success/10 text-stuhub-success'
-                          : 'bg-stuhub-text-secondary/10 text-stuhub-text-secondary'
-                      }`}
-                    >
-                      {status.active ? 'Aktif' : 'Kota doldu — yedekte'}
-                    </span>
-                  )}
+                  {status?.configured && <ProviderBadge status={status} />}
                 </div>
                 <input
                   id={field.settingKey}
@@ -145,7 +174,7 @@ export function SettingsPage() {
                     loaded ? currentKeyHints[field.settingKey] || 'Anahtar girin…' : 'Yükleniyor…'
                   }
                   autoComplete="off"
-                  className="w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-stuhub-accent"
+                  className="w-full rounded-control border border-stuhub-border bg-stuhub-glass-2 px-3 py-2 text-sm text-stuhub-text outline-none transition-colors duration-[var(--duration-micro)] placeholder:text-stuhub-text-secondary focus:border-stuhub-accent"
                 />
                 <p className="mt-1 text-xs text-stuhub-text-secondary">{field.hint}</p>
               </div>
@@ -153,7 +182,7 @@ export function SettingsPage() {
           })}
         </div>
 
-        <div className="rounded-md border border-stuhub-border bg-stuhub-surface p-6">
+        <div className="glass-panel p-6">
           <h2 className="text-lg font-semibold">Çalışma alışkanlıkları</h2>
           <p className="mt-1 text-sm text-stuhub-text-secondary">
             Günlük hedef, streak halkasının doluluk ölçüsüdür. Varsayılan 3 etkinlik.
@@ -168,18 +197,24 @@ export function SettingsPage() {
               min={1}
               value={dailyGoal}
               onChange={(e) => setDailyGoal(e.target.value)}
-              className="w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-stuhub-accent"
+              className="w-full rounded-control border border-stuhub-border bg-stuhub-glass-2 px-3 py-2 text-sm text-stuhub-text outline-none transition-colors duration-[var(--duration-micro)] focus:border-stuhub-accent"
             />
           </div>
         </div>
 
         {error && (
-          <p role="alert" className="rounded-sm bg-stuhub-error/10 px-4 py-2 text-sm text-stuhub-error">
+          <p
+            role="alert"
+            className="rounded-control bg-stuhub-error/10 px-4 py-2 text-sm text-stuhub-error"
+          >
             {error}
           </p>
         )}
         {saveState === 'saved' && (
-          <p role="status" className="rounded-sm bg-stuhub-success/10 px-4 py-2 text-sm text-stuhub-success">
+          <p
+            role="status"
+            className="rounded-control bg-stuhub-success/10 px-4 py-2 text-sm text-stuhub-success"
+          >
             Ayarlar kaydedildi.
           </p>
         )}

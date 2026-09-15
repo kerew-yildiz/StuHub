@@ -31,6 +31,7 @@ import re
 from collections.abc import Awaitable, Callable
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
 import asyncpg
 
@@ -45,14 +46,37 @@ _INSERT_RE = re.compile(r"^\s*INSERT\s+INTO", re.IGNORECASE)
 _RETURNING_RE = re.compile(r"\bRETURNING\b", re.IGNORECASE)
 _STATUS_TAG_RE = re.compile(r"^(\w+)\s*(\d+)?", re.IGNORECASE)
 
+# SQLite'ın `json_each()` fonksiyonu Postgres'te de VAR ama farklı iş yapar: yalnızca
+# JSON *nesnesini* key/value çiftlerine açar, dizi verilince patlar; üstelik dönen `value`
+# `json` tipindedir, `integer = json` operatörü olmadığı için sorgu plan aşamasında ölür.
+# Router/servis katmanı id listelerini tek parametre olarak JSON dizisiyle geçmek için bu
+# deyimi 8 yerde kullanıyor (routers/flashcards.py due kuyruğu + services/archive_service.py
+# 7 tablo) — hepsi SaaS/Postgres yolunda 500 veriyordu (prod'da doğrulandı: `GET
+# /api/courses/4/flashcards/due` ve `GET /api/terms/7/archive` → 500). Dialekt çevirisi
+# çağrı yerlerine değil bu katmana ait: tek yer düzeltilince 8 çağıran birden düzeliyor.
+# Postgres karşılığı `json_array_elements_text` (dizi elemanlarını metin olarak açar),
+# `::bigint` ile de id kolonlarıyla karşılaştırılabilir hale gelir.
+_JSON_EACH_RE = re.compile(
+    r"SELECT\s+value\s+FROM\s+json_each\(\s*(\$\d+)\s*\)",
+    re.IGNORECASE,
+)
+_JSON_EACH_PG = r"SELECT value::bigint FROM json_array_elements_text(\1::json)"
+
 
 class _Row:
-    """asyncpg.Record'a benzer, ama `datetime`/`date` değerleri ISO string'e çevrilmiş satır.
+    """asyncpg.Record'a benzer, ama `datetime`/`date`/`UUID` değerleri metne çevrilmiş satır.
 
     SQLite'ta (aiosqlite) `TIMESTAMP` kolonları zaten TEXT olarak saklanır/dönülür —
     Pydantic modelleri (`TermOut.created_at: str` gibi) bunu varsayar. Postgres/asyncpg
     ise gerçek `datetime`/`date` nesnesi döner; dönüştürülmezse `pydantic.ValidationError`
     fırlar (bkz. routers/terms.py `TermOut`).
+
+    `tenant_id` kolonları Postgres'te `UUID` (bkz. sql/schema_postgres.sql), SQLite'ta
+    TEXT. asyncpg `uuid.UUID` nesnesi döndürüyordu ve `SELECT *` yapan yollar bunu
+    doğrudan `json.dumps` ile serileştirmeye çalışıp `TypeError: Object of type UUID is
+    not JSON serializable` ile 500 veriyordu — `GET /api/terms/{id}/archive` prod'da bu
+    yüzden çöküyor (services/archive_service.py `_fetch_rows` 7 tabloyu `SELECT *` ile
+    okuyor). Dönüşüm burada yapılır: sürücü farkını gizlemek bu sınıfın işi.
 
     Router/servis kodu hem `dict(row)` / `row["kolon"]` (mapping) hem de `for a, b in row`
     (sıralı sequence — `aiosqlite.Row` ve `asyncpg.Record`'un ortak, tuple'a benzer
@@ -66,7 +90,12 @@ class _Row:
     def __init__(self, record: asyncpg.Record) -> None:
         self._keys: list[str] = list(record.keys())
         self._values: tuple[Any, ...] = tuple(
-            v.isoformat() if isinstance(v, datetime | date) else v for v in record.values()
+            v.isoformat()
+            if isinstance(v, datetime | date)
+            else str(v)
+            if isinstance(v, UUID)
+            else v
+            for v in record.values()
         )
 
     def keys(self) -> list[str]:
@@ -171,7 +200,7 @@ class PgConnection:
             await self._tx.start()
 
     async def execute(self, sql: str, params: tuple = ()) -> PgCursor:
-        translated = _translate_placeholders(sql)
+        translated = _JSON_EACH_RE.sub(_JSON_EACH_PG, _translate_placeholders(sql))
         is_insert = _INSERT_RE.match(translated) is not None
         has_returning = _RETURNING_RE.search(translated) is not None
 
@@ -181,15 +210,23 @@ class PgConnection:
 
         if is_insert and not has_returning:
             attempt = translated.rstrip().rstrip(";") + " RETURNING id"
+            # SAVEPOINT şart: Postgres bir hata sonrası TÜM transaction'ı abort eder,
+            # yani aşağıdaki `except` dalı savepoint olmadan `InFailedSQLTransactionError:
+            # current transaction is aborted` ile patlıyordu — `id` kolonu olmayan
+            # tablolara (ör. `settings`, PK `key`) yapılan her INSERT/UPSERT SaaS modunda
+            # 500 dönüyordu ve buradaki fallback hiç çalışmamıştı.
+            await self._raw.execute("SAVEPOINT pg_compat_returning_id")
             try:
                 row = await self._raw.fetchrow(attempt, *params)
             except asyncpg.exceptions.UndefinedColumnError:
-                # Hedef tablonun `id` kolonu yok (ör. `settings`: PK `key`) — lastrowid
-                # zaten kullanılmayacak, düz INSERT/UPSERT olarak çalıştır.
+                # Hedef tablonun `id` kolonu yok — lastrowid zaten kullanılmayacak,
+                # savepoint'e dönüp düz INSERT/UPSERT olarak çalıştır.
+                await self._raw.execute("ROLLBACK TO SAVEPOINT pg_compat_returning_id")
                 status = await self._raw.execute(translated, *params)
                 match = _STATUS_TAG_RE.match(status or "")
                 rowcount = int(match.group(2)) if match and match.group(2) else 0
                 return PgCursor(rows=[], rowcount=rowcount, lastrowid=None)
+            await self._raw.execute("RELEASE SAVEPOINT pg_compat_returning_id")
             lastrowid = row["id"] if row else None
             return PgCursor(
                 rows=[row] if row else [], rowcount=1 if row else 0, lastrowid=lastrowid

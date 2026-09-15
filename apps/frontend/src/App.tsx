@@ -35,6 +35,7 @@ const SavedQuestionsPage = lazy(() =>
 
 export default function App() {
   const loading = useAuthStore((s) => s.loading)
+  const failed = useAuthStore((s) => s.failed)
   const saasMode = useAuthStore((s) => s.saasMode)
   const session = useAuthStore((s) => s.session)
   const init = useAuthStore((s) => s.init)
@@ -43,6 +44,19 @@ export default function App() {
   useEffect(() => {
     void init()
   }, [init])
+
+  if (failed) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center text-stuhub-text">
+        <p className="text-sm text-stuhub-text-secondary">
+          Sunucuya bağlanılamıyor. Backend çalışmıyor veya yanıt vermiyor olabilir.
+        </p>
+        <button type="button" onClick={() => void init()} className="btn-primary">
+          Tekrar dene
+        </button>
+      </div>
+    )
+  }
 
   if (loading) {
     return (

@@ -417,6 +417,17 @@ async def _generate(course_id: int, tenant_id: str, *, mode: str = "practice", e
         warnings.append(f"Dağılım sapması: {counts} (hedef {EXPECTED_COUNTS}) — quiz eldeki sorularla sunuldu.")
 
 
+    # Tek tek batch'lerin atlanması kasıtlı (yukarıdaki "asla başarısız olma" kuralı), ama
+    # HEPSİ atlanırsa elde quiz yok — 0 soruluk kayıt hem anlamsız hem de oynatıcıyı
+    # çökertiyordu: `OverallQuizPlayer` `questions[0].type` okuyor, boş dizide
+    # "Cannot read properties of undefined (reading 'type')" ile tüm CoursePage düşüyor
+    # (prod'da doğrulandı: course 4, overall_quizzes.id=1, questions=[]).
+    # Kullanıcıya sessiz bozuk kayıt yerine gerçek hata dönmeli.
+    if not questions:
+        raise OverallGenerationError(
+            "Hiç soru üretilemedi (tüm batch'ler başarısız). Lütfen tekrar deneyin."
+        )
+
     yield {"type": "status", "percent": 96, "message": "Sorular karıştırılıyor ve kaydediliyor…"}
     seed = random.SystemRandom().randint(1, 10**9)
     rng = random.Random(seed)  # nosec B311 — yalnızca seed'li karıştırma determinizmi (kripto değil)
