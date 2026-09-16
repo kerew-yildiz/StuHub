@@ -255,7 +255,8 @@ async def test_tenant_izolasyonu(client):
     assert len(other_rows) == 2
 
     items = (await client.get(f"/api/courses/{course_id}/feed?limit=10")).json()["items"]
-    assert [i["question"] for i in items] == [
+    # §41: feed partisi randomize servis edilir — sıra değil küme eşitliği doğrulanır.
+    assert sorted(i["question"] for i in items) == [
         "S1 Bağlı listeler nedir?",
         "S2 Sıralama yöntemi?",
     ]

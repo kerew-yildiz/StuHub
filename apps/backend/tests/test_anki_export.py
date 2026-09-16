@@ -79,3 +79,25 @@ def test_csv_has_bom_and_columns():
     assert lines[0] == ["front", "back", "topic", "citation"]
     assert lines[1][0] == "Soru;1"  # noktalı virgül alıntılanmış
     assert lines[1][3] == "41"
+
+
+def test_csv_neutralizes_formula_injection():
+    """CSV formula-injection: '=', '+', '-', '@' önekli hücreler nötrlenir (OWASP)."""
+    raw = flashcards_to_csv(
+        [
+            {
+                "front": "=cmd|'/c calc'!A0",
+                "back": "+2+2",
+                "topic": "@SUM(1)",
+                "citations": [],
+            },
+            {"front": "-1 dir", "back": "normal", "topic": "temiz", "citations": []},
+        ]
+    )
+    text = raw.decode("utf-8-sig")
+    lines = list(csv.reader(io.StringIO(text), delimiter=";"))
+    assert lines[1][0] == "'=cmd|'/c calc'!A0"
+    assert lines[1][1] == "'+2+2"
+    assert lines[1][2] == "'@SUM(1)"
+    assert lines[2][0] == "'-1 dir"
+    assert lines[2][2] == "temiz"  # güvenli hücre dokunulmaz

@@ -1,11 +1,36 @@
 import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ConceptMapGuide, SummaryGuide } from '../api/guides'
 import { GuideView } from './GuideView'
 
+// Mermaid gerçekten çizilirse jsdom'da layout ölçümü (getBBox/getComputedTextLength)
+// yüzünden ~12 sn sürüyor ve vitest'in 5 sn'lik varsayılanını aşıyordu — test iki
+// koşuda bu yüzden düştü. İddia çizimin kendisi değil: üretilen flowchart tanımı TÜM
+// düğümleri/kenarları içeriyor, bu tanım mermaid.render'a veriliyor ve dönen SVG
+// işaretlenerek DOM'a giriyor. Mock, sahte SVG'yi render'a gelen tanımdan türetir —
+// tanımda düğüm eksikse DOM'da da eksik olur, "tüm düğümler" kapsağı korunur.
+const { renderMock } = vi.hoisted(() => ({
+  renderMock: vi.fn<(id: string, definition: string) => Promise<{ svg: string }>>(),
+}))
+
+vi.mock('mermaid', () => ({
+  default: { initialize: vi.fn(), render: renderMock },
+}))
+
+renderMock.mockImplementation(async (_id, definition) => ({
+  // Her düğüm satırı (`  id["etiket"]:::sınıf`) için bir `.node` — MermaidDiagram'ın
+  // `data-cm-node` işaretlemesi gerçek kod yolunda çalışmaya devam eder.
+  svg: `<svg xmlns="http://www.w3.org/2000/svg">${definition
+    .split('\n')
+    .flatMap((line) => line.match(/\["(.+)"\]:::/)?.[1] ?? [])
+    .map((label) => `<g class="node"><text>${label}</text></g>`)
+    .join('')}</svg>`,
+}))
+
 afterEach(() => {
   cleanup()
+  renderMock.mockClear()
 })
 
 describe('GuideView', () => {
@@ -50,11 +75,21 @@ describe('GuideView', () => {
     const { container } = render(<GuideView guide={conceptMap} />)
 
     await screen.findByText('Hücre')
+
+    // Tanım tüm düğümleri ve kenarları taşır, mermaid'e tek seferde verilir.
+    expect(renderMock).toHaveBeenCalledTimes(1)
+    const [, definition] = renderMock.mock.calls[0]
+    expect(definition).toContain('flowchart LR')
+    for (const label of ['Hücre', 'Mitoz', 'Mayoz']) {
+      expect(definition).toContain(`"${label}"]`)
+    }
+    expect(definition).toContain('a -->|bölünür| b')
+    expect(definition).toContain('a --> c')
+
+    // Dönen SVG DOM'a girer ve her düğüm işaretlenir.
     expect(container.querySelectorAll('[data-cm-node]')).toHaveLength(3)
     expect(screen.getByText('Mitoz')).toBeInTheDocument()
     expect(screen.getByText('Mayoz')).toBeInTheDocument()
-    // Mermaid gerçekten çizilir (mock'lanmaz) — jsdom'da bu ~12 sn sürüyor ve
-    // vitest'in 5 sn'lik varsayılanını aşıyordu. Yavaşlık render'ın kendisinde,
-    // testin mantığında değil; bu yüzden mock'lamak yerine süre tanınır.
-  }, 30_000)
+    expect(screen.getByLabelText('Kavram haritası')).toBeInTheDocument()
+  })
 })

@@ -20,7 +20,9 @@ async def test_upload_and_list(client):
     assert resp.status_code == 201
     body = resp.json()
     assert body["type"] == "textbook"
-    assert body["filepath"].endswith("kitap.pdf")
+    assert body["file_ext"] == "pdf"
+    # Sunucu dosya yolu sızdırılmaz (Phase 3 güvenlik düzeltmesi)
+    assert "filepath" not in body
     assert body["page_count"] is None  # çıkarım Faz 2.1
 
     resp = await client.get(f"/api/courses/{course_id}/materials")

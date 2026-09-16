@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import uuid
 import zipfile
 from pathlib import Path
 
@@ -12,6 +13,7 @@ import pytest
 
 from src.config import settings
 from src.db import init_db
+from src.services import archive_service
 from src.services.archive_service import (
     ARCHIVE_VERSION,
     ArchiveError,
@@ -178,3 +180,92 @@ async def test_archive_with_material_files(tmp_path, monkeypatch):
 
         # içe aktarılan dosya gerçekten diskte
         assert Path(row[0]).exists()
+
+
+async def test_archive_serializes_uuid_rows(tmp_path, monkeypatch):
+    """Postgres `SELECT *` satırlarındaki UUID kolonları (`tenant_id`) arşive yazılabilmeli.
+
+    Regresyon (K5/Katman 3): asyncpg UUID nesnesi döndürür; `json.dumps` varsayılanı
+    `TypeError: Object of type UUID is not JSON serializable` verip arşivi 500'e
+    düşürüyordu.
+    """
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    await init_db()
+    term_id = await _seed(tmp_path)
+    async with aiosqlite.connect(tmp_path / "stuhub.db") as db:
+        await db.execute(
+            "INSERT INTO materials (id, course_id, type, filepath, page_count) "
+            "VALUES (1, 1, 'textbook', ?, 2)",
+            (str(tmp_path / "kitap.pdf"),),
+        )
+        await db.commit()
+
+    fixed_uuid = uuid.UUID("12345678-1234-5678-1234-567812345678")
+    real_fetch_rows = archive_service._fetch_rows
+
+    async def fetch_rows_with_uuid(*args, **kwargs):
+        rows = await real_fetch_rows(*args, **kwargs)
+        return [{**row, "tenant_id": fixed_uuid} for row in rows]
+
+    monkeypatch.setattr(archive_service, "_fetch_rows", fetch_rows_with_uuid)
+
+    data = await build_term_archive(term_id, include_files=True)
+
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        for name in (
+            "courses/1/chapters.json",
+            "courses/1/materials/1.json",
+            "chapters/1/note-1.json",
+            "chapters/1/quiz-1.json",
+            "courses/1/flashcards/1.json",
+            "courses/1/chats/1.json",
+            "courses/1/guides/1.json",
+        ):
+            payload = json.loads(archive.read(name))
+            rows = payload if isinstance(payload, list) else [payload]
+            assert rows, name
+            assert all(row["tenant_id"] == str(fixed_uuid) for row in rows), name
+
+
+class _RecordingDb:
+    """`get_db()` yerine geçen sahte bağlantı — sorguyu/parametreleri kaydeder."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, tuple]] = []
+
+    async def execute(self, query, params=()):
+        self.calls.append((query, params))
+        return self
+
+    async def fetchall(self) -> list:
+        return []
+
+    async def close(self) -> None:
+        pass
+
+
+async def test_fetch_rows_picks_dialect_by_mode(monkeypatch):
+    """SaaS (Postgres) modunda SQLite'a özgü `json_each` kullanılmamalı ve parametre düz
+    liste olmalı; yerel (SQLite) modda JSON dizisi metni + `json_each` korunmalı.
+    (K5/Katman 2 — `bigint = json` hatası)
+    """
+    db = _RecordingDb()
+
+    async def fake_get_db() -> _RecordingDb:
+        return db
+
+    monkeypatch.setattr(archive_service, "get_db", fake_get_db)
+
+    monkeypatch.setattr(
+        settings, "database_url", "postgresql://kullanici:sifre@localhost/stuhub"
+    )
+    await archive_service._fetch_rows("chapters", "course_id", [1, 2], "t1")
+    pg_query, pg_params = db.calls[-1]
+    assert "json_each" not in pg_query
+    assert pg_params == ([1, 2], "t1")
+
+    monkeypatch.setattr(settings, "database_url", "")
+    await archive_service._fetch_rows("chapters", "course_id", [1, 2], "t1")
+    local_query, local_params = db.calls[-1]
+    assert "json_each" in local_query
+    assert local_params == ("[1, 2]", "t1")

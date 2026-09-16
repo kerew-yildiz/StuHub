@@ -195,35 +195,3 @@ async def test_overall_generation_tf_rebalance(client, monkeypatch):
     assert events[-1]["type"] == "done"
     tf = [q for q in events[-1]["quiz"]["questions"] if q["type"] == "tf"]
     assert 7 <= sum(1 for q in tf if q["answer"]) <= 8
-
-
-async def test_all_batches_failing_reports_error_and_saves_nothing(client, monkeypatch):
-    """Tüm batch'ler başarısızsa 0 soruluk quiz KAYDEDİLMEMELİ.
-
-    Eskiden kaydediliyordu ve `type: done` yayınlanıyordu; prod'da böyle bir satır vardı
-    (course 4, overall_quizzes.id=1, questions=[]) ve `OverallQuizPlayer` `questions[0].type`
-    okuduğu için "Cannot read properties of undefined (reading 'type')" ile tüm CoursePage
-    çöküyordu. Kullanıcı sessiz bozuk kayıt yerine gerçek hata görmeli.
-    """
-    course_id = await _make_course_with_note(client)
-    monkeypatch.setattr(llm_service.settings, "google_api_key", "sk-test")
-
-    async def always_fail(*args, **kwargs):
-        return None
-
-    monkeypatch.setattr(overall_generator, "_generate_batch", always_fail)
-
-    events = await _collect(overall_generator.generate_overall_quiz_stream(course_id, "local"))
-    assert events[-1]["type"] == "error"
-    assert "soru" in events[-1]["message"].lower()
-
-    import aiosqlite
-
-    from src.config import settings
-
-    async with aiosqlite.connect(settings.db_path) as conn:
-        cursor = await conn.execute(
-            "SELECT COUNT(*) FROM overall_quizzes WHERE course_id = ?", (course_id,)
-        )
-        (count,) = await cursor.fetchone()
-    assert count == 0

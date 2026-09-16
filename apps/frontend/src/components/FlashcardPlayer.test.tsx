@@ -54,6 +54,11 @@ const dueCards: DueCard[] = [
   },
 ]
 
+/** Kart grubunu (swipe/klavye hedefi) bulur. */
+function getCardGroup() {
+  return screen.getByRole('group', { name: /Flashcard/ })
+}
+
 describe('FlashcardPlayer', () => {
   it('ön yüzü gösterir ve tıklayınca arka yüzü çevirir', async () => {
     render(<FlashcardPlayer dueCards={dueCards} onFinished={vi.fn()} onExit={vi.fn()} />)
@@ -64,33 +69,52 @@ describe('FlashcardPlayer', () => {
     fireEvent.click(screen.getByRole('button', { name: /Soru 1/ }))
 
     expect(screen.getByText('Cevap 1')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Again' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Hard' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Good' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Easy' })).toBeInTheDocument()
+    // §42 swipe modeli: yön ipuçları görünür, 4 buton grid'i YOK
+    expect(screen.getByText('Sağa kaydır: Doğru →')).toBeInTheDocument()
+    expect(screen.getByText('← Sola kaydır: Yanlış')).toBeInTheDocument()
   })
 
-  it('Again doğru parametrelerle submitReview çağırır ve sonraki karta geçer', async () => {
+  it('sağa kaydırma (klavye →) good rating gönderir ve sonraki karta geçer', async () => {
     render(<FlashcardPlayer dueCards={dueCards} onFinished={vi.fn()} onExit={vi.fn()} />)
-    await screen.findByText('Soru 1?')
+    expect(screen.getByText('Soru 1?')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /Soru 1/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Again' }))
+    vi.useFakeTimers()
+    fireEvent.keyDown(getCardGroup(), { key: 'ArrowRight' })
 
-    expect(await screen.findByText('Soru 2?')).toBeInTheDocument()
+    await vi.advanceTimersByTimeAsync(200)
+    expect(submitReview).toHaveBeenCalledWith(1, 0, 'good')
+    expect(screen.getByText('Soru 2?')).toBeInTheDocument()
+    vi.useRealTimers()
+  })
+
+  it('sola kaydırma (klavye ←) again rating gönderir ve sonraki karta geçer', async () => {
+    render(<FlashcardPlayer dueCards={dueCards} onFinished={vi.fn()} onExit={vi.fn()} />)
+    expect(screen.getByText('Soru 1?')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Soru 1/ }))
+    vi.useFakeTimers()
+    fireEvent.keyDown(getCardGroup(), { key: 'ArrowLeft' })
+
+    await vi.advanceTimersByTimeAsync(200)
     expect(submitReview).toHaveBeenCalledWith(1, 0, 'again')
+    expect(screen.getByText('Soru 2?')).toBeInTheDocument()
+    vi.useRealTimers()
   })
 
   it('son kartta özet ekranı gösterir', async () => {
     const single = [dueCards[0]]
     render(<FlashcardPlayer dueCards={single} onFinished={vi.fn()} onExit={vi.fn()} />)
-    await screen.findByText('Soru 1?')
+    expect(screen.getByText('Soru 1?')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /Soru 1/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Good' }))
+    vi.useFakeTimers()
+    fireEvent.keyDown(getCardGroup(), { key: 'ArrowRight' })
 
-    expect(await screen.findByText(/Bugünlük tekrar tamamlandı/)).toBeInTheDocument()
+    await vi.advanceTimersByTimeAsync(400)
+    expect(screen.getByText(/Bugünlük tekrar tamamlandı/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Kapat' })).toBeInTheDocument()
+    vi.useRealTimers()
   })
 
   it('boş due kuyruğunda bilgi mesajı gösterir', () => {

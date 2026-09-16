@@ -1,11 +1,9 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-
-import { getHealthInfo } from './api/client'
-import { useAuthStore } from './stores/authStore'
+import { describe, expect, it, vi } from 'vitest'
 
 import App from './App'
+import { getHealthInfo } from './api/client'
 
 vi.mock('./api/client', () => ({
   getHealth: vi.fn(async () => true),
@@ -35,6 +33,12 @@ vi.mock('./api/streaks', () => ({
     daily_goal: 3,
     progress_percent: 66,
   })),
+  getWeeklyStudy: vi.fn(async () => ({
+    days: Array.from({ length: 7 }, (_, index) => ({
+      date: `2026-09-0${index + 1}`,
+      duration_sec: 600,
+    })),
+  })),
 }))
 
 vi.mock('./api/settings', () => ({
@@ -46,15 +50,14 @@ vi.mock('./api/settings', () => ({
 }))
 
 describe('App', () => {
-  it('Dönemler sayfasını boş durumla gösterir', async () => {
+  it('Ana sayfayı karşılama paneliyle gösterir', async () => {
     render(
       <MemoryRouter initialEntries={['/']}>
         <App />
       </MemoryRouter>,
     )
 
-    expect(await screen.findByRole('heading', { name: 'Dönemler' })).toBeInTheDocument()
-    expect(await screen.findByText('Henüz dönem yok')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Çalışmaya başlamak için iyi bir an.' })).toBeInTheDocument()
   })
 
   it('Ayarlar sayfasını gösterir', async () => {
@@ -75,47 +78,26 @@ describe('App', () => {
       </MemoryRouter>,
     )
 
-    await screen.findByText('Henüz dönem yok')
+    await screen.findAllByRole('heading', { name: 'Çalışmaya başlamak için iyi bir an.' })
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('Backend yanıt vermezse "Yükleniyor…"da kilitlenmez, tekrar dene ekranı gösterir', async () => {
-    // `/health` hiç sonuçlanmayan bir promise döndüğünde (asılı backend) uygulama
-    // eskiden sonsuza kadar "Yükleniyor…" gösteriyordu — kullanıcı hiçbir şey öğrenmiyordu.
-    // Asla settle etmeyen promise: asılı backend'i taklit eder.
-    vi.mocked(getHealthInfo).mockReturnValueOnce(Promise.withResolvers<never>().promise)
-    vi.useFakeTimers({ shouldAdvanceTime: true })
+  it('Backend kapalıyken uygulama çökmez ve yerel modda açılır', async () => {
+    // authStore yeniden tasarlandı: `failed` bayrağı yok. getHealthInfo patlarsa
+    // init bunu yakalar, yerel moda düşer ve normal kabuk açılır (hata ekranı yok).
+    vi.mocked(getHealthInfo).mockRejectedValueOnce(new Error('backend kapalı'))
 
-    render(
+    // Bu dosyada RTL otomatik cleanup'ı yok (vitest `globals` kapalı): sorgular
+    // bilinçli olarak kendi render kabına kapsanır (aşağıdaki `within`).
+    const view = render(
       <MemoryRouter initialEntries={['/']}>
         <App />
       </MemoryRouter>,
     )
+    const scoped = within(view.container)
 
-    expect(screen.getByText('Yükleniyor…')).toBeInTheDocument()
-    await vi.advanceTimersByTimeAsync(10_000)
-
-    expect(
-      await screen.findByText(/Sunucuya bağlanılamıyor/),
-    ).toBeInTheDocument()
-
-    // Tekrar dene sağlıklı yanıt alınca uygulama normal açılır.
-    fireEvent.click(screen.getByRole('button', { name: 'Tekrar dene' }))
-    expect(await screen.findByRole('heading', { name: 'Dönemler' })).toBeInTheDocument()
-  })
-})
-
-afterEach(() => {
-  // Vitest'te `globals` kapalı olduğu için otomatik cleanup çalışmıyor; render'lar
-  // birikirse aynı metin birden çok kez bulunuyor.
-  cleanup()
-  vi.useRealTimers()
-  useAuthStore.setState({ loading: true, failed: false, session: null, user: null, saasMode: false })
-  vi.mocked(getHealthInfo).mockReset()
-  vi.mocked(getHealthInfo).mockResolvedValue({
-    status: 'ok',
-    app: 'stuhub',
-    version: '0.1.0',
-    saas_mode: false,
+    // 1) Hata ekranı YOK.
+    expect(await scoped.findByRole('heading', { name: 'Çalışmaya başlamak için iyi bir an.' })).toBeInTheDocument()
+    expect(scoped.queryByRole('button', { name: 'Tekrar dene' })).not.toBeInTheDocument()
   })
 })

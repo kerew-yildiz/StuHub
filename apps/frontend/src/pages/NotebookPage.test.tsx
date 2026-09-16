@@ -47,30 +47,30 @@ afterEach(() => {
 })
 
 describe('NotebookPage sekmeleri', () => {
-  it('çalışma modu sekmelerini render eder ve geçişi günceller', async () => {
+  it('çalışma alanlarını ?view= parametresiyle değiştirir (sidebar-driven workspace)', async () => {
     render(
-      <MemoryRouter initialEntries={['/dersler/1/defter/1']}>
+      <MemoryRouter initialEntries={['/dersler/1/defter/1?view=notes']}>
         <Routes>
           <Route path="/dersler/:courseId/defter/:chapterId" element={<NotebookPage />} />
         </Routes>
       </MemoryRouter>,
     )
 
-    const notlar = await screen.findByRole('tab', { name: 'Notlar' })
-    const kartlar = screen.getByRole('tab', { name: 'Kartlar' })
-    const quiz = screen.getByRole('tab', { name: 'Kaydırarak Quiz' })
+    // Notlar workspace'i — Guide Slides bölümü görünür
+    expect(await screen.findByText('Guide Slides')).toBeInTheDocument()
+    cleanup()
 
-    expect(notlar).toHaveAttribute('aria-selected', 'true')
-    expect(kartlar).toHaveAttribute('aria-selected', 'false')
-    expect(quiz).toHaveAttribute('aria-selected', 'false')
+    render(
+      <MemoryRouter initialEntries={['/dersler/1/defter/1?view=flashcards']}>
+        <Routes>
+          <Route path="/dersler/:courseId/defter/:chapterId" element={<NotebookPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
 
-    fireEvent.click(kartlar)
-    expect(kartlar).toHaveAttribute('aria-selected', 'true')
-    expect(notlar).toHaveAttribute('aria-selected', 'false')
-
-    fireEvent.click(quiz)
-    expect(quiz).toHaveAttribute('aria-selected', 'true')
-    expect(kartlar).toHaveAttribute('aria-selected', 'false')
+    // Kartlar workspace'i — başlık görünür
+    expect(await screen.findByRole('heading', { name: 'Kartlar' })).toBeInTheDocument()
+    expect(screen.queryByText('Guide Slides')).not.toBeInTheDocument()
   })
 
   it('slaytlar varken "Yeni sunum ekle" görünür ve tıklanınca form açılır', async () => {
@@ -78,7 +78,7 @@ describe('NotebookPage sekmeleri', () => {
       { id: 1, chapter_id: 1, material_id: null, slide_no: 1, content_text: 'İlk slayt' },
     ])
     render(
-      <MemoryRouter initialEntries={['/dersler/1/defter/1']}>
+      <MemoryRouter initialEntries={['/dersler/1/defter/1?view=notes']}>
         <Routes>
           <Route path="/dersler/:courseId/defter/:chapterId" element={<NotebookPage />} />
         </Routes>

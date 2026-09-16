@@ -1,5 +1,7 @@
 """Ayarlar router'ı — kaydet/oku + gizli anahtar maskesi + LLM sağlayıcı durumu testleri."""
 
+from src.services.llm_providers import PROVIDER_CHAIN
+
 
 async def test_settings_roundtrip(client):
     resp = await client.put("/api/settings", json={"key": "daily_goal", "value": "5"})
@@ -31,13 +33,10 @@ async def test_llm_status_reports_unconfigured_chain(client):
     resp = await client.get("/api/settings/llm-status")
     assert resp.status_code == 200
     body = resp.json()
-    assert [p["name"] for p in body] == [
-        "gemini",
-        "openrouter",
-        "groq",
-        "cerebras",
-        "github",
-    ]
+    # Beklenen liste PROVIDER_CHAIN'den türetilir: zincire sağlayıcı eklenmesi/çıkarılması
+    # (ör. 2026-09-16 opencode) bu testi bayatlatmaz. Testin koruduğu asıl sözleşme:
+    # uç nokta zinciri eksiksiz, zincir sırasıyla ve hepsi `configured: false` raporlar.
+    assert [p["name"] for p in body] == [p.name for p in PROVIDER_CHAIN]
     assert all(p["configured"] is False for p in body)
     assert all(p["active"] is False for p in body)
 
