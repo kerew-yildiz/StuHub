@@ -1,0 +1,18 @@
+/* Kisillestirme: kullanici arkaplani.
+   theme.css'teki varsayilan (calisma-masasi) katman yapisi birebir esas alindi —
+   sadece url degisir. Attribute yokken theme.css'teki varsayilan kural gecerli kalir. */
+html[data-stuhub-bg='calisma-masasi'] body {
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(0, 0, 0, 0) 30%, rgba(0, 0, 0, 0.75) 100%),
+    linear-gradient(rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.78)),
+    url("/bg/calisma-masasi.png") center / cover no-repeat fixed,
+    var(--stuhub-bg);
+}
+
+html[data-stuhub-bg='zirve'] body {
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(0, 0, 0, 0) 30%, rgba(0, 0, 0, 0.75) 100%),
+    linear-gradient(rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.78)),
+    url("/bg/zirve.jpg") center / cover no-repeat fixed,
+    var(--stuhub-bg);
+}
