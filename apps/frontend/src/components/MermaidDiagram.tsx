@@ -22,14 +22,14 @@ async function ensureMermaidInitialized() {
       // NOT: mermaid'in dahili renk motoru (khroma) `var(--...)` ayrıştıramıyor —
       // tema tokenlarının (theme.css) düz karşılıkları kullanılmalı (tek koyu tema var).
       themeVariables: {
-        background: '#1c1c1e',
+        background: '#000',
         primaryColor: '#2b2b2e',
         primaryTextColor: '#fafafa',
         primaryBorderColor: 'rgba(255, 255, 255, 0.24)',
         lineColor: '#ffffff',
         secondaryColor: '#2b2b2e',
         tertiaryColor: '#2b2b2e',
-        edgeLabelBackground: '#1c1c1e',
+        edgeLabelBackground: '#000',
         fontSize: '13px',
       },
       flowchart: { htmlLabels: true, curve: 'basis' },

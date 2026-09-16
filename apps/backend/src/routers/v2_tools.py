@@ -119,18 +119,24 @@ async def create_course_guide(
 async def latest_chapter_guide(
     chapter_id: int, kind: str = "summary", tenant_id: str = Depends(get_tenant_id)
 ) -> dict | None:
-    return await get_latest_guide(
-        course_id=None, chapter_id=chapter_id, kind=kind, tenant_id=tenant_id
-    )
+    try:
+        return await get_latest_guide(
+            course_id=None, chapter_id=chapter_id, kind=kind, tenant_id=tenant_id
+        )
+    except GuideError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/courses/{course_id}/guides")
 async def latest_course_guide(
     course_id: int, kind: str = "summary", tenant_id: str = Depends(get_tenant_id)
 ) -> dict | None:
-    return await get_latest_guide(
-        course_id=course_id, chapter_id=None, kind=kind, tenant_id=tenant_id
-    )
+    try:
+        return await get_latest_guide(
+            course_id=course_id, chapter_id=None, kind=kind, tenant_id=tenant_id
+        )
+    except GuideError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 # ── Karşılaştırma tablosu + terim sözlüğü (Plan #24 / #29) ──────────────

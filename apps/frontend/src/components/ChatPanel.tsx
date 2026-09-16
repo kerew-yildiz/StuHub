@@ -95,7 +95,14 @@ function AssistantContent({
   return (
     <div className="text-sm leading-relaxed">
       <ReactMarkdown
-        urlTransform={(url) => url}
+        /* URL allow-list — NoteViewer/GuideView ile aynı kural. CitationLink
+         * javascript: URI'lı href'i zaten <span>'e düşürüyor ama bu tesadüfi
+         * savunma; kaynağa sanitize edilmiş URL vermeyi garanti ediyoruz. */
+        urlTransform={(url) =>
+          url.startsWith(CITATION_SCHEME) || /^(https?:|mailto:|tel:|[./#])/i.test(url)
+            ? url
+            : ''
+        }
         components={{
           a: ({ href, children }) => (
             <CitationLink
@@ -205,7 +212,9 @@ export function ChatPanel({ courseId }: ChatPanelProps) {
   }
 
   return (
-    <div className="glass-panel p-5">
+    // Workspace içeriği — kendi panelini sarmalamaz (nested card yasağı, yönerge §3/§5):
+    // ChatPanel zaten bir workspace-card içinde render edilir.
+    <div className="p-5">
       <div className="flex items-center justify-between gap-4">
         <div
           className="glass-panel-subtle inline-flex max-w-full flex-wrap gap-1 p-1"
@@ -237,7 +246,7 @@ export function ChatPanel({ courseId }: ChatPanelProps) {
         </button>
       </div>
 
-      <div ref={listRef} className="mt-4 max-h-96 space-y-3 overflow-y-auto">
+      <div ref={listRef} className="no-scrollbar mt-4 max-h-96 space-y-3 overflow-y-auto">
         {loading && (
           <p className="text-sm text-stuhub-text-secondary">Yükleniyor…</p>
         )}

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -9,6 +11,11 @@ from ..auth import get_tenant_id
 from ..db import get_db
 
 router = APIRouter(prefix="/api/terms", tags=["terms"])
+
+# ISO tarih biçimi doğrulaması — bozuk tarih TermCard'ta NaN/Invalid Date üretiyordu.
+# (exams.py 'de exam_date zaten pydantic `date` tipiyle doğrulanıyor; terms'de kolon
+# TEXT olduğu için burada biçim kontrolü yapılmıyordu.)
+_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 # Sabit SQL şablonları — kullanıcı girdisi asla SQL'e gömülmez (parametreli sorgular)
 _SELECT_BY_ID = (
@@ -55,9 +62,19 @@ async def list_terms(tenant_id: str = Depends(get_tenant_id)) -> list[TermOut]:
     return [TermOut(**dict(r)) for r in rows]
 
 
+def _validate_dates(item: TermIn) -> None:
+    """Tarih alanlarını biçim + sıralama açısından doğrular (422)."""
+    for label, value in (("start_date", item.start_date), ("end_date", item.end_date)):
+        if value is not None and not _ISO_DATE_RE.match(value):
+            raise HTTPException(status_code=422, detail=f"{label} 'YYYY-MM-DD' biçiminde olmalı")
+    if item.start_date and item.end_date and item.start_date > item.end_date:
+        raise HTTPException(status_code=422, detail="end_date, start_date'den önce olamaz")
+
+
 @router.post("", response_model=TermOut, status_code=201)
 async def create_term(item: TermIn, tenant_id: str = Depends(get_tenant_id)) -> TermOut:
     """Yeni dönem oluşturur."""
+    _validate_dates(item)
     db = await get_db()
     try:
         cursor = await db.execute(
@@ -92,6 +109,7 @@ async def update_term(
     term_id: int, item: TermIn, tenant_id: str = Depends(get_tenant_id)
 ) -> TermOut:
     """Dönemi günceller."""
+    _validate_dates(item)
     db = await get_db()
     try:
         cursor = await db.execute(

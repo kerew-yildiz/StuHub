@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
-import lancedb
-import pyarrow as pa
+try:
+    import lancedb
+    import pyarrow as pa
+except (ImportError, OSError):
+    # Windows Uygulama Denetimi (Smart App Control) pyarrow DLL'ini engelleyebilir —
+    # vektör deposu bu ortamda kullanılamaz; backend geri kalanıyla çalışır.
+    lancedb = None  # type: ignore[assignment]
+    pa = None  # type: ignore[assignment]
 
 from ..config import settings
 

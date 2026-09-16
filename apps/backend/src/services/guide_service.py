@@ -31,6 +31,8 @@ logger = logging.getLogger(__name__)
 MAX_NOTE_CHARS = 12000
 KINDS = ("summary", "concept_map")
 COMPARISON_KIND = "comparison"
+# Okuma ucu, yazma uçlarının ürettiği her türü okuyabilmeli: yazma kümesi ⊆ okuma kümesi.
+READABLE_KINDS = (*KINDS, COMPARISON_KIND)
 MAX_COMPARE_CONCEPTS = 6
 COMPARISON_CONTEXT_CHARS = 6000
 GLOSSARY_DEFINITION_CHARS = 400
@@ -306,6 +308,10 @@ async def get_latest_guide(
     tenant_id: str = LOCAL_TENANT_ID,
 ) -> dict | None:
     """Son rehberi döner (yoksa None)."""
+    if kind not in READABLE_KINDS:
+        # Üretim uçları zaten doğruluyor; okuma ucuna çıplak kind gelirse
+        # anlamsız sorgu yerine tutarlı 422 üretiriz (giriş hijyeni).
+        raise GuideError("kind " + " veya ".join(f"'{k}'" for k in READABLE_KINDS) + " olmalı")
     db = await get_db()
     try:
         if chapter_id is not None:

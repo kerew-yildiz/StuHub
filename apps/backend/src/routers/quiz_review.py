@@ -1,7 +1,7 @@
 """Hata-odaklı kurtarma quizi router'ı (Plan #6).
 
 Bağımlıdır: `routers/errors.py` (Plan #5) — hata günlüğü verisini yeniden hesaplamaz,
-`list_course_errors`'ı doğrudan çağırır. Üretim `services/quiz_generator.py`'deki
+`collect_course_errors`'ı doğrudan çağırır. Üretim `services/quiz_generator.py`'deki
 `generate_from_errors` ile aynı zinciri (bölüm quizi/feed) kullanır: LLM çağrısı VAR,
 bu yüzden `enforce_quota` zorunlu.
 """
@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from ..quota import enforce_quota
 from ..services import quiz_generator
-from .errors import list_course_errors
+from .errors import collect_course_errors
 
 router = APIRouter(prefix="/api", tags=["quiz-review"])
 
@@ -72,7 +72,7 @@ async def generate_error_quiz(
     olarak geçirilir (`generate_from_errors` → `_generate_feed_topic`, feed hattıyla
     aynı tekrar-yasağı mekanizması).
     """
-    entries = await list_course_errors(
+    entries = await collect_course_errors(
         course_id, topic=None, since=None, only_repeated=False, tenant_id=tenant_id
     )
 

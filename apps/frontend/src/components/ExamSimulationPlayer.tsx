@@ -1,8 +1,8 @@
-import { LockSimple, Timer, WarningCircle } from '@phosphor-icons/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { startExamSimulation } from '../api/exams'
 import { submitOverallAttempt, type OverallOutcome, type OverallQuiz } from '../api/overall'
+import { Lock, Timer, CircleAlert } from 'lucide-react'
 
 export interface ExamSimulationPlayerProps {
   courseId: number
@@ -143,7 +143,7 @@ export function ExamSimulationPlayer({ courseId, examId, examTitle, onFinished }
     return (
       <div className="glass-panel mt-4 p-6">
         <div className="flex items-center gap-2 text-stuhub-error">
-          <WarningCircle size={20} weight="fill" />
+          <CircleAlert size={20} />
           <p className="font-medium">{errorMessage || 'Sınav simülasyonu başarısız oldu.'}</p>
         </div>
         <button
@@ -196,8 +196,8 @@ export function ExamSimulationPlayer({ courseId, examId, examTitle, onFinished }
                       {result.type === 'open'
                         ? `Puan: ${result.score} / 10`
                         : result.correct
-                          ? '✓ Doğru'
-                          : '✗ Yanlış'}
+                          ? 'Doğru'
+                          : 'Yanlış'}
                     </p>
                     {result.explanation && <p className="mt-1">{result.explanation}</p>}
                   </div>
@@ -234,7 +234,7 @@ export function ExamSimulationPlayer({ courseId, examId, examTitle, onFinished }
     <div className="glass-panel mt-4 p-6">
       <div className="flex items-center justify-between text-sm text-stuhub-text-secondary">
         <span className="flex items-center gap-1.5">
-          <LockSimple size={14} />
+          <Lock size={14} />
           Soru {current + 1} / {questions.length} · {TYPE_LABELS[question.type]}
         </span>
         <span
@@ -242,7 +242,7 @@ export function ExamSimulationPlayer({ courseId, examId, examTitle, onFinished }
             timeCritical ? 'text-stuhub-error' : 'text-stuhub-text'
           }`}
         >
-          <Timer size={16} weight={timeCritical ? 'fill' : 'regular'} />
+          <Timer size={16} />
           {formatClock(remainingSec)}
         </span>
       </div>

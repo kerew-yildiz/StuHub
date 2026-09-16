@@ -30,3 +30,18 @@ export interface RetentionProgress {
 export function getRetentionProgress(courseId: number): Promise<RetentionProgress> {
   return apiFetch<RetentionProgress>(`/courses/${courseId}/retention-progress`)
 }
+
+
+export interface WeeklyStudyDay {
+  date: string
+  duration_sec: number
+}
+
+export interface WeeklyStudy {
+  days: WeeklyStudyDay[]
+}
+
+/** Son 7 gündeki tamamlanmış çalışma oturumlarını getirir. */
+export function getWeeklyStudy(): Promise<WeeklyStudy> {
+  return apiFetch<WeeklyStudy>('/study-sessions/weekly')
+}

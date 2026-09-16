@@ -245,7 +245,7 @@ CREATE TABLE IF NOT EXISTS activity_log (
 CREATE TABLE IF NOT EXISTS study_sessions (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     tenant_id    TEXT NOT NULL DEFAULT 'local',
-    course_id    INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    course_id    INTEGER REFERENCES courses(id) ON DELETE CASCADE,
     session_id   TEXT NOT NULL,
     duration_sec INTEGER NOT NULL,
     created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -335,3 +335,18 @@ CREATE INDEX IF NOT EXISTS idx_exams_tenant_course       ON exams(tenant_id, cou
 CREATE INDEX IF NOT EXISTS idx_exams_tenant_date         ON exams(tenant_id, exam_date);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_activity_day_kind_course
     ON activity_log(tenant_id, date, kind, COALESCE(course_id, 0));
+
+CREATE TABLE IF NOT EXISTS calendar_events (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id  TEXT NOT NULL DEFAULT 'local',
+    course_id  INTEGER REFERENCES courses(id) ON DELETE CASCADE,
+    event_date TEXT NOT NULL,
+    kind       TEXT NOT NULL DEFAULT 'custom',
+    title      TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_calendar_events_tenant_date
+    ON calendar_events(tenant_id, event_date);
+CREATE INDEX IF NOT EXISTS idx_calendar_events_course
+    ON calendar_events(course_id);

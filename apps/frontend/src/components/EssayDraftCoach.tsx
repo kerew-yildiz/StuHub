@@ -1,7 +1,7 @@
-import { CheckCircle, XCircle } from '@phosphor-icons/react'
 import { useState } from 'react'
 
 import { draftReview, type DraftFeedback } from '../api/essays'
+import { CheckCircle, XCircle } from 'lucide-react'
 
 export interface EssayDraftCoachProps {
   courseId: number

@@ -1,17 +1,24 @@
-"""Ücretsiz LLM sağlayıcı zinciri — geçici çözüm (Kerem kararı, 2026-09-02).
+"""LLM sağlayıcı zinciri — birincil opencode-go, yedekler ücretsiz sağlayıcılar.
 
-StuHub artık DeepSeek kullanmıyor. Kerem ileride tek bir model için ücretli API
-anahtarı verene kadar, aşağıdaki ücretsiz sağlayıcılar YETENEK sırasına göre
-denenir: birinin günlük kotası tükenince (401/402/403/429) otomatik olarak
-sıradakine geçilir (bkz. `llm_service._pick_provider`). Kota durumu `settings`
-tablosunda `llm_provider_cooldowns` anahtarı altında kalıcı tutulur — uygulama
-yeniden başlasa da tükenmiş bir sağlayıcıya tekrar tekrar vurulmaz.
+Birincil sağlayıcı artık opencode-go (Kerem kararı, 2026-09-16): $10/ay Go
+aboneliği, DeepSeek V4.1 Flash. DeepSeek yeniden kullanımda; aşağıdaki ücretsiz
+sağlayıcılar YEDEK olarak korunur. Zincir YETENEK sırasına göre denenir: birinin
+kotası tükenince (401/402/403/429) otomatik olarak sıradakine geçilir (bkz.
+`llm_service._pick_provider`). Kota durumu `settings` tablosunda
+`llm_provider_cooldowns` anahtarı altında kalıcı tutulur — uygulama yeniden
+başlasa da tükenmiş bir sağlayıcıya tekrar tekrar vurulmaz.
 
 Sıralama gerekçesi (StuHub ihtiyaçları gözetilerek — Türkçe kalite, JSON modu
 güvenilirliği, uzun materyal bağlamı, atıflı akıl yürütme):
 
-1. Google Gemini 3.6 Flash — en iyi genel yetenek: 1M token bağlam (RAG için
-   kritik), güçlü Türkçe, native JSON modu, günlük 1500 istek (en geniş kota).
+0. opencode-go (DeepSeek V4.1 Flash) — ücretli birincil sağlayıcı: yüksek akıl
+   yürütme (reasoning_effort=high), geniş bağlam, günlük kota yerine abonelik
+   kotası (5 saatlik/haftalık/aylık). Devre dışı kalırsa altındaki ücretsiz yedek
+   zincir devralır.
+
+1. Google Gemini 3.1 Flash Lite — ücretsiz yedekler içinde en iyi genel yetenek:
+   1M token bağlam (RAG için kritik), güçlü Türkçe, native JSON modu, günlük
+   1500 istek (en geniş kota).
 2. OpenRouter ücretsiz havuzu (Nvidia Nemotron 3 Ultra 550B) — güçlü akıl yürütme
    (ödev değerlendirme, quiz mantığı), 1M token bağlam; ücretsiz model listesi
    haftalık değişebilir (2026-09-03: DeepSeek R1 free slug kaldırılmış, canlı API
@@ -27,12 +34,14 @@ güvenilirliği, uzun materyal bağlamı, atıflı akıl yürütme):
    sınırı (uzun bölüm metni + materyal bağlamını kısıtlar) ve günlük kota en
    dar (50-150) sağlayıcı; son çare.
 
-Bu liste geçicidir. Kerem tek bir ücretli anahtar verdiğinde `PROVIDER_CHAIN`
-o tek sağlayıcıya indirgenecek (bkz. Backlog.md).
+Bu liste geçicidir: opencode-go çalıştığı sürece ücretsiz yedekler yalnızca
+kesinti/kota durumunda devreye girer; Kerem "artık gerek yok" dediğinde yedek
+girdiler silinecek (bkz. Backlog.md).
 """
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -49,16 +58,41 @@ class LLMProvider:
     """`config.Settings` üzerindeki anahtar alanının adı."""
     max_context_tokens: int
     extra_params: dict[str, Any] = field(default_factory=dict)
-    """Sağlayıcıya özel ek istek parametreleri (ör. Gemini 3 `reasoning_effort`).
+    """Sağlayıcıya özel ek istek parametreleri (ör. Gemini 3 `reasoning_effort`,
+    opencode-go `extra_headers` — `User-Agent` bu yolla geçilir).
 
     Değer tipi `Any`: bu sözlük `client.chat.completions.create(**extra_params)`
     ile açılıyor; `str`e daraltılırsa tip denetleyici her olası keyword parametresini
     `str`e karşı deneyip onlarca yanlış pozitif üretir (parametrelerin gerçek tipleri
     sağlayıcıya göre değişir — bool/int/dict de olabilir).
     """
+    session_header: str | None = None
+    """Oturum kimliğinin gönderileceği HTTP başlığı (varsa) — değeri statik değil,
+    `request_params()` istek başına kiracı + iş bağlamından türetir."""
+
 
 
 PROVIDER_CHAIN: list[LLMProvider] = [
+    LLMProvider(
+        name="opencode",
+        label="opencode-go — DeepSeek V4.1 Flash",
+        # 2026-09-16: base_url + slug canlı doğrulandı (GET /models → 200, 37 model;
+        # POST /chat/completions → 200, yanıt "TAMAM"). Zen'in ücretli ucu (/zen/v1)
+        # DEĞİL: anahtar Go aboneliğine bağlı, bakiye yok ("Insufficient balance").
+        # Go ucu `x-opencode-session` olmadan 400 "MissingSessionID" döner; dokümana
+        # göre istemci konuşma başına bir oturum kimliği göndermeli (yönlendirme +
+        # prompt cache). Kimlik SABİT DEĞİL: `session_header` işaretlenir, değeri
+        # `request_params()` her istekte kiracı + iş bağlamından türetir.
+        base_url="https://opencode.ai/zen/go/v1",
+        model="deepseek-v4.1-flash",
+        api_key_setting="opencode_api_key",
+        max_context_tokens=1_000_000,
+        session_header="x-opencode-session",
+        extra_params={
+            "reasoning_effort": "high",
+            "extra_headers": {"User-Agent": "StuHub/1.0"},
+        },
+    ),
     LLMProvider(
         name="gemini",
         label="Google Gemini 3.1 Flash Lite",
@@ -108,3 +142,35 @@ PROVIDER_CHAIN: list[LLMProvider] = [
 ]
 
 PROVIDERS_BY_NAME: dict[str, LLMProvider] = {p.name: p for p in PROVIDER_CHAIN}
+
+# Oturum kimliği: eskiden TÜM uygulama için tek bir sabitti; farklı dersler/kiracılar
+# aynı oturumu paylaşıyordu (prompt cache kirlenmesi + kiracı ayrımı yok). Artık
+# (kiracı, iş bağlamı) çiftinden deterministik UUID5 türetilir — gerekçe ve öneri:
+# master_worker_system/uiux/raporlar/INCELEME-opencode-saglayici.md ("Önerilen düzeltme").
+_SESSION_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "stuhub/llm-session")
+
+
+def session_id_for(tenant_id: str, context_key: str | None = None) -> str:
+    """(kiracı, iş bağlamı) → deterministik oturum kimliği.
+
+    `context_key` işin doğal kimliğidir (ör. "note_generation:5:12"); verilmezse
+    yalnızca kiracı ayrımı kalır. Aynı girdi her zaman aynı kimliği üretir: aynı iş
+    bağlamının tekrar istekleri sağlayıcı tarafında aynı oturumu (prompt cache) paylaşır.
+    """
+    return str(uuid.uuid5(_SESSION_NAMESPACE, f"{tenant_id}:{context_key or ''}"))
+
+
+def request_params(
+    provider: LLMProvider, *, tenant_id: str, context_key: str | None = None
+) -> dict[str, Any]:
+    """`create(**params)` için istek başına parametre sözlüğü (`extra_params` kopyası).
+
+    `extra_params` frozen dataclass üzerinde paylaşılan bir nesnedir; oturum başlığı
+    istek başına değiştiğinden kopya döndürülür — orijinal sözlük mutasyona uğramaz.
+    """
+    params = dict(provider.extra_params)
+    if provider.session_header:
+        headers = dict(params.get("extra_headers") or {})
+        headers[provider.session_header] = session_id_for(tenant_id, context_key)
+        params["extra_headers"] = headers
+    return params

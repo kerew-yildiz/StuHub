@@ -1,7 +1,7 @@
-import { ChartLine, Info } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 
 import { getRetention, type RetentionReport, type TopicRetention } from '../api/exams'
+import { ChartLine, Info } from 'lucide-react'
 
 export interface RetentionCurveProps {
   courseId: number

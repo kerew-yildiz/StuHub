@@ -46,11 +46,18 @@ async def upsert_setting(item: SettingIn, _: str = Depends(require_admin)) -> di
     """Bir ayarı kaydeder (yoksa ekler, varsa günceller)."""
     db = await get_db()
     try:
-        await db.execute(
+        cursor = await db.execute(
+            # `RETURNING key` bilinçli: `settings` tablosunda `id` kolonu yok, açık
+            # RETURNING olmadan pg_compat `RETURNING id` ekleyip UndefinedColumnError
+            # alıyordu (bkz. KOK-NEDEN-K1).
             "INSERT INTO settings (key, value) VALUES (?, ?) "
-            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value "
+            "RETURNING key",
             (item.key, item.value),
         )
+        # RETURNING satırı tüketilmezse SQLite commit'i "cannot commit transaction -
+        # SQL statements in progress" ile düşer (değeri kullanmıyoruz, yalnızca kapatıyoruz).
+        await cursor.fetchall()
         await db.commit()
     finally:
         await db.close()

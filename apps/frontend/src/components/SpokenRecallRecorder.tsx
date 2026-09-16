@@ -1,7 +1,7 @@
-import { CheckCircle, Microphone, Stop, WarningCircle, XCircle } from '@phosphor-icons/react'
 import { useRef, useState } from 'react'
 
 import { submitRecall, type RecallResult } from '../api/recall'
+import { CheckCircle, Mic, Square, CircleAlert, XCircle } from 'lucide-react'
 
 export interface SpokenRecallRecorderProps {
   chapterId: number
@@ -18,7 +18,7 @@ export function SpokenRecallRecorder({ chapterId }: SpokenRecallRecorderProps) {
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
 
-  const handleStopped = async () => {
+  const handleSquareped = async () => {
     const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
     if (blob.size === 0) {
       setError('Kayıt boş. Tekrar dene.')
@@ -46,7 +46,7 @@ export function SpokenRecallRecorder({ chapterId }: SpokenRecallRecorderProps) {
       }
       recorder.onstop = () => {
         stream.getTracks().forEach((track) => track.stop())
-        void handleStopped()
+        void handleSquareped()
       }
       recorder.start()
       recorderRef.current = recorder
@@ -64,7 +64,7 @@ export function SpokenRecallRecorder({ chapterId }: SpokenRecallRecorderProps) {
   return (
     <div className="glass-panel p-6">
       <div className="flex items-center gap-2 text-sm font-semibold text-stuhub-text-secondary">
-        <Microphone size={18} weight="bold" />
+        <Mic size={18} />
         Konuşarak Tekrar
       </div>
       <p className="mt-1 text-sm text-stuhub-text-secondary">
@@ -83,7 +83,7 @@ export function SpokenRecallRecorder({ chapterId }: SpokenRecallRecorderProps) {
           </button>
         ) : (
           <button type="button" onClick={stopRecording} className="btn-primary flex items-center gap-2">
-            <Stop size={16} weight="fill" />
+            <Square size={16} />
             Kaydı Bitir
           </button>
         )}
@@ -123,7 +123,7 @@ export function SpokenRecallRecorder({ chapterId }: SpokenRecallRecorderProps) {
           )}
           {result.covered_topics.length === 0 && result.missed_topics.length === 0 && (
             <p className="flex items-center gap-1 text-sm text-stuhub-text-secondary">
-              <WarningCircle size={16} /> Bu bölüm için tanımlı konu bulunamadı.
+              <CircleAlert size={16} /> Bu bölüm için tanımlı konu bulunamadı.
             </p>
           )}
         </div>

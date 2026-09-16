@@ -1,7 +1,7 @@
-import { Flame } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 
 import { getStreakSummary, type StreakSummary } from '../api/streaks'
+import { Flame } from 'lucide-react'
 
 /** SVG ilerleme halkası — çevresi progress_percent ile dolar; renkler theme token'larından. */
 function ProgressRing({ percent }: { percent: number }) {
@@ -89,7 +89,7 @@ export function StreakRing() {
           <ProgressRing percent={summary.progress_percent} />
           <div className="min-w-0">
             <p className="flex items-center gap-1.5 text-lg font-semibold">
-              <Flame weight="fill" className="h-5 w-5 shrink-0 text-stuhub-warning" aria-hidden="true" />
+              <Flame className="h-5 w-5 shrink-0 text-stuhub-warning" aria-hidden="true" />
               {summary.streak_days} gün streak
             </p>
             {todayTotal > 0 ? (

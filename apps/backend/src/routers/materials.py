@@ -58,7 +58,10 @@ class MaterialOut(BaseModel):
     id: int
     course_id: int
     type: str
-    filepath: str
+    # Sunucu dosya yolu API'den EXPOSE EDİLMEZ (data leak — mutlak yol bilgisi
+    # işletim sistemi/dizin yapısı sızdırır). Frontend'in ihtiyacı olan uzantı
+    # ayrı bir alanda verilir (PDF önizleme kararı için).
+    file_ext: str
     display_name: str
     extracted_text: str | None = None
     page_count: int | None = None
@@ -67,8 +70,10 @@ class MaterialOut(BaseModel):
 
 
 def _to_out(row: dict) -> MaterialOut:
+    data = {k: v for k, v in row.items() if k not in ("display_name", "filepath")}
     return MaterialOut(
-        **{k: v for k, v in row.items() if k != "display_name"},
+        **data,
+        file_ext=Path(row["filepath"]).suffix.lower().lstrip("."),
         display_name=_display_name(row["filepath"]),
     )
 

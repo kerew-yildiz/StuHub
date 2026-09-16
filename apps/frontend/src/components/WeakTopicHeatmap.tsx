@@ -1,7 +1,7 @@
-import { GridFour, Thermometer } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 
 import { getHeatmap, type CourseHeatmap } from '../api/heatmap'
+import { LayoutGrid, Thermometer } from 'lucide-react'
 
 export interface WeakTopicHeatmapProps {
   courseId: number
@@ -64,7 +64,7 @@ export function WeakTopicHeatmap({ courseId }: WeakTopicHeatmapProps) {
 
   const header = (
     <div className="flex items-center gap-2">
-      <GridFour className="h-5 w-5 text-stuhub-text-secondary" aria-hidden="true" />
+      <LayoutGrid className="h-5 w-5 text-stuhub-text-secondary" aria-hidden="true" />
       <h2 className="text-lg font-semibold">Zayıf Konu Isı Haritası</h2>
     </div>
   )

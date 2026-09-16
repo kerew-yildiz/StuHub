@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import mimetypes
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -23,13 +24,17 @@ APP_VERSION = "2.0.0"
 # Üretim: inşa edilmiş frontend (apps/frontend/dist) — varsa servis edilir (yol haritası 2.2.2)
 FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 INDEX_HTML = FRONTEND_DIST / "index.html"
-# `mimetypes` bu uzantıları platforma göre yanlış/hiç tahmin ediyor: `.webmanifest`
-# tabloda yok, `.js` ise Windows'ta registry'den `text/plain` gelebiliyor — ikisi de
-# tarayıcının dosyayı reddetmesine yeter. Bu üçü açıkça sabitlenir, gerisi tahmine kalır.
-_STATIC_MEDIA_TYPES = {
-    ".js": "text/javascript",
-    ".mjs": "text/javascript",
-    ".webmanifest": "application/manifest+json",
+# v2 PWA dosyaları (Faz V2.8) — build çıktısında varsa servis edilir
+SW_FILE = FRONTEND_DIST / "sw.js"
+MANIFEST_FILE = FRONTEND_DIST / "manifest.webmanifest"
+
+# `mimetypes` bu uzantıları tanımıyor (ölçüldü: Windows Python 3.12'de registry de boş
+# dönüyor) — açık eşleme olmadan dist/fonts yazı tipleri `text/html` olarak sunulurdu.
+STATIC_MEDIA_TYPES = {
+    ".ttf": "font/ttf",
+    ".otf": "font/otf",
+    ".woff": "font/woff",
+    ".woff2": "font/woff2",
 }
 
 
@@ -147,30 +152,38 @@ if INDEX_HTML.exists():
     async def root_spa():
         return FileResponse(INDEX_HTML)
 
+    # v2 PWA: service worker + manifest — catch-all SPA fallback'ten ÖNCE kaydedilir
+    if SW_FILE.exists():
+
+        @app.get("/sw.js", include_in_schema=False)
+        async def sw_js():
+            return FileResponse(SW_FILE, media_type="application/javascript")
+
+    if MANIFEST_FILE.exists():
+
+        @app.get("/manifest.webmanifest", include_in_schema=False)
+        async def web_manifest():
+            return FileResponse(MANIFEST_FILE, media_type="application/manifest+json")
+
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa_fallback(full_path: str):
-        """SPA fallback: dist kökündeki GERÇEK dosyalar servis edilir, kalanı index.html.
-
-        Önceden yalnızca `sw.js` ve `manifest.webmanifest` için açık rota vardı; dist
-        kökündeki diğer dosyalar (`registerSW.js`, `workbox-*.js`, `icon.svg`, ileride
-        `robots.txt`/`favicon.*`) buraya düşüp index.html alıyordu. Tarayıcı
-        `registerSW.js`'i JS diye çalıştırınca `Unexpected token '<'` veriyor ve PWA
-        tamamen kırılıyordu; manifest ikonu da "geçersiz görsel" oluyordu (prod'da
-        doğrulandı: iki dosya da 200 + `text/html`, 758 bayt `<!doctype html>`).
-        Dosya adı listelemek yerine varlık kontrolü yapılır — yeni bir build çıktısı
-        eklendiğinde bug tekrar etmesin.
-        """
+        """SPA fallback: dist'te gerçek dosya varsa onu, yoksa index.html döner."""
         if full_path.startswith(("api/", "health")):
             from fastapi import HTTPException
 
             raise HTTPException(status_code=404)
-
-        if full_path:
-            candidate = (FRONTEND_DIST / full_path).resolve()
-            # Yol geçişi koruması: `../../etc/passwd` gibi istekler dist dışına çıkmamalı.
-            if candidate.is_file() and candidate.is_relative_to(FRONTEND_DIST.resolve()):
-                return FileResponse(candidate, media_type=_STATIC_MEDIA_TYPES.get(candidate.suffix))
-
+        # dist kökündeki/altındaki gerçek dosyalar (registerSW.js, workbox-*.js, icon.svg,
+        # fonts/*.ttf) burada koşulsuz index.html'e dönüyordu: tarayıcı JS yerine HTML alıp
+        # service worker'ı kaydetmiyordu (2026-09-10'da prod'da doğrulandı). `sw.js` ve
+        # `manifest.webmanifest` açık rotaları yalnızca o iki dosyayı kurtarıyordu.
+        # Dosya varsa MIME `mimetypes` ile (bilinmeyenler için STATIC_MEDIA_TYPES ile) verilir;
+        # resolve() sonrası dist altında kalma şartı path traversal'ı kapatır.
+        candidate = (FRONTEND_DIST / full_path).resolve()
+        if candidate.is_file() and candidate.is_relative_to(FRONTEND_DIST):
+            media_type = STATIC_MEDIA_TYPES.get(
+                candidate.suffix.lower()
+            ) or mimetypes.guess_type(candidate.name)[0]
+            return FileResponse(candidate, media_type=media_type)
         return FileResponse(INDEX_HTML)
 
 else:

@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import re
 
-import lancedb
+try:
+    import lancedb
+except (ImportError, OSError):
+    # Windows Uygulama Denetimi (Smart App Control) pyarrow DLL'ini engelleyebilir —
+    # bu durumda backend vektör arama olmadan (yalnızca keyword retrieval) çalışır.
+    lancedb = None  # type: ignore[assignment]
 import numpy as np
 
 from ..config import settings
@@ -26,6 +31,10 @@ _db_path: str | None = None
 
 def _connect() -> lancedb.DBConnection:
     global _db, _db_path
+    if lancedb is None:
+        raise RuntimeError(
+            "lancedb/pyarrow yüklenemedi — vektör arama bu ortamda kullanılamıyor"
+        )
     path = str(settings.data_dir / "lancedb")
     if _db is None or _db_path != path:
         _db = lancedb.connect(path)
@@ -84,6 +93,22 @@ def _keyword_score(text: str, keywords: list[str]) -> float:
     return sum(lowered.count(kw.lower().strip()) for kw in keywords if kw.strip())
 
 
+def _lexical_scores(query: str, rows: list[dict]) -> list[float]:
+    """Embedding yokken yedek skor: sorgu terimlerinin chunk metninde sıklığı.
+
+    Windows Uygulama Denetimi sentence-transformers'ın `regex` DLL'ini
+    engelleyebiliyor; bu ortamda vektör arama üretilemez ama LanceDB'deki
+    chunk metinlerine lexikal erişim çalışır. BM25'in kaba bir yedeği:
+    terim frekansı toplamı, 3+ harfli terimlerle (dur kelimeleri elenir).
+    """
+    terms = [t for t in re.split(r"\W+", query.lower(), flags=re.UNICODE) if len(t) > 2]
+    scores: list[float] = []
+    for row in rows:
+        lowered = row["text"].lower()
+        scores.append(float(sum(lowered.count(t) for t in terms)))
+    return scores
+
+
 def hybrid_search(
     course_id: int,
     query: str,
@@ -105,35 +130,57 @@ def hybrid_search(
     if not rows:
         return []
 
-    query_embedding = embed_service.embed_texts([query])[0]
-    indexed_dim = len(rows[0]["vector"])
-    if indexed_dim != len(query_embedding):
-        # Embedding modeli indeks kurulduktan sonra değişmiş (bkz. vector_store
-        # `VectorDimMismatch`). Ham bir numpy boyut hatası yerine anlaşılır mesaj.
-        raise vector_store.VectorDimMismatch(
-            f"Ders {course_id} indeksi {indexed_dim} boyutlu, şu anki embedding "
-            f"modeli {len(query_embedding)} boyut üretiyor — STUHUB_EMBED_MODEL ayarını "
-            "indeksin kurulduğu modelle eşleyin ya da materyalleri yeniden indeksleyin."
-        )
-
-    query_vec = np.asarray(query_embedding, dtype=np.float32)
-    vectors = np.asarray([row["vector"] for row in rows], dtype=np.float32)
-    dots = vectors @ query_vec  # cosine (vektörler zaten normalize) — tek BLAS çağrısı
+    try:
+        query_embedding = embed_service.embed_texts([query])[0]
+    except embed_service.EmbedError:
+        # Embedding modeli bu ortamda yüklenemiyor (ör. Windows Uygulama Denetimi
+        # `regex` DLL'ini engelliyor). Chat/not üretimi tamamen çökmesin: lexikal
+        # yedeğe düş — vektör katkısı olmadan, yalnızca terim frekansıyla sırala.
+        query_embedding = None
 
     scored: list[dict] = []
-    for row, dot in zip(rows, dots, strict=True):
-        kw = _keyword_score(row["text"], keywords)
-        combined = VECTOR_WEIGHT * float(dot) + KEYWORD_WEIGHT * kw
-        scored.append(
-            {
-                "chunk_id": row["chunk_id"],
-                "material_id": row["material_id"],
-                "text": row["text"],
-                "page": row["page"],
-                "slide": row["slide"],
-                "score": combined,
-            }
-        )
+    if query_embedding is None:
+        lex = _lexical_scores(query, rows)
+        for row, lex_score in zip(rows, lex, strict=True):
+            kw = _keyword_score(row["text"], keywords)
+            scored.append(
+                {
+                    "chunk_id": row["chunk_id"],
+                    "material_id": row["material_id"],
+                    "text": row["text"],
+                    "page": row["page"],
+                    "slide": row["slide"],
+                    "score": lex_score + kw,
+                }
+            )
+    else:
+        indexed_dim = len(rows[0]["vector"])
+        if indexed_dim != len(query_embedding):
+            # Embedding modeli indeks kurulduktan sonra değişmiş (bkz. vector_store
+            # `VectorDimMismatch`). Ham bir numpy boyut hatası yerine anlaşılır mesaj.
+            raise vector_store.VectorDimMismatch(
+                f"Ders {course_id} indeksi {indexed_dim} boyutlu, şu anki embedding "
+                f"modeli {len(query_embedding)} boyut üretiyor — STUHUB_EMBED_MODEL ayarını "
+                "indeksin kurulduğu modelle eşleyin ya da materyalleri yeniden indeksleyin."
+            )
+
+        query_vec = np.asarray(query_embedding, dtype=np.float32)
+        vectors = np.asarray([row["vector"] for row in rows], dtype=np.float32)
+        dots = vectors @ query_vec  # cosine (vektörler zaten normalize) — tek BLAS çağrısı
+
+        for row, dot in zip(rows, dots, strict=True):
+            kw = _keyword_score(row["text"], keywords)
+            combined = VECTOR_WEIGHT * float(dot) + KEYWORD_WEIGHT * kw
+            scored.append(
+                {
+                    "chunk_id": row["chunk_id"],
+                    "material_id": row["material_id"],
+                    "text": row["text"],
+                    "page": row["page"],
+                    "slide": row["slide"],
+                    "score": combined,
+                }
+            )
     scored.sort(key=lambda r: r["score"], reverse=True)
     top = scored[:k]
 

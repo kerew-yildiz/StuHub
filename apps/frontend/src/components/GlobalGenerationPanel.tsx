@@ -1,8 +1,8 @@
-import { CheckCircle, Warning } from '@phosphor-icons/react'
 import { useState } from 'react'
 
 import { useAnimatedProgress } from '../lib/useAnimatedProgress'
 import { useGenerationStore } from '../stores/generationStore'
+import { CheckCircle, TriangleAlert } from 'lucide-react'
 
 function JobRow({ kind, targetId }: { kind: string; targetId: number }) {
   const job = useGenerationStore((s) => s.jobs.find((j) => j.kind === kind && j.targetId === targetId))
@@ -75,12 +75,12 @@ export function GlobalGenerationPanel() {
           </>
         ) : hasError ? (
           <>
-            <Warning weight="fill" aria-hidden="true" className="h-4 w-4 shrink-0 text-stuhub-warning" />
+            <TriangleAlert aria-hidden="true" className="h-4 w-4 shrink-0 text-stuhub-warning" />
             <span className="shrink-0 font-medium text-stuhub-text-secondary">Hata</span>
           </>
         ) : (
           <>
-            <CheckCircle weight="fill" aria-hidden="true" className="h-4 w-4 shrink-0 text-stuhub-success" />
+            <CheckCircle aria-hidden="true" className="h-4 w-4 shrink-0 text-stuhub-success" />
             <span className="min-w-0 truncate font-medium">{jobs[0].label}</span>
           </>
         )}
@@ -101,7 +101,9 @@ export function GlobalGenerationPanel() {
           Kapat ▾
         </button>
       </div>
-      <div className="space-y-2">
+      {/* aria-live: iş bitişleri ekran okuyucuya duyurulur (a11y — progress değişimleri
+          değil yalnızca durum metni announce edilir, spam yok) */}
+      <div className="space-y-2" role="status" aria-live="polite">
         {jobs.map((job) => (
           <JobRow key={`${job.kind}-${job.targetId}`} kind={job.kind} targetId={job.targetId} />
         ))}

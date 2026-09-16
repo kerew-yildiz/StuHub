@@ -1,7 +1,7 @@
-import { X } from '@phosphor-icons/react'
 import { useState } from 'react'
 
 import type { Slide } from '../api/slides'
+import { X } from 'lucide-react'
 
 interface SlidePreviewProps {
   slides: Slide[]
@@ -38,7 +38,7 @@ export function SlidePreview({ slides, onDelete }: SlidePreviewProps) {
             type="button"
             onClick={() => setIndex((i) => Math.max(0, i - 1))}
             disabled={current === 0}
-            className="rounded-control px-2 py-1 text-base text-stuhub-text-secondary transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-glass-1-hover active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100"
+            className="rounded-control px-2 py-1 text-base text-stuhub-text-secondary transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-glass-1-hover active:scale-[0.98] disabled:active:scale-100"
             aria-label="Önceki slide"
           >
             ‹
@@ -50,7 +50,7 @@ export function SlidePreview({ slides, onDelete }: SlidePreviewProps) {
             type="button"
             onClick={() => setIndex((i) => Math.min(slides.length - 1, i + 1))}
             disabled={current === slides.length - 1}
-            className="rounded-control px-2 py-1 text-base text-stuhub-text-secondary transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-glass-1-hover active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100"
+            className="rounded-control px-2 py-1 text-base text-stuhub-text-secondary transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-glass-1-hover active:scale-[0.98] disabled:active:scale-100"
             aria-label="Sonraki slide"
           >
             ›

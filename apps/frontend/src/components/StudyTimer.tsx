@@ -1,8 +1,8 @@
-import { ArrowClockwise, CheckCircle, Pause, Play, Timer, XCircle } from '@phosphor-icons/react'
 import { useEffect, useRef, useState } from 'react'
 
 import { answerFeed, fetchFeed, type FeedQuestion } from '../api/feed'
 import { createStudySession } from '../api/studySessions'
+import { RotateCw, CheckCircle, Pause, Play, Timer, XCircle } from 'lucide-react'
 
 export interface StudyTimerProps {
   courseId: number
@@ -116,7 +116,7 @@ export function StudyTimer({ courseId }: StudyTimerProps) {
   return (
     <div className="glass-panel p-6">
       <div className="flex items-center gap-2 text-sm font-semibold text-stuhub-text-secondary">
-        <Timer size={18} weight="bold" />
+        <Timer size={18} />
         Çalışma Zamanlayıcı
       </div>
 
@@ -148,7 +148,7 @@ export function StudyTimer({ courseId }: StudyTimerProps) {
             className="rounded-control border border-stuhub-border p-2"
             aria-label="Sıfırla"
           >
-            <ArrowClockwise size={18} />
+            <RotateCw size={18} />
           </button>
         </div>
       )}

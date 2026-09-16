@@ -296,13 +296,30 @@ def validate_apkg(data: bytes, expected_count: int) -> None:
 
 
 def flashcards_to_csv(cards: list[dict]) -> bytes:
-    """Kartları Excel uyumlu CSV'ye çevirir: front;back;topic;citation (UTF-8 BOM)."""
+    """Kartları Excel uyumlu CSV'ye çevirir: front;back;topic;citation (UTF-8 BOM).
+
+    CSV formula-injection koruması: '=' / '+' / '-' / '@' ile başlayan hücreler
+    Excel/LibreOffice'te formül olarak yorumlanır (=cmd|'/c calc'!A0 gibi). Kart
+    içeriği kullanıcı/LLM kaynaklı olduğu için tehlikeli önekli hücreler
+    tek tırnakla nötrlenir — OWASP CSV Injection kuralı.
+    """
+
+    def _safe_cell(value: str) -> str:
+        if value.startswith(("=", "+", "-", "@", "\t", "\r")):
+            return f"'{value}"
+        return value
+
     lines = ["front;back;topic;citation"]
     for card in cards:
         citation = "; ".join(
             str(c.get("page") or c.get("slide") or "") for c in card.get("citations", [])
         )
-        row = [card.get("front", ""), card.get("back", ""), card.get("topic", ""), citation]
+        row = [
+            _safe_cell(str(card.get("front", ""))),
+            _safe_cell(str(card.get("back", ""))),
+            _safe_cell(str(card.get("topic", ""))),
+            citation,
+        ]
         lines.append(
             ";".join(f'"{cell.replace(chr(34), chr(34) + chr(34))}"' for cell in row)
         )

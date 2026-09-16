@@ -1,7 +1,7 @@
-import { CalendarBlank, CaretDown, CaretRight, ListChecks, Plus, Trash } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 
 import type { Chapter } from '../api/chapters'
+import { Calendar, ChevronDown, ChevronRight, ListChecks, Plus, Trash } from 'lucide-react'
 import {
   createExam,
   deleteExam,
@@ -247,7 +247,7 @@ export function ExamCountdownPanel({ courseId, chapters = [], onSimulate }: Exam
 
       {!loading && exams.length === 0 && (
         <div className="glass-panel mt-4 flex items-start gap-3 px-5 py-4">
-          <CalendarBlank
+          <Calendar
             className="mt-0.5 h-5 w-5 shrink-0 text-stuhub-text-secondary"
             aria-hidden="true"
           />
@@ -304,9 +304,9 @@ export function ExamCountdownPanel({ courseId, chapters = [], onSimulate }: Exam
                       className="glass-interactive glass-panel-subtle flex items-center gap-2 rounded-pill px-3 py-1.5 text-xs font-medium text-stuhub-text-secondary"
                     >
                       {open ? (
-                        <CaretDown className="h-3.5 w-3.5" aria-hidden="true" />
+                        <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
                       ) : (
-                        <CaretRight className="h-3.5 w-3.5" aria-hidden="true" />
+                        <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
                       )}
                       Çalışma planı
                     </button>

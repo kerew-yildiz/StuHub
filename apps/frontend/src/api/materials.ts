@@ -1,11 +1,11 @@
 import { apiFetch } from './client'
 
-/** Materyal (backend MaterialOut ile birebir). */
+/** Materyal (backend MaterialOut ile birebir; sunucu dosya yolu expose edilmez). */
 export interface Material {
   id: number
   course_id: number
   type: 'textbook' | 'slides' | 'syllabus'
-  filepath: string
+  file_ext: string
   display_name: string
   extracted_text: string | null
   page_count: number | null

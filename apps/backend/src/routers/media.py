@@ -69,7 +69,11 @@ async def _create_material(
         raise RuntimeError("beklenen materyal satırı bulunamadı")
     job_id = await create_indexing_job(course_id, material_id, tenant_id, kind=job_kind)
     await process_pending_jobs()
-    return {**dict(row), "job_id": job_id}
+    # Sunucu dosya yolu sızdırılmaz (bkz. MaterialOut.file_ext gerekçesi) —
+    # youtube ingest'te URL kullanıcı tarafından zaten bilinir; text'te yol türetilir.
+    data = dict(row)
+    data.pop("filepath", None)
+    return {**data, "job_id": job_id}
 
 
 @router.post("/courses/{course_id}/media/youtube", status_code=201)

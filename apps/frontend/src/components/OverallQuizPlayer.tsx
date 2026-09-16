@@ -152,8 +152,8 @@ export function OverallQuizPlayer({ quiz, onDelete }: OverallQuizPlayerProps) {
                         return (
                           <div key={index} className={className}>
                             {option}
-                            {isCorrect && ' ✓ (doğru cevap)'}
-                            {isSelected && !isCorrect && ' ← senin cevabın'}
+                            {isCorrect && ' · doğru cevap'}
+                            {isSelected && !isCorrect && ' · senin cevabın'}
                           </div>
                         )
                       })}
@@ -205,8 +205,8 @@ export function OverallQuizPlayer({ quiz, onDelete }: OverallQuizPlayerProps) {
                       {result.type === 'open'
                         ? `Puan: ${result.score} / 10`
                         : result.correct
-                          ? '✓ Doğru'
-                          : '✗ Yanlış'}
+                          ? 'Doğru'
+                          : 'Yanlış'}
                       {result.feedback ? ` — ${result.feedback}` : ''}
                     </p>
                     {/* Açıklama her durumda gösterilir: doğruysa neden doğru, yanlışsa öğretici metin */}

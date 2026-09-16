@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { importArchive } from '../api/archive'
 import { termsApi, type Term, type TermInput } from '../api/terms'
+import { AddContentCard } from '../components/AddContentCard'
 import { StreakRing } from '../components/StreakRing'
 import { TermCard } from '../components/TermCard'
 import { TermForm } from '../components/TermForm'
@@ -184,16 +185,16 @@ export function TermsPage() {
   }
 
   return (
-    <section>
+    <section className="page-shell">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Dönemler</h1>
+          <p className="page-subtitle">Ders dönemlerini buradan yönetebilirsin.</p>
+        </div>
+      </div>
       <StreakRing />
 
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold">Dönemler</h1>
-          <p className="mt-2 text-stuhub-text-secondary">
-            Ders dönemlerini buradan yönetebilirsin.
-          </p>
-        </div>
+      <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
         <div className="flex flex-wrap items-center gap-3">
           {!showForm && (
             <>
@@ -209,7 +210,7 @@ export function TermsPage() {
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={importing}
-                className="glass-panel-subtle glass-interactive rounded-control px-4 py-2 text-sm font-medium text-stuhub-text-secondary disabled:opacity-50"
+                className="glass-panel-subtle glass-interactive rounded-control px-4 py-2 text-sm font-medium text-stuhub-text-secondary"
               >
                 {importing ? 'İçe aktarılıyor…' : 'Arşiv İçe Aktar'}
               </button>
@@ -220,7 +221,10 @@ export function TermsPage() {
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0]
-                  if (file) void handleImportFile(file)
+                  // importing guard'i: çift tetikleme (hızlı çift tıklama + change)
+                  // aynı arşivi iki dönem olarak içe aktarırdı.
+                  if (file && !importing) void handleImportFile(file)
+                  e.target.value = ''
                 }}
               />
               <button
@@ -259,20 +263,21 @@ export function TermsPage() {
         </div>
       )}
 
-      <div className="mt-8 space-y-4">
+      {/* Sıkıntı #3: dönem kartları büyük hücreler — dar sütunlarda sıramasın */}
+      <div className="term-grid mt-8">
         {state === 'loading' && (
           <p className="text-sm text-stuhub-text-secondary">Dönemler yükleniyor…</p>
         )}
-        {state === 'ready' && terms.length === 0 && (
-          <div className="glass-panel-subtle border-dashed p-12 text-center">
-            <p className="font-medium">Henüz dönem yok</p>
-            <p className="mt-1 text-sm text-stuhub-text-secondary">
-              İlk dönemini oluşturarak başla.
-            </p>
-          </div>
+        {state === 'ready' && terms.length === 0 && !showForm && (
+          <AddContentCard
+            label="Dönem ekle"
+            description="Henüz dönem yok — ilk dönemini oluşturarak başla."
+            variant="term"
+            onClick={() => setShowForm(true)}
+          />
         )}
         {terms.map((term) => (
-          <div key={term.id} className="space-y-3">
+          <div key={term.id} className="max-w-[420px] space-y-3">
             <TermCard term={term} onDelete={handleDelete} onEdit={setEditingTerm} />
             {editingTerm?.id === term.id && (
               <TermEditForm
@@ -283,6 +288,14 @@ export function TermsPage() {
             )}
           </div>
         ))}
+        {terms.length > 0 && !showForm && (
+          <AddContentCard
+            label="Dönem ekle"
+            description="Yeni bir dönem oluştur ve derslerini ekle."
+            variant="term"
+            onClick={() => setShowForm(true)}
+          />
+        )}
       </div>
     </section>
   )

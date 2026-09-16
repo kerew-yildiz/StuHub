@@ -1,8 +1,8 @@
-import { ArrowCounterClockwise, ClockCounterClockwise, WarningCircle } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 
 import { fetchAbandonedTopics, type AbandonedTopic } from '../api/abandoned'
 import { generateErrorQuiz, type ErrorQuizResult } from '../api/errors'
+import { RotateCcw, History, CircleAlert } from 'lucide-react'
 
 export interface AbandonedTopicsListProps {
   courseId: number
@@ -64,7 +64,7 @@ export function AbandonedTopicsList({ courseId, onStartRecovery }: AbandonedTopi
   if (error) {
     return (
       <div className="glass-panel flex items-center gap-2 p-5 text-sm text-stuhub-error">
-        <WarningCircle size={20} aria-hidden="true" />
+        <CircleAlert size={20} aria-hidden="true" />
         {error}
       </div>
     )
@@ -85,7 +85,7 @@ export function AbandonedTopicsList({ courseId, onStartRecovery }: AbandonedTopi
   return (
     <div className="glass-panel p-5">
       <div className="mb-4 flex items-center gap-2">
-        <ClockCounterClockwise size={20} className="text-stuhub-accent" aria-hidden="true" />
+        <History size={20} className="text-stuhub-accent" aria-hidden="true" />
         <h3 className="text-sm font-medium uppercase tracking-widest text-stuhub-text-muted">
           Terk edilmiş konular
         </h3>
@@ -102,11 +102,11 @@ export function AbandonedTopicsList({ courseId, onStartRecovery }: AbandonedTopi
             </div>
             <button
               type="button"
-              className="btn-primary shrink-0 disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn-primary shrink-0 disabled:cursor-not-allowed"
               disabled={starting === topic.topic}
               onClick={() => void handleStart(topic)}
             >
-              <ArrowCounterClockwise className="mr-2 h-4 w-4" aria-hidden="true" />
+              <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
               {starting === topic.topic ? 'Başlatılıyor…' : 'Kurtarma turu başlat'}
             </button>
           </li>

@@ -14,7 +14,7 @@ from ..auth import get_tenant_id
 from ..db import get_db
 from ..quota import enforce_quota
 from ..services import retrieval
-from ..services.export_service import note_markdown_to_pdf
+from ..services.export_service import PDF_VARIANTS, note_markdown_to_pdf
 from ..services.note_generator import generate_notes_stream
 
 router = APIRouter(prefix="/api", tags=["notes"])
@@ -28,6 +28,10 @@ class NoteOut(BaseModel):
     topics_json: list
     generated_at: str
     model_used: str | None
+
+
+class NoteUpdateIn(BaseModel):
+    content_md: str
 
 
 def _sse(event: dict) -> str:
@@ -68,9 +72,88 @@ async def get_latest_note(
     if row is None:
         return None
     data = dict(row)
-    data["citations_json"] = json.loads(data["citations_json"] or "{}")
+    # Eski satırlarda citations_json boş liste olabilir ([]); NoteOut dict bekler —
+    # dict olmayan değer boş dict'e indirgenir (gerçek üretim her zaman dict yazar).
+    parsed_citations = json.loads(data["citations_json"] or "{}")
+    data["citations_json"] = parsed_citations if isinstance(parsed_citations, dict) else {}
     data["topics_json"] = json.loads(data["topics_json"] or "[]")
     return NoteOut(**data)
+
+
+@router.get("/chapters/{chapter_id}/notes/archive", response_model=list[NoteOut])
+async def list_chapter_notes(
+    chapter_id: int, tenant_id: str = Depends(get_tenant_id)
+) -> list[NoteOut]:
+    """Chapter'ın tüm kayıtlı notlarını yeniden eskiye döner (not arşivi).
+
+    Yeni not üretimi eskilerin üzerine YAZMAZ — hepsi arşivde kalır;
+    kullanıcı önceki sürümlere bu uç üzerinden erişir.
+    """
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT id, chapter_id, content_md, citations_json, topics_json, "
+            "generated_at, model_used FROM notes WHERE chapter_id = ? AND tenant_id = ? "
+            "ORDER BY id DESC",
+            (chapter_id, tenant_id),
+        )
+        rows = await cursor.fetchall()
+    finally:
+        await db.close()
+    out: list[NoteOut] = []
+    for row in rows:
+        data = dict(row)
+        parsed_citations = json.loads(data["citations_json"] or "{}")
+        data["citations_json"] = parsed_citations if isinstance(parsed_citations, dict) else {}
+        data["topics_json"] = json.loads(data["topics_json"] or "[]")
+        out.append(NoteOut(**data))
+    return out
+
+
+@router.patch("/notes/{note_id}", response_model=NoteOut)
+async def update_note(
+    note_id: int, payload: NoteUpdateIn, tenant_id: str = Depends(get_tenant_id)
+) -> NoteOut:
+    """Not içeriğini düzenler (yönerge §39 — kullanıcı emeği olan içerik düzenlenebilir)."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "UPDATE notes SET content_md = ? WHERE id = ? AND tenant_id = ?",
+            (payload.content_md, note_id, tenant_id),
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Not bulunamadı")
+        await db.commit()
+        cursor = await db.execute(
+            "SELECT id, chapter_id, content_md, citations_json, topics_json, "
+            "generated_at, model_used FROM notes WHERE id = ? AND tenant_id = ?",
+            (note_id, tenant_id),
+        )
+        row = await cursor.fetchone()
+    finally:
+        await db.close()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Not bulunamadı")
+    data = dict(row)
+    parsed_citations = json.loads(data["citations_json"] or "{}")
+    data["citations_json"] = parsed_citations if isinstance(parsed_citations, dict) else {}
+    data["topics_json"] = json.loads(data["topics_json"] or "[]")
+    return NoteOut(**data)
+
+
+@router.delete("/notes/{note_id}", status_code=204)
+async def delete_note(note_id: int, tenant_id: str = Depends(get_tenant_id)) -> None:
+    """Notu siler (yönerge §39 — delete confirmation modal'ı frontend'de zorunlu)."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "DELETE FROM notes WHERE id = ? AND tenant_id = ?", (note_id, tenant_id)
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Not bulunamadı")
+        await db.commit()
+    finally:
+        await db.close()
 
 
 @router.get("/citations/{chunk_id}")
@@ -108,16 +191,27 @@ async def resolve_citation(chunk_id: str, tenant_id: str = Depends(get_tenant_id
 
 @router.get("/notes/{note_id}/export")
 async def export_note(
-    note_id: int, format: str = "pdf", tenant_id: str = Depends(get_tenant_id)
+    note_id: int,
+    format: str = "pdf",
+    variant: str = "physical",
+    tenant_id: str = Depends(get_tenant_id),
 ) -> Response:
-    """Notu PDF (varsayılan) ya da Markdown olarak indirir (Türkçe karakter destekli)."""
+    """Notu PDF ya da Markdown olarak indirir (Türkçe karakter destekli).
+
+    PDF'te ``variant``: ``physical`` (baskı dostu, siyah logo, marka header'ı)
+    ya da ``digital`` (StuHub koyu tasarım dili, cam efektli header).
+    """
     if format not in ("pdf", "md"):
         raise HTTPException(status_code=422, detail="format 'pdf' veya 'md' olmalı")
+    if format == "pdf" and variant not in PDF_VARIANTS:
+        raise HTTPException(status_code=422, detail="variant 'physical' veya 'digital' olmalı")
     db = await get_db()
     try:
         cursor = await db.execute(
-            "SELECT n.content_md, c.title FROM notes n "
-            "JOIN chapters c ON c.id = n.chapter_id WHERE n.id = ? AND n.tenant_id = ?",
+            "SELECT n.content_md, c.title, co.name AS course_name FROM notes n "
+            "JOIN chapters c ON c.id = n.chapter_id "
+            "JOIN courses co ON co.id = c.course_id "
+            "WHERE n.id = ? AND n.tenant_id = ?",
             (note_id, tenant_id),
         )
         row = await cursor.fetchone()
@@ -138,12 +232,13 @@ async def export_note(
             },
         )
 
-    pdf_bytes = note_markdown_to_pdf(row["content_md"], row["title"])
+    document_title = f"{row['course_name']} · {row['title']}"
+    pdf_bytes = note_markdown_to_pdf(row["content_md"], document_title, variant=variant)
     return Response(
         pdf_bytes,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f'attachment; filename="stuhub-not-{note_id}.pdf"'
+            "Content-Disposition": f'attachment; filename="stuhub-not-{note_id}-{variant}.pdf"'
         },
     )
 

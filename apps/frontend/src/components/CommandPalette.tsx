@@ -1,10 +1,11 @@
-import { MagnifyingGlass } from '@phosphor-icons/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { coursesApi, type Course } from '../api/courses'
 import { termsApi, type Term } from '../api/terms'
 import { usePaletteStore } from '../stores/paletteStore'
+import { useFocusTrap } from '../hooks/useFocusTrap'
+import { Search } from 'lucide-react'
 
 interface PaletteItem {
   id: string
@@ -28,6 +29,8 @@ export function CommandPalette() {
   const [terms, setTerms] = useState<Term[]>([])
   const [coursesByTerm, setCoursesByTerm] = useState<Record<number, Course[]>>({})
   const inputRef = useRef<HTMLInputElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(dialogRef, open)
   const navigate = useNavigate()
 
   // Ctrl/Cmd+K her yerden paleti açar/kapatır — metin girişindeyken bile (arama
@@ -108,6 +111,7 @@ export function CommandPalette() {
       onClick={() => close()}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Komut paleti"
@@ -115,7 +119,7 @@ export function CommandPalette() {
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center gap-2 border-b border-stuhub-border px-4 py-3">
-          <MagnifyingGlass size={18} className="shrink-0 text-stuhub-text-secondary" aria-hidden="true" />
+          <Search size={18} className="shrink-0 text-stuhub-text-secondary" aria-hidden="true" />
           <input
             ref={inputRef}
             value={query}

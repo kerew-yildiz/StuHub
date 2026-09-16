@@ -21,8 +21,8 @@ export default defineConfig({
         short_name: 'StuHub',
         description: 'Yerel AI ders çalışma asistanı',
         lang: 'tr',
-        theme_color: '#1c1c1e',
-        background_color: '#1c1c1e',
+        theme_color: '#000000',
+        background_color: '#000000',
         display: 'standalone',
         start_url: '/',
         icons: [

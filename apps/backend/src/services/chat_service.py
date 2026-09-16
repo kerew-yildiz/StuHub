@@ -110,9 +110,18 @@ def _citation_numbers(text: str) -> list[int]:
     return [int(m) for m in re.findall(r"\[(\d+)\]", text)]
 
 
+# Prompt kuralı 4, modele kaynaklarda bilgi yoksa atıfsız "Bu bilgi kaynaklarda
+# bulunmuyor." yanıtı vermeyi EMREDER. Bu yanıtı _citations_valid reddedince model
+# retry'da aynı dürüst yanıtı veriyor ve kullanıcı "Beklenmeyen bir hata" görüyordu.
+_NO_INFO_MARKER = "kaynaklarda bulunmuyor"
+
+
 def _citations_valid(text: str, n_sources: int) -> bool:
     numbers = _citation_numbers(text)
-    return bool(numbers) and all(1 <= n <= n_sources for n in numbers)
+    if not numbers:
+        # Atıfsız tek geçerli yanıt: açık "kaynaklarda yok" beyanı.
+        return _NO_INFO_MARKER in text.lower()
+    return all(1 <= n <= n_sources for n in numbers)
 
 
 def _build_messages(
@@ -188,7 +197,8 @@ async def _log_activity(course_id: int, tenant_id: str) -> None:
             "INSERT INTO activity_log (tenant_id, date, kind, count, course_id) "
             "VALUES (?, ?, 'chat', 1, ?) "
             "ON CONFLICT(tenant_id, date, kind, COALESCE(course_id, 0)) "
-            "DO UPDATE SET count = count + 1",
+            # Postgres'te `count` sütun/adet karışımı belirsizdi — tablo adıyla nitele.
+            "DO UPDATE SET count = activity_log.count + 1",
             (tenant_id, datetime.now().date().isoformat(), course_id),
         )
         await db.commit()

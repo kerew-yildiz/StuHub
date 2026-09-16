@@ -269,11 +269,15 @@ CREATE TABLE IF NOT EXISTS activity_log (
 CREATE TABLE IF NOT EXISTS study_sessions (
     id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id    UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-    course_id    BIGINT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    course_id    BIGINT REFERENCES courses(id) ON DELETE CASCADE,
     session_id   TEXT NOT NULL,
     duration_sec INTEGER NOT NULL,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Eski kurulumlarda course_id NOT NULL ile kurulmuştu; global (ders dışı) kullanım
+-- süresi kaydı (migration 0013'ün PG karşılığı) NULL gerektirir. Idempotent:
+-- sütun zaten nullable ise işlem sessizce başarılı olur.
+ALTER TABLE study_sessions ALTER COLUMN course_id DROP NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_study_sessions_tenant_course
     ON study_sessions(tenant_id, course_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_study_sessions_session
@@ -387,4 +391,27 @@ CREATE POLICY own_profile ON profiles
 ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS own_subscriptions ON subscriptions;
 CREATE POLICY own_subscriptions ON subscriptions
+    USING (tenant_id = auth.uid());
+
+CREATE TABLE IF NOT EXISTS calendar_events (
+    id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id  UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    course_id  BIGINT REFERENCES courses(id) ON DELETE CASCADE,
+    event_date TEXT NOT NULL,
+    kind       TEXT NOT NULL DEFAULT 'custom',
+    title      TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- Kullanıcı tanımlı etiket (sıkıntı: "kullanıcının kendisinin tag eklemesine
+-- müsaade edilmiyor"). NULL = etiketsiz; virgülle çoklu etiket ileride.
+ALTER TABLE calendar_events ADD COLUMN IF NOT EXISTS tags TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_calendar_events_tenant_date
+    ON calendar_events(tenant_id, event_date);
+CREATE INDEX IF NOT EXISTS idx_calendar_events_course
+    ON calendar_events(course_id);
+
+ALTER TABLE calendar_events ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS own_calendar_events ON calendar_events;
+CREATE POLICY own_calendar_events ON calendar_events
     USING (tenant_id = auth.uid());

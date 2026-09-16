@@ -26,7 +26,6 @@ import asyncio
 
 import jwt
 from fastapi import Header, HTTPException
-from jwt.exceptions import PyJWKClientConnectionError
 
 from .config import settings
 from .db import get_db
@@ -36,17 +35,9 @@ LOCAL_TENANT_ID = "local"
 # Supabase access token'ları bu audience ile imzalanır (GoTrue varsayılanı).
 _JWT_AUDIENCE = "authenticated"
 
-# JWKS çekimi için ağ zaman aşımı. PyJWT'nin varsayılanı 30 sn: erişilemeyen bir JWKS
-# ucunda istek 30 sn asılır, `_decode_token`'ın ikinci denemesiyle bu 60 sn'ye çıkar.
-# 2026-09-10 ölçümü: geçici bir ağ arızasında her kimlik doğrulamalı istek 38.6 sn
-# sürüyordu (2 × 19.3 sn) ve uygulama kullanıcı için tamamen donmuş görünüyordu.
+# PyJWT varsayılanı 30 sn — erişilemeyen JWKS ucunda istek başına kabul edilemez
+# gecikme (2026-09-10 ölçümü: 19.3 sn'lik başarısız çekim). İstemci bu sınırla kurulur.
 _JWKS_TIMEOUT_SECONDS = 5
-
-# JWKS'e ulaşılamaması kullanıcının oturumuyla ilgili DEĞİLDİR; 401 demek kullanıcıyı
-# (ve geliştiriciyi) token'ı suçlamaya yönlendiriyordu. Altyapı arızası 503'tür.
-_JWKS_UNREACHABLE = (
-    "Kimlik doğrulama servisine şu anda ulaşılamıyor. Lütfen birazdan tekrar deneyin."
-)
 
 _jwk_client: jwt.PyJWKClient | None = None
 
@@ -65,26 +56,28 @@ class AuthError(HTTPException):
 
 
 def _get_jwk_client(*, fresh: bool = False) -> jwt.PyJWKClient | None:
-    """JWKS istemcisini döner (tembel singleton).
-
-    `fresh=True`: önbelleği paylaşmayan TEK KULLANIMLIK bir istemci döner ve global
-    singleton'ı EZMEZ. Eskiden global'i eziyordu: kimlik doğrulaması gerektirmeyen tek
-    bir çöp token isteği bile süreç genelindeki ısınmış JWKS önbelleğini çöpe atıyor,
-    SONRAKİ meşru isteği yeni bir ağ turuna zorluyordu (dışarıdan tetiklenebilir gecikme
-    amplifikasyonu — Op02Session ölçümü, 2026-09-10).
-    """
+    """JWKS istemcisini döner (tembel singleton). `fresh=True`: önbelleği atlayıp
+    yeni bir istemci kurar — bkz. `_decode_token` soğuk-önbellek yeniden deneme notu."""
     global _jwk_client
     if not settings.supabase_url:
         return None
-    if _jwk_client is None or fresh:
-        jwks_url = settings.supabase_url.rstrip("/") + "/auth/v1/.well-known/jwks.json"
-        client = jwt.PyJWKClient(
-            jwks_url, cache_keys=True, lifespan=3600, timeout=_JWKS_TIMEOUT_SECONDS
-        )
-        if fresh:
-            return client
-        _jwk_client = client
+    if fresh:
+        # Isınmış singleton EZİLMEZ: yoksa imzası bozuk tek bir çöp istek, sonraki meşru
+        # isteğe yeni bir JWKS ağ turu ödetirdi (2026-09-10 düzeltmesi).
+        return _new_jwk_client()
+    if _jwk_client is None:
+        _jwk_client = _new_jwk_client()
     return _jwk_client
+
+
+def _new_jwk_client() -> jwt.PyJWKClient:
+    jwks_url = settings.supabase_url.rstrip("/") + "/auth/v1/.well-known/jwks.json"
+    return jwt.PyJWKClient(
+        jwks_url,
+        cache_keys=True,
+        lifespan=3600,
+        timeout=_JWKS_TIMEOUT_SECONDS,
+    )
 
 
 def _decode_with_jwks(token: str, jwk_client: jwt.PyJWKClient) -> dict:
@@ -106,31 +99,41 @@ def _decode_token(token: str) -> dict:
             # Süresi dolmuş token YENİ imza anahtarı gerektirmez; JWKS'i tazelemek boşuna
             # bir ağ turudur ve istemci token'ı yenileyene kadar HER istekte tekrarlanır.
             raise AuthError("Oturum geçersiz veya süresi dolmuş.") from exc
-        except PyJWKClientConnectionError as exc:
-            # JWKS ucuna ulaşılamadı: imza anahtarı hakkında hiçbir şey bilmiyoruz, bu
-            # yüzden ikinci deneme yalnızca gecikmeyi ikiye katlar (ve HS256 sırrı varsa
-            # ES256 token'ı boşuna oraya düşürür). Tek denemede 503 ile dur.
-            raise AuthError(_JWKS_UNREACHABLE, status_code=503) from exc
-        except jwt.PyJWTError as exc:
-            # Yalnızca "imza anahtarını bulamadım" hatası ikinci bir JWKS turuna değer —
-            # 2026-09-08 canlı bulgu: taze imzalanmış bir token, önbellekteki anahtar
-            # setinde henüz yoksa (soğuk önbellek/anahtar rotasyonu) burada başarısız olup
-            # kullanıcıya "geçersiz oturum" gösteriyordu; sayfa yenilenince AYNI token
-            # sorunsuz doğrulanıyordu. Bozuk/çöp token veya uyuşmayan imzada ise JWKS'i
-            # tazelemek sonucu DEĞİŞTİRMEZ, sadece boşuna ağ turudur.
-            if isinstance(exc, jwt.PyJWKClientError):
-                try:
-                    fresh_client = _get_jwk_client(fresh=True)
-                    if fresh_client is not None:
-                        return _decode_with_jwks(token, fresh_client)
-                except PyJWKClientConnectionError as conn_exc:
-                    raise AuthError(_JWKS_UNREACHABLE, status_code=503) from conn_exc
-                except jwt.PyJWTError:
-                    pass
-            if not settings.supabase_jwt_secret:
-                raise AuthError("Oturum geçersiz veya süresi dolmuş.") from exc
-            # JWKS yolu sonuç vermedi (ör. eski proje, henüz asimetrik anahtara
-            # geçmemiş) — Legacy HS256 sırra düş.
+        except jwt.PyJWKClientConnectionError as exc:
+            # 2026-09-10 canlı ölçüm: JWKS ucuna geçici ağ arızasında (WinError 10054)
+            # aşağıdaki `PyJWTError` bloğu taze istemciyle İKİNCİ bir ~19 sn'lik ağ turu
+            # yapıyordu → istek 38.6 sn asılıp kullanıcıya 401 dönüyordu. Ağ hatası "imza
+            # yanlış" demek değildir: taze deneme YOK, HS256'ya düşme YOK.
+            raise AuthError(
+                "Kimlik doğrulama servisine ulaşılamıyor, lütfen tekrar deneyin.",
+                status_code=503,
+            ) from exc
+        except jwt.InvalidSignatureError as exc:
+            # Bozuk/çöp imza: JWKS'i tazelemek sonucu değiştirmez, ağ turu boşunadır.
+            raise AuthError("Oturum geçersiz veya süresi dolmuş.") from exc
+        except jwt.PyJWTError:
+            # İlk deneme başarısız — 2026-09-08 canlı bulgu: taze imzalanmış bir token,
+            # önbellekteki JWKS anahtar setinde henüz yoksa (soğuk önbellek/anahtar
+            # rotasyonu) burada başarısız olup kullanıcıya "geçersiz oturum" gösteriyordu;
+            # oysa sayfa yenilendiğinde (yeni bir istek → önbellek o sırada ısınmış oluyor)
+            # AYNI token sorunsuz doğrulanıyordu. Düzeltme: önbelleği atlayıp bir kez daha
+            # dene — bu, kullanıcının yenilemeyle elde ettiği sonucu tek istekte verir.
+            try:
+                fresh_client = _get_jwk_client(fresh=True)
+                if fresh_client is not None:
+                    return _decode_with_jwks(token, fresh_client)
+            except jwt.PyJWKClientConnectionError as exc:
+                # Taze denemenin ağ turu da düştüyse bu yine altyapı arızasıdır: 401
+                # yerine 503 (bkz. yukarıdaki aynı sınıflandırma).
+                raise AuthError(
+                    "Kimlik doğrulama servisine ulaşılamıyor, lütfen tekrar deneyin.",
+                    status_code=503,
+                ) from exc
+            except jwt.PyJWTError as exc:
+                if not settings.supabase_jwt_secret:
+                    raise AuthError("Oturum geçersiz veya süresi dolmuş.") from exc
+                # JWKS iki denemede de başarısız (ör. eski proje, henüz asimetrik
+                # anahtara geçmemiş) — Legacy HS256 sırra düş.
     if not settings.supabase_jwt_secret:
         raise AuthError(
             "Sunucu SaaS auth için yapılandırılmamış (VITE_SUPABASE_URL/SUPABASE_JWT_SECRET eksik)."

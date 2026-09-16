@@ -1,8 +1,8 @@
-import { ArrowUp, CircleNotch, Confetti, WarningCircle } from '@phosphor-icons/react'
 import { useCallback, useEffect, useRef } from 'react'
 
 import { useFeedStore } from '../stores/feedStore'
 import { QuizFeedCard } from './QuizFeedCard'
+import { ArrowUp, LoaderCircle, PartyPopper, CircleAlert } from 'lucide-react'
 
 interface QuizFeedProps {
   courseId: number
@@ -320,7 +320,7 @@ export function QuizFeed({ courseId, chapterId }: QuizFeedProps) {
           <div className="glass-panel flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
             {phase === 'error' ? (
               <>
-                <WarningCircle size={28} className="text-stuhub-error" />
+                <CircleAlert size={28} className="text-stuhub-error" />
                 <p className="text-sm text-stuhub-error" role="alert">
                   {error ?? 'Sorular alınamadı. Bağlantını kontrol et.'}
                 </p>
@@ -334,14 +334,14 @@ export function QuizFeed({ courseId, chapterId }: QuizFeedProps) {
               </>
             ) : phase === 'loading' ? (
               <>
-                <CircleNotch size={28} className="animate-spin text-stuhub-text-secondary" />
+                <LoaderCircle size={28} className="animate-spin text-stuhub-text-secondary" />
                 <p className="text-sm text-stuhub-text-secondary" role="status">
                   Sorular yükleniyor…
                 </p>
               </>
             ) : phase === 'waiting' || generating ? (
               <>
-                <CircleNotch size={28} className="animate-spin text-stuhub-text-secondary" />
+                <LoaderCircle size={28} className="animate-spin text-stuhub-text-secondary" />
                 <p className="text-sm text-stuhub-text-secondary" role="status">
                   Yeni sorular hazırlanıyor…
                 </p>
@@ -351,7 +351,7 @@ export function QuizFeed({ courseId, chapterId }: QuizFeedProps) {
               </>
             ) : (
               <>
-                <Confetti size={28} className="text-stuhub-accent" />
+                <PartyPopper size={28} className="text-stuhub-accent" />
                 <p className="text-sm text-stuhub-text-secondary" role="status">
                   Şimdilik bu kadar. Havuz dolunca yeni sorular gelecek.
                 </p>

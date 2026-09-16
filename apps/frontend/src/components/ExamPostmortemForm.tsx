@@ -1,6 +1,6 @@
-import { CheckCircle, NotePencil, WarningCircle } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 
+import { CheckCircle, NotebookPen, CircleAlert } from 'lucide-react'
 import {
   getPostmortem,
   submitPostmortem,
@@ -58,7 +58,7 @@ export function ExamPostmortemForm({ examId, missedQuestions, onSubmitted }: Exa
     return (
       <div className="glass-panel mt-4 p-6">
         <div className="flex items-center gap-2">
-          <NotePencil size={20} className="text-stuhub-accent" />
+          <NotebookPen size={20} className="text-stuhub-accent" />
           <h3 className="text-lg font-semibold">Sınav sonrası muhasebe</h3>
         </div>
         <div className="mt-3 rounded-control bg-stuhub-info/10 p-3 text-sm text-stuhub-text">
@@ -78,7 +78,7 @@ export function ExamPostmortemForm({ examId, missedQuestions, onSubmitted }: Exa
   if (missedQuestions.length === 0) {
     return (
       <div className="glass-panel mt-4 flex items-center gap-2 p-6 text-stuhub-success">
-        <CheckCircle size={20} weight="fill" />
+        <CheckCircle size={20} />
         <p className="font-medium">Hiç soru kaçırmadın — muhasebeye gerek yok.</p>
       </div>
     )
@@ -104,7 +104,7 @@ export function ExamPostmortemForm({ examId, missedQuestions, onSubmitted }: Exa
   return (
     <div className="glass-panel mt-4 p-6">
       <div className="flex items-center gap-2">
-        <NotePencil size={20} className="text-stuhub-accent" />
+        <NotebookPen size={20} className="text-stuhub-accent" />
         <h3 className="text-lg font-semibold">Sınav sonrası muhasebe</h3>
       </div>
       <p className="mt-1 text-sm text-stuhub-text-secondary">
@@ -138,7 +138,7 @@ export function ExamPostmortemForm({ examId, missedQuestions, onSubmitted }: Exa
 
       {errorMessage && (
         <div className="mt-3 flex items-center gap-2 text-sm text-stuhub-error">
-          <WarningCircle size={16} />
+          <CircleAlert size={16} />
           {errorMessage}
         </div>
       )}

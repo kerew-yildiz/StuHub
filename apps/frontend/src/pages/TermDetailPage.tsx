@@ -1,14 +1,15 @@
-import { PencilSimple, X } from '@phosphor-icons/react'
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 
 import { coursesApi, type Course, type CourseInput } from '../api/courses'
-import { downloadFile, termArchiveUrl } from '../api/exports'
+import { downloadAuthed } from '../api/exports'
 import { materialsApi } from '../api/materials'
 import { termsApi, type Term } from '../api/terms'
-import { Breadcrumb } from '../components/Breadcrumb'
+import { AddContentCard } from '../components/AddContentCard'
 import { CourseForm } from '../components/CourseForm'
+import { CourseCard } from '../components/CourseCard'
 import { confirmDialog } from '../stores/confirmStore'
+import { GlobalUtilityPage, type GlobalUtilityKind } from './GlobalUtilityPage'
 
 type LoadState = 'loading' | 'ready' | 'error'
 
@@ -101,7 +102,8 @@ function CourseEditForm({
 /** Dönem detay sayfası — ders listesi + yeni ders (Faz 1.2). */
 export function TermDetailPage() {
   const { termId } = useParams<{ termId: string }>()
-  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const utilityView = searchParams.get('view') as GlobalUtilityKind | null
   const numericId = Number(termId)
 
   const [term, setTerm] = useState<Term | null>(null)
@@ -172,9 +174,22 @@ export function TermDetailPage() {
     }
   }
 
+  /** Arşivi yetkili yoldan indirir: <a href> gezinmesi `Authorization`
+   * başlığını taşımadığından SaaS modda 401 alıyordu (K5). */
+  const handleDownloadArchive = async () => {
+    const ok = await downloadAuthed(
+      `/terms/${numericId}/archive?include_files=${includeFiles}`,
+      `stuhub-donem-${numericId}.zip`,
+    )
+    if (!ok) setError('Dönem arşivi indirilemedi. Lütfen tekrar deneyin.')
+  }
+
+  if (utilityView === 'calendar' || utilityView === 'exam-plan' || utilityView === 'study-now') {
+    return <GlobalUtilityPage kind={utilityView} termIdOverride={numericId} />
+  }
+
   return (
-    <section>
-      <Breadcrumb items={[{ label: 'Dönemler', to: '/' }, { label: term?.name ?? 'Dönem' }]} />
+    <section className="page-shell">
       <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold">{term?.name ?? 'Dönem'}</h1>
@@ -193,7 +208,7 @@ export function TermDetailPage() {
           </label>
           <button
             type="button"
-            onClick={() => downloadFile(termArchiveUrl(numericId, includeFiles))}
+            onClick={() => void handleDownloadArchive()}
             className="glass-panel-subtle glass-interactive rounded-control px-4 py-2 text-sm font-medium text-stuhub-text-secondary"
           >
             Dönem Arşivi İndir (.zip)
@@ -222,62 +237,24 @@ export function TermDetailPage() {
         </div>
       )}
 
-      <div className="mt-8 space-y-4">
+      <div className="mt-8 course-grid" data-tour-id="term-courses">
         {state === 'loading' && (
           <p className="text-sm text-stuhub-text-secondary">Dersler yükleniyor…</p>
         )}
-        {state === 'ready' && courses.length === 0 && (
-          <div className="glass-panel-subtle border-dashed p-12 text-center">
-            <p className="font-medium">Henüz ders yok</p>
-            <p className="mt-1 text-sm text-stuhub-text-secondary">
-              İlk dersini ekleyerek başla.
-            </p>
-          </div>
+        {state === 'ready' && courses.length === 0 && !showForm && (
+          <AddContentCard
+            label="Ders ekle"
+            description="Henüz ders yok — ilk dersini ekleyerek başla."
+            onClick={() => setShowForm(true)}
+          />
         )}
         {courses.map((course) => (
-          <div key={course.id} className="space-y-3">
-            <div
-              role="link"
-              tabIndex={0}
-              onClick={() => navigate(`/dersler/${course.id}`)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  navigate(`/dersler/${course.id}`)
-                }
-              }}
-              className="glass-panel glass-interactive flex cursor-pointer items-center justify-between gap-4 p-6"
-            >
-              <div className="min-w-0">
-                <h2 className="text-lg font-semibold">{course.name}</h2>
-                {course.instructor && (
-                  <p className="mt-1 text-sm text-stuhub-text-secondary">{course.instructor}</p>
-                )}
-              </div>
-              <span
-                className="flex shrink-0 items-center gap-2"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <button
-                  type="button"
-                  onClick={() => setEditingCourse(course)}
-                  className="rounded-control p-2 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-glass-2-hover"
-                  title="Düzenle"
-                  aria-label={`${course.name} dersini düzenle`}
-                >
-                  <PencilSimple className="h-4 w-4" aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDeleteCourse(course)}
-                  className="rounded-control p-2 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10 hover:text-stuhub-error"
-                  title="Sil"
-                  aria-label={`${course.name} dersini sil`}
-                >
-                  <X className="h-4 w-4" aria-hidden="true" />
-                </button>
-              </span>
-            </div>
+          <div key={course.id} className="max-w-[420px] space-y-3">
+            <CourseCard
+              course={course}
+              onEdit={(target) => setEditingCourse(target)}
+              onDelete={(target) => void handleDeleteCourse(target)}
+            />
             {editingCourse?.id === course.id && (
               <CourseEditForm
                 course={course}
@@ -287,6 +264,13 @@ export function TermDetailPage() {
             )}
           </div>
         ))}
+        {courses.length > 0 && !showForm && (
+          <AddContentCard
+            label="Ders ekle"
+            description="Yeni bir ders ekle ve kitabını yükle."
+            onClick={() => setShowForm(true)}
+          />
+        )}
       </div>
     </section>
   )

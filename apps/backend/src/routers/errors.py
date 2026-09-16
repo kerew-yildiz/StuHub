@@ -19,7 +19,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from ..auth import get_tenant_id
+from ..auth import LOCAL_TENANT_ID, get_tenant_id
 from ..db import get_db
 
 router = APIRouter(prefix="/api", tags=["errors"])
@@ -197,21 +197,24 @@ def _overall_entries(row: dict) -> list[dict]:
     return entries
 
 
-@router.get("/courses/{course_id}/errors", response_model=list[ErrorLogEntry])
-async def list_course_errors(
+async def collect_course_errors(
     course_id: int,
-    topic: str | None = Query(default=None, description="Yalnızca bu konudaki hatalar"),
-    since: str | None = Query(default=None, description="ISO tarih; bu andan sonraki hatalar"),
-    only_repeated: bool = Query(
-        default=False, description="Yalnızca 2+ kez yanlış yapılan konular"
-    ),
-    tenant_id: str = Depends(get_tenant_id),
+    *,
+    chapter_id: int | None = None,
+    topic: str | None = None,
+    since: str | None = None,
+    only_repeated: bool = False,
+    tenant_id: str = LOCAL_TENANT_ID,
 ) -> list[ErrorLogEntry]:
     """Dersteki tüm yanlış cevapları (yeniden eskiye) döner.
 
     `repeat_count`, `since` ile daraltılan pencere içinde konunun kaç kez yanlış yapıldığıdır;
     `topic`/`only_repeated` süzgeçleri bu sayım yapıldıktan SONRA uygulanır, böylece filtreleme
     tekrar sayısını değiştirmez.
+
+    Rota fonksiyonundan AYRI tutulur: `Query(...)` varsayılanı taşımadığı için diğer
+    router'lardan düz Python fonksiyonu olarak çağrılabilir (`quiz_review.py`,
+    `next_action.py`). Düz çağrıda `Query` nesnesi sızması bu ayrımın sebebiydi.
     """
     since_dt: datetime | None = None
     if since:
@@ -266,6 +269,29 @@ async def list_course_errors(
             repeat_count=repeats[entry["topic"]],
         )
         for entry in entries
-        if (not wanted_topic or entry["topic"] == wanted_topic)
+        if (chapter_id is None or entry["chapter_id"] == chapter_id)
+        and (not wanted_topic or entry["topic"] == wanted_topic)
         and (not only_repeated or repeats[entry["topic"]] >= 2)
     ]
+
+
+@router.get("/courses/{course_id}/errors", response_model=list[ErrorLogEntry])
+async def list_course_errors(
+    course_id: int,
+    chapter_id: int | None = Query(default=None, description="Yalnızca bu chapter'daki hatalar"),
+    topic: str | None = Query(default=None, description="Yalnızca bu konudaki hatalar"),
+    since: str | None = Query(default=None, description="ISO tarih; bu andan sonraki hatalar"),
+    only_repeated: bool = Query(
+        default=False, description="Yalnızca 2+ kez yanlış yapılan konular"
+    ),
+    tenant_id: str = Depends(get_tenant_id),
+) -> list[ErrorLogEntry]:
+    """Hata günlüğü ucu — sorgu parametrelerini `collect_course_errors`'a devreder."""
+    return await collect_course_errors(
+        course_id,
+        chapter_id=chapter_id,
+        topic=topic,
+        since=since,
+        only_repeated=only_repeated,
+        tenant_id=tenant_id,
+    )

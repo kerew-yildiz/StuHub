@@ -1,7 +1,8 @@
-import { MagnifyingGlass, Question } from '@phosphor-icons/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useHelpStore } from '../stores/helpStore'
+import { useFocusTrap } from '../hooks/useFocusTrap'
+import { Search, CircleHelp } from 'lucide-react'
 
 interface HelpEntry {
   id: string
@@ -120,12 +121,14 @@ const HELP_ENTRIES: HelpEntry[] = [
 
 const GROUP_ORDER = ['Genel', 'Öğren', 'Pratik Yap', 'Sınava Hazırlan', 'Ödev']
 
-export function HelpPanel() {
+export function HelpPanel({ showTrigger = true }: { showTrigger?: boolean }) {
   const open = useHelpStore((s) => s.open)
   const toggle = useHelpStore((s) => s.toggle)
   const close = useHelpStore((s) => s.close)
   const [query, setQuery] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(dialogRef, open)
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -166,15 +169,15 @@ export function HelpPanel() {
 
   return (
     <>
-      <button
+      {showTrigger && <button
         type="button"
         onClick={toggle}
         aria-label="Yardım"
         title="Yardım (?)"
         className="glass-panel-subtle glass-interactive flex h-8 w-8 shrink-0 items-center justify-center rounded-control text-stuhub-text-secondary"
       >
-        <Question size={16} weight="bold" aria-hidden="true" />
-      </button>
+        <CircleHelp size={16} aria-hidden="true" />
+      </button>}
 
       {open && (
         <div
@@ -183,6 +186,7 @@ export function HelpPanel() {
           onClick={close}
         >
           <div
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-label="Yardım"
@@ -190,7 +194,7 @@ export function HelpPanel() {
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center gap-2 border-b border-stuhub-border px-4 py-3">
-              <MagnifyingGlass size={18} className="shrink-0 text-stuhub-text-secondary" aria-hidden="true" />
+              <Search size={18} className="shrink-0 text-stuhub-text-secondary" aria-hidden="true" />
               <input
                 ref={inputRef}
                 value={query}

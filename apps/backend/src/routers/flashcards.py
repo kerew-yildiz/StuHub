@@ -111,6 +111,37 @@ async def delete_flashcard_set(set_id: int, tenant_id: str = Depends(get_tenant_
         await db.close()
 
 
+@router.get("/courses/{course_id}/flashcard-sets")
+async def list_course_flashcard_sets(
+    course_id: int, tenant_id: str = Depends(get_tenant_id)
+) -> list[dict]:
+    """Dersin TÜM chapter'larının flashcard setleri (§42: ders görünümü chapter'a göre gruplu).
+
+    Frontend chapter_id üzerinden gruplar; setler yeniden eskiye döner.
+    """
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT id, chapter_id, cards_json, created_at, model_used "
+            "FROM flashcard_sets WHERE course_id = ? AND tenant_id = ? ORDER BY id ASC",
+            (course_id, tenant_id),
+        )
+        rows = await cursor.fetchall()
+    finally:
+        await db.close()
+    return [
+        {
+            "id": row["id"],
+            "chapter_id": row["chapter_id"],
+            "cards_json": json.loads(row["cards_json"] or "[]"),
+            "card_count": len(json.loads(row["cards_json"] or "[]")),
+            "created_at": row["created_at"],
+            "model_used": row["model_used"],
+        }
+        for row in rows
+    ]
+
+
 @router.get("/courses/{course_id}/flashcards/due")
 async def due_flashcards(
     course_id: int, limit: int = 20, tenant_id: str = Depends(get_tenant_id)
@@ -127,11 +158,14 @@ async def due_flashcards(
         set_ids = [row["id"] for row in set_rows]
         reviews: dict[tuple[int, int], dict] = {}
         if set_ids:
+            # IN-listi kendi sorgumuzdan gelen int id'lerle kuruyoruz (enjeksiyon yok).
+            # json_each() SQLite-özgü — Postgres yolunu kırıyordu (bigint = json).
+            placeholders = ", ".join("?" for _ in set_ids)
             cursor = await db.execute(
-                "SELECT set_id, card_index, ease_factor, interval_days, repetitions, "
-                "due_at, last_rating FROM card_reviews "
-                "WHERE set_id IN (SELECT value FROM json_each(?)) AND tenant_id = ?",
-                (json.dumps(set_ids), tenant_id),
+                f"SELECT set_id, card_index, ease_factor, interval_days, repetitions, "
+                f"due_at, last_rating FROM card_reviews "
+                f"WHERE set_id IN ({placeholders}) AND tenant_id = ?",
+                (*set_ids, tenant_id),
             )
             for row in await cursor.fetchall():
                 reviews[(row["set_id"], row["card_index"])] = dict(row)

@@ -127,6 +127,13 @@ export async function listFlashcardSets(chapterId: number): Promise<FlashcardSet
   return (await response.json()) as FlashcardSet[]
 }
 
+/** Dersin TÜM chapter'larının flashcard setleri (§42: ders görünümü chapter'a göre gruplu). */
+export async function listCourseFlashcardSets(courseId: number): Promise<FlashcardSet[]> {
+  const response = await authFetch(`/courses/${courseId}/flashcard-sets`)
+  if (!response.ok) return []
+  return (await response.json()) as FlashcardSet[]
+}
+
 /** Tek flashcard seti (404 ise null). */
 export async function getFlashcardSet(setId: number): Promise<FlashcardSet | null> {
   const response = await authFetch(`/flashcard-sets/${setId}`)

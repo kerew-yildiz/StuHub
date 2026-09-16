@@ -1,8 +1,8 @@
-import { ArrowSquareOut, BookOpen, MagnifyingGlass } from '@phosphor-icons/react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { getGlossary, type GlossaryEntry } from '../api/guides'
+import { SquareArrowOutUpRight, BookOpen, Search } from 'lucide-react'
 
 export interface GlossaryPanelProps {
   courseId: number
@@ -63,7 +63,7 @@ export function GlossaryPanel({ courseId }: GlossaryPanelProps) {
       </p>
 
       <label className="glass-panel-subtle mt-4 flex items-center gap-2 px-4 py-2">
-        <MagnifyingGlass className="h-4 w-4 shrink-0 text-stuhub-text-secondary" aria-hidden="true" />
+        <Search className="h-4 w-4 shrink-0 text-stuhub-text-secondary" aria-hidden="true" />
         <input
           type="search"
           value={query}
@@ -114,7 +114,7 @@ export function GlossaryPanel({ courseId }: GlossaryPanelProps) {
                       to={`/dersler/${courseId}/defter/${entry.chapter_id}`}
                       className="glass-interactive glass-panel-subtle flex items-center gap-1.5 rounded-pill px-3 py-1 font-medium text-stuhub-text"
                     >
-                      <ArrowSquareOut className="h-3.5 w-3.5" aria-hidden="true" />
+                      <SquareArrowOutUpRight className="h-3.5 w-3.5" aria-hidden="true" />
                       Nota git
                     </Link>
                     {entry.chapter_title && <span>{entry.chapter_title}</span>}

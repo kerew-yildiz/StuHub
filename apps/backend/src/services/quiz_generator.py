@@ -89,16 +89,6 @@ def _validate_question(q: dict) -> bool:
     return isinstance(citations, list)
 
 
-def _balanced(questions: list[dict]) -> bool:
-    counts = [0] * 4
-    for q in questions:
-        idx = q["correct_index"]
-        counts[idx] += 1
-        if counts[idx] > MAX_CORRECT_PER_INDEX:
-            return False
-    return True
-
-
 def _rebalance(questions: list[dict]) -> list[dict]:
     """Doğru cevap indexlerini seçenek yer değiştirerek dengeler (soru anlamı değişmez).
 

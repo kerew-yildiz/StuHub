@@ -97,15 +97,42 @@ export async function streamNoteGeneration(
 }
 
 /** Chapter'ın en güncel kayıtlı notu. */
+/** Not içeriğini düzenler (yönerge §39). */
+export async function updateNote(noteId: number, contentMd: string): Promise<SavedNote> {
+  const response = await authFetch(`/notes/${noteId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content_md: contentMd }),
+  })
+  if (!response.ok) throw new Error('Not güncellenemedi')
+  return (await response.json()) as SavedNote
+}
+
+/** Chapter'ın tüm kayıtlı notları — yeniden eskiye (not arşivi). */
+export async function listChapterNotes(chapterId: number): Promise<SavedNote[]> {
+  const response = await authFetch(`/chapters/${chapterId}/notes/archive`)
+  if (!response.ok) return []
+  return (await response.json()) as SavedNote[]
+}
+
+/** Notu siler (yönerge §39 — çağıran taraf confirmation modal'ı zorunlu kılar). */
+export async function deleteNote(noteId: number): Promise<void> {
+  const response = await authFetch(`/notes/${noteId}`, { method: 'DELETE' })
+  if (!response.ok) throw new Error('Not silinemedi')
+}
+
 export async function getNote(chapterId: number): Promise<SavedNote | null> {
   const response = await authFetch(`/chapters/${chapterId}/notes`)
   if (!response.ok) return null
   return (await response.json()) as SavedNote
 }
 
-/** Notu PDF olarak indirir (Türkçe karakter destekli). */
-export async function exportNotePdf(noteId: number): Promise<void> {
-  const response = await authFetch(`/notes/${noteId}/export`)
+/** Notu PDF olarak indirir (Türkçe karakter destekli).
+ * variant: "physical" (baskı dostu, siyah logo, marka header) | "digital" (koyu StuHub teması). */
+export type PdfVariant = 'physical' | 'digital'
+
+export async function exportNotePdf(noteId: number, variant: PdfVariant = 'physical'): Promise<void> {
+  const response = await authFetch(`/notes/${noteId}/export?variant=${variant}`)
   if (!response.ok) {
     throw new Error('PDF oluşturulamadı. Lütfen tekrar deneyin.')
   }
@@ -113,7 +140,7 @@ export async function exportNotePdf(noteId: number): Promise<void> {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `stuhub-not-${noteId}.pdf`
+  link.download = `stuhub-not-${noteId}-${variant}.pdf`
   document.body.appendChild(link)
   link.click()
   link.remove()

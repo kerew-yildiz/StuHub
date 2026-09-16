@@ -96,36 +96,37 @@ async def _course_exists(db, course_id: int, tenant_id: str) -> bool:
 
 
 async def _load_course_notes(course_id: int, tenant_id: str) -> list[dict]:
-    """Dersin tüm chapter notlarını (en güncel) toplar."""
+    """Dersin tüm chapter notlarını (en güncel) toplar.
+
+    Tek sorgu: chapter başına ayrı not sorgusu (N+1) yerine "her chapter'ın en son
+    notu" ilişkili alt sorguyla bir kerede okunur — aynı kalıp `guide_service.
+    _course_chapter_notes` içinde de kullanılır. Hem SQLite hem Postgres'te çalışır.
+    """
     db = await get_db()
     try:
         if not await _course_exists(db, course_id, tenant_id):
             return []
         cursor = await db.execute(
-            "SELECT id, title FROM chapters WHERE course_id = ? AND tenant_id = ? ORDER BY id",
-            (course_id, tenant_id),
+            "SELECT c.id AS chapter_id, c.title AS chapter_title, "
+            "n.content_md AS content_md, n.citations_json AS citations_json "
+            "FROM chapters c JOIN notes n ON n.chapter_id = c.id "
+            "WHERE c.course_id = ? AND c.tenant_id = ? AND n.tenant_id = ? AND n.id = ("
+            "  SELECT MAX(n2.id) FROM notes n2 "
+            "  WHERE n2.chapter_id = c.id AND n2.tenant_id = n.tenant_id"
+            ") ORDER BY c.id",
+            (course_id, tenant_id, tenant_id),
         )
-        chapters = await cursor.fetchall()
-        notes: list[dict] = []
-        for chapter in chapters:
-            cursor = await db.execute(
-                "SELECT content_md, citations_json FROM notes "
-                "WHERE chapter_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1",
-                (chapter["id"], tenant_id),
-            )
-            row = await cursor.fetchone()
-            if row is not None:
-                notes.append(
-                    {
-                        "chapter_id": chapter["id"],
-                        "chapter_title": chapter["title"],
-                        "content_md": row["content_md"],
-                        "citations_json": json.loads(row["citations_json"] or "{}"),
-                    }
-                )
+        return [
+            {
+                "chapter_id": row["chapter_id"],
+                "chapter_title": row["chapter_title"],
+                "content_md": row["content_md"],
+                "citations_json": json.loads(row["citations_json"] or "{}"),
+            }
+            for row in await cursor.fetchall()
+        ]
     finally:
         await db.close()
-    return notes
 
 
 def _build_context(notes: list[dict]) -> tuple[list[dict], str, str]:
@@ -416,17 +417,6 @@ async def _generate(course_id: int, tenant_id: str, *, mode: str = "practice", e
     if counts != EXPECTED_COUNTS:
         warnings.append(f"Dağılım sapması: {counts} (hedef {EXPECTED_COUNTS}) — quiz eldeki sorularla sunuldu.")
 
-
-    # Tek tek batch'lerin atlanması kasıtlı (yukarıdaki "asla başarısız olma" kuralı), ama
-    # HEPSİ atlanırsa elde quiz yok — 0 soruluk kayıt hem anlamsız hem de oynatıcıyı
-    # çökertiyordu: `OverallQuizPlayer` `questions[0].type` okuyor, boş dizide
-    # "Cannot read properties of undefined (reading 'type')" ile tüm CoursePage düşüyor
-    # (prod'da doğrulandı: course 4, overall_quizzes.id=1, questions=[]).
-    # Kullanıcıya sessiz bozuk kayıt yerine gerçek hata dönmeli.
-    if not questions:
-        raise OverallGenerationError(
-            "Hiç soru üretilemedi (tüm batch'ler başarısız). Lütfen tekrar deneyin."
-        )
 
     yield {"type": "status", "percent": 96, "message": "Sorular karıştırılıyor ve kaydediliyor…"}
     seed = random.SystemRandom().randint(1, 10**9)

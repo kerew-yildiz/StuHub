@@ -7,8 +7,12 @@
       name="description"
       content="StuHub — ders notlarını ve quizlerini tek yerde toplayan yerel uygulama"
     />
-    <meta name="theme-color" content="#1c1c1e" />
+    <meta name="theme-color" content="#000000" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <!-- P5: Kritik fontları CSS'ten önce yükle — FOUT'ı keser. Regular+ SemiBold
+         çoğu ekranın ilk boyasını taşır; Bold/Medium CSS üzerinden swap ile gelir. -->
+    <link rel="preload" href="/fonts/Montserrat-Regular.ttf" as="font" type="font/ttf" crossorigin />
+    <link rel="preload" href="/fonts/Montserrat-SemiBold.ttf" as="font" type="font/ttf" crossorigin />
     <title>StuHub</title>
   </head>
   <body>

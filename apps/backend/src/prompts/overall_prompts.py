@@ -6,9 +6,18 @@ OVERALL_BATCH_PROMPT = """Aşağıdaki ders notu parçalarından "{category}" t�
 KURALLAR:
 1. Sorular SADECE sağlanan not parçaları ve ATIF LİSTESİ'ndeki kaynaklardan üretilecek; atıfsız soru üretme.
 2. Konular verilen DAĞILIM PLANI'na göre dengeli dağılacak.
+2c. KONULAR ARASI BAĞLANTI: üretilen soruların en az %10'u (partide en az 1 madde), farklı
+    chapter/konular arasında ilişki kurdursun (karşılaştırma, sıralama, "hangisi diğerinden farklı",
+    bir kavramı diğerinin bağlamına taşıma). Bu maddeler tek bir not parçasına bağlı kalmayacak;
+    ilgili atıfların tümünü taşıyacak.
 3. Her soru kendi tip şemasına birebir uyacak.
+3b. TF: "statement" yanlış olduğunda, yanlışlık GERÇEK bir kavram yanılgısından gelmeli (bariz
+    olgu değiştirme, olumsuzlama veya sayı bozma ile üretilen yanlışlar YASAK). explanation alanı
+    yanılgının nereden geldiğini açıklayacak.
 4. MCQ/TF/FIB için doğru/yanlış geribildirim metinleri üretimde hazırlanacak; yanlış geribildirimi atıflı açıklama içerecek.
-5. FIB sorularına kabul edilen cevap listesi (accepted_answers) eklenecek — eş anlamlılar ve yaygın yazım varyantları dahil (interaksiyonda LLM çağrısı yapılmaz).
+5. FIB: boşluk (____) cümlenin geri kalanından tahmin edilebilecek bir kelime olmayacak; boşluğun
+   yerine terim/kavram/nicelik gelecek. accepted_answers eş anlamlılar ve yaygın yazım varyantlarını
+   içerecek.
 6. Açık uçlu sorulara saklı cevap anahtarı (answer_key: points listesi + citations) yazılacak.
 7. Yalnızca JSON döndür: {{"category": "{category}", "questions": [ ... ]}}
 8. {dil_talimati}

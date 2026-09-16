@@ -16,9 +16,11 @@ class Settings(BaseSettings):
 
     - data_dir: uygulama veri dizini (SQLite + materyal deposu).
       Varsayılan <repo>/data; testler STUHUB_DATA_DIR env'iyle geçici dizine yönlendirir.
-    - google_api_key / openrouter_api_key / groq_api_key / github_token: ücretsiz LLM
-      sağlayıcı zinciri anahtarları (bkz. `services/llm_providers.py`) — geçici çözüm,
-      Kerem ileride tek bir ücretli anahtar verecek. Asla loglanmaz, hata mesajında
+    - opencode_api_key: birincil sağlayıcı anahtarı (opencode-go aboneliği,
+      DeepSeek V4.1 Flash — bkz. `services/llm_providers.py`).
+    - google_api_key / openrouter_api_key / groq_api_key / cerebras_api_key /
+      github_token: yedek ücretsiz LLM sağlayıcı zinciri anahtarları — opencode-go
+      çalışmadığında devreye girer. Tüm anahtarlar asla loglanmaz, hata mesajında
       veya API yanıtında görünmez (yol haritası Bölüm 8).
     """
 
@@ -30,6 +32,9 @@ class Settings(BaseSettings):
     )
 
     data_dir: Path = Field(default=REPO_ROOT / "data", alias="STUHUB_DATA_DIR")
+    opencode_api_key: str = Field(default="", alias="OPENCODE_API_KEY")
+    """Birincil sağlayıcı (Kerem kararı, 2026-09-16): opencode-go Go aboneliği,
+    DeepSeek V4.1 Flash. Boşsa zincir doğrudan yedek ücretsiz sağlayıcılara düşer."""
     google_api_key: str = Field(default="", alias="GOOGLE_API_KEY")
     openrouter_api_key: str = Field(default="", alias="OPENROUTER_API_KEY")
     groq_api_key: str = Field(default="", alias="GROQ_API_KEY")

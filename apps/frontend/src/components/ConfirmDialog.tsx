@@ -1,6 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 import { useConfirmStore } from '../stores/confirmStore'
+import { useFocusTrap } from '../hooks/useFocusTrap'
 
 /**
  * Tema uyumlu onay diyaloğu — `window.confirm()` yerine. `confirmStore`'daki
@@ -10,6 +11,8 @@ export function ConfirmDialog() {
   const open = useConfirmStore((s) => s.open)
   const message = useConfirmStore((s) => s.message)
   const respond = useConfirmStore((s) => s.respond)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(dialogRef, open)
 
   useEffect(() => {
     if (!open) return
@@ -29,6 +32,7 @@ export function ConfirmDialog() {
       onClick={() => respond(false)}
     >
       <div
+        ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-message"

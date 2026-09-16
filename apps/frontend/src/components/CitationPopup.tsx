@@ -1,7 +1,8 @@
-import { X } from '@phosphor-icons/react'
 import { useEffect, useRef, useState } from 'react'
 
 import { resolveCitation, type Citation, type ResolvedChunk } from '../api/notes'
+import { useFocusTrap } from '../hooks/useFocusTrap'
+import { X } from 'lucide-react'
 
 interface CitationPopupProps {
   citation: Citation
@@ -40,6 +41,8 @@ function SourceUrl({ url }: { url: string }) {
 export function CitationPopup({ citation, onClose, preloadedText, sourceLabel }: CitationPopupProps) {
   const [chunk, setChunk] = useState<ResolvedChunk | null>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(dialogRef, true)
   const isWeb = citation.source_type === 'web' || Boolean(citation.url)
 
   useEffect(() => {
@@ -79,6 +82,7 @@ export function CitationPopup({ citation, onClose, preloadedText, sourceLabel }:
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="citation-popup-title"

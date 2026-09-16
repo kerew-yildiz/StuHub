@@ -29,7 +29,7 @@ from openai import AsyncOpenAI
 from ..auth import LOCAL_TENANT_ID
 from ..config import settings
 from ..db import get_db
-from .llm_providers import PROVIDER_CHAIN, LLMProvider
+from .llm_providers import PROVIDER_CHAIN, LLMProvider, request_params
 
 logger = logging.getLogger(__name__)
 
@@ -149,11 +149,18 @@ async def _mark_cooldown(provider_name: str) -> None:
     )
     db = await get_db()
     try:
-        await db.execute(
+        cursor = await db.execute(
+            # `RETURNING key` bilinçli: `settings` tablosunda `id` kolonu yok, açık
+            # RETURNING olmadan pg_compat `RETURNING id` ekleyip UndefinedColumnError
+            # alıyordu (bkz. KOK-NEDEN-K1).
             "INSERT INTO settings (key, value) VALUES (?, ?) "
-            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value "
+            "RETURNING key",
             (_cooldown_key(provider_name), tomorrow.isoformat()),
         )
+        # RETURNING satırı tüketilmezse SQLite commit'i "cannot commit transaction -
+        # SQL statements in progress" ile düşer (değeri kullanmıyoruz, yalnızca kapatıyoruz).
+        await cursor.fetchall()
         await db.commit()
     finally:
         await db.close()
@@ -328,9 +335,15 @@ async def chat_stream(
     if not providers:
         raise LLMError(_friendly_error(None))
 
+    # Oturum bağlamı: sağlayıcı oturum kimliği (opencode `x-opencode-session`) bu
+    # anahtardan türetilir — aynı iş bağlamı aynı oturumu paylaşır (prompt cache),
+    # farklı kiracı/ders ayrışır (bkz. llm_providers.session_id_for).
+    context_key = f"{kind}:{course_id or ''}:{chapter_id or ''}"
+
     last_error: Exception | None = None
     for provider in providers:
         client = _client_for(provider, keys)
+        params = request_params(provider, tenant_id=tenant_id, context_key=context_key)
         delay = BASE_DELAY
         for attempt in range(1, MAX_RETRIES_PER_PROVIDER + 1):
             try:
@@ -341,7 +354,7 @@ async def chat_stream(
                     temperature=temperature,
                     stream=True,
                     stream_options={"include_usage": True},
-                    **provider.extra_params,
+                    **params,
                 )
                 prompt_tokens = 0
                 completion_tokens = 0
@@ -423,9 +436,13 @@ async def chat_json(
     if not providers:
         raise LLMError(_friendly_error(None))
 
+    # Oturum bağlamı — bkz. chat_stream'deki aynı açıklama.
+    context_key = f"{kind}:{course_id or ''}:{chapter_id or ''}"
+
     last_error: Exception | None = None
     for provider in providers:
         client = _client_for(provider, keys)
+        params = request_params(provider, tenant_id=tenant_id, context_key=context_key)
         json_failures = 0
         provider_exhausted = False
         while json_failures < 3:
@@ -451,7 +468,7 @@ async def chat_json(
                         max_tokens=max_tokens,
                         temperature=temperature,
                         response_format={"type": "json_object"},
-                        **provider.extra_params,
+                        **params,
                     )
                     break
                 except Exception as exc:

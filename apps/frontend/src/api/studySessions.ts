@@ -9,6 +9,23 @@ export interface StudySession {
   created_at: string
 }
 
+/** Ders bağlamı OLMAYAN kullanım oturumunu kaydeder (POST /study-sessions).
+ *
+ * Otomatik zaman takipleyici global sayfalarda geçen aktif süreyi bununla yazar. */
+export async function createGlobalStudySession(
+  sessionId: string,
+  durationSec: number,
+): Promise<StudySession> {
+  const response = await authFetch('/study-sessions', {
+    method: 'POST',
+    body: JSON.stringify({ session_id: sessionId, duration_sec: durationSec }),
+  })
+  if (!response.ok) {
+    throw new Error('Çalışma oturumu kaydedilemedi. Lütfen tekrar deneyin.')
+  }
+  return (await response.json()) as StudySession
+}
+
 /** Tamamlanmış bir çalışma oturumunu kaydeder (POST /courses/{id}/study-sessions).
  *
  * `sessionId` bazında idempotenttir — ağ hatasında yeniden gönderilirse aynı oturum

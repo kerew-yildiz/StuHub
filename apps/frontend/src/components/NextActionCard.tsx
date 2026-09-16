@@ -1,7 +1,7 @@
-import { BookOpen, Cards, CheckCircle, Target, WarningCircle } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 
 import { fetchNextAction, type NextAction, type NextActionKind } from '../api/nextAction'
+import { BookOpen, CheckCircle, Crosshair, Layers, CircleAlert } from 'lucide-react'
 
 export interface NextActionCardProps {
   courseId: number
@@ -13,9 +13,9 @@ export interface NextActionCardProps {
   onOpenChapter?: (chapterId: number) => void
 }
 
-const ICON: Record<NextActionKind, typeof Cards> = {
-  cards: Cards,
-  error_quiz: Target,
+const ICON: Record<NextActionKind, typeof Layers> = {
+  cards: Layers,
+  error_quiz: Crosshair,
   read_chapter: BookOpen,
   none: CheckCircle,
 }
@@ -55,10 +55,12 @@ export function NextActionCard({
     }
   }, [courseId])
 
+  // Sıkıntı #1: kendi panelini sarmalamaz — zaten bir feature-card içinde render
+  // edilir; nested glass-panel (iç içe kart) yasak (yönerge §5).
   if (error) {
     return (
-      <div className="glass-panel flex items-center gap-2 p-5 text-sm text-stuhub-error">
-        <WarningCircle size={20} aria-hidden="true" />
+      <div className="flex items-center gap-2 text-sm text-stuhub-error">
+        <CircleAlert size={20} aria-hidden="true" />
         {error}
       </div>
     )
@@ -66,7 +68,7 @@ export function NextActionCard({
 
   if (action === null) {
     return (
-      <div className="glass-panel p-5 text-sm text-stuhub-text-muted">Öneri hazırlanıyor…</div>
+      <div className="text-sm text-stuhub-text-muted">Öneri hazırlanıyor…</div>
     )
   }
 
@@ -84,18 +86,15 @@ export function NextActionCard({
   }
 
   return (
-    <div className="glass-panel flex flex-wrap items-center justify-between gap-4 p-5">
+    <div className="flex flex-1 flex-col items-start justify-center gap-3 self-stretch">
       <div className="flex items-center gap-3">
         <Icon size={24} className="shrink-0 text-stuhub-accent" aria-hidden="true" />
-        <div>
-          <p className="text-xs font-medium uppercase tracking-widest text-stuhub-text-muted">
-            Bugün ne çalışsam?
-          </p>
-          <p className="text-sm text-stuhub-text">{action.reason}</p>
-        </div>
+        {/* Kart başlığı feature-card__top'ta zaten var — eyebrow duplikasyonu kaldırıldı;
+            satır cart'ın dikey merkezine hizalandı (sıkıntı: bitişik yazılar). */}
+        <p className="text-sm text-stuhub-text">{action.reason}</p>
       </div>
       {action.action !== 'none' && (
-        <button type="button" className="btn-primary shrink-0" onClick={handleClick}>
+        <button type="button" className="btn-primary" onClick={handleClick}>
           {BUTTON_LABEL[action.action]}
         </button>
       )}

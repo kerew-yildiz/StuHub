@@ -1,90 +1,111 @@
 @import "tailwindcss";
 
-/* ── Tema değişkenleri (🏰 300-Projects/StuHub/TASARIM-SISTEMI.md — tek otorite) ──
-   Monochrome Glassmorphic: zinc-950 zemin, iki kademe buzlu-cam yüzey, tek beyaz
-   aksan. Yalnızca koyu tema — açık mod yok, `.dark` sınıf mekanizması kaldırıldı.
-   Bileşenlerde hardcoded renk YASAK — yalnızca bu tokenlar. */
+@font-face {
+  font-family: "Montserrat";
+  src: url("/fonts/Montserrat-Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Montserrat";
+  src: url("/fonts/Montserrat-Medium.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Montserrat";
+  src: url("/fonts/Montserrat-SemiBold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Montserrat";
+  src: url("/fonts/Montserrat-Bold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
 
 :root {
-  /* Zemin — granit grisi, saf siyah değil */
-  --stuhub-bg: #1c1c1e;
-  --stuhub-bg-elevated: #242427;
+  /* Yönerge: arka plan siyah — glass katmanları siyah zeminde yeniden dengelendi */
+  --stuhub-bg: #000;
+  --stuhub-bg-elevated: #0d0d0f;
   --stuhub-text: #fafafa;
   --stuhub-text-secondary: #a1a1aa;
-  --stuhub-text-muted: #71717a;
-  --stuhub-border: rgba(255, 255, 255, 0.12);
-  --stuhub-border-strong: rgba(255, 255, 255, 0.24);
-
-  /* Cam yüzey katmanları — kart/panel her zaman saydam, düz renk değil. Net cam hissi
-     istendi (buzlu/frosted DEĞİL) — blur bilinçli olarak düşük, zemin deseni panel
-     arkasında az bozulmuş şekilde net seçilir; kimlik dolgu + kenarlıkla kurulur. */
-  --stuhub-glass-1: rgba(255, 255, 255, 0.07);
-  --stuhub-glass-1-hover: rgba(255, 255, 255, 0.11);
-  --stuhub-glass-2: rgba(255, 255, 255, 0.04);
-  --stuhub-glass-2-hover: rgba(255, 255, 255, 0.075);
+  /* WCAG AA: #71717a siyah zeminde 4.35:1 — 12px metin için yetersizdi (AA 4.5).
+   * #8b8b93 5.4:1 verir; muted rolü (küçük yardımcı metin) tam AA kapsar. */
+  --stuhub-text-muted: #8b8b93;
+  --stuhub-border: rgba(255,255,255,.08);
+  --stuhub-border-strong: rgba(255,255,255,.18);
+  --stuhub-glass-1: rgba(255,255,255,.075);
+  --stuhub-glass-1-hover: rgba(255,255,255,.12);
+  --stuhub-glass-2: rgba(255,255,255,.045);
+  --stuhub-glass-2-hover: rgba(255,255,255,.08);
   --blur-glass-1: 6px;
   --blur-glass-2: 3px;
-  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.45);
-
-  /* Geriye dönük eşleme: eski `bg-stuhub-surface` kullanan bileşenler kırılmasın
-     diye yüzey rengi cam-1'e eşitlendi (backdrop-blur olmadan da makul görünür). */
-  --stuhub-surface: var(--stuhub-glass-1);
-  --stuhub-surface-hover: var(--stuhub-glass-1-hover);
-
-  /* Tek aksan — beyaz. Renkli aksan yok, vurgu yoğunlukla yapılır. */
-  --stuhub-accent: #ffffff;
-  --stuhub-accent-hover: #e4e4e7;
-  --stuhub-on-accent: #1c1c1e;
-  --stuhub-accent-glass: rgba(255, 255, 255, 0.1);
-  --stuhub-accent-glass-border: rgba(255, 255, 255, 0.2);
-
-  /* Semantik — yalnızca ikon/metinle birlikte, renk tek başına anlam taşımaz */
-  --stuhub-success: #4ade80;
-  --stuhub-error: #f87171;
-  --stuhub-on-error: #18181b;
-  --stuhub-warning: #fbbf24;
-  --stuhub-info: #22d3ee;
-
-  /* Anahtar terim kutusu (notlarda) */
-  --stuhub-callout-bg: rgba(251, 191, 36, 0.1);
-  --stuhub-callout-border: rgba(251, 191, 36, 0.35);
-
-  /* Ders renk paleti (hue) — Sidebar noktası, şerit, sekme vurgusu.
-     Artık zemin değil: ince şerit/nokta/tint. -soft cam üstü %14 tint. */
-  --stuhub-hue-indigo: #818cf8;
-  --stuhub-hue-indigo-text: #a5b4fc;
-  --stuhub-hue-indigo-soft: rgba(129, 140, 248, 0.14);
-  --stuhub-hue-pine: #4ade80;
-  --stuhub-hue-pine-text: #86efac;
-  --stuhub-hue-pine-soft: rgba(74, 222, 128, 0.14);
-  --stuhub-hue-burgundy: #f87171;
-  --stuhub-hue-burgundy-text: #fca5a5;
-  --stuhub-hue-burgundy-soft: rgba(248, 113, 113, 0.14);
-  --stuhub-hue-amber: #fbbf24;
-  --stuhub-hue-amber-text: #fcd34d;
-  --stuhub-hue-amber-soft: rgba(251, 191, 36, 0.14);
-  --stuhub-hue-teal: #22d3ee;
-  --stuhub-hue-teal-text: #67e8f9;
-  --stuhub-hue-teal-soft: rgba(34, 211, 238, 0.14);
-  --stuhub-hue-plum: #c084fc;
-  --stuhub-hue-plum-text: #d8b4fe;
-  --stuhub-hue-plum-soft: rgba(192, 132, 252, 0.14);
-
-  /* Hareket — geri bildirim sistemi (TASARIM-SISTEMI.md §4) */
-  --ease-out: cubic-bezier(0, 0, 0.2, 1);
-  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --shadow-glass: 0 8px 32px rgba(0,0,0,.6);
+  /* Cam yüzey katmanları: üst-sol ışık yansıması, iç kenar ışığı, kart gölgesi. */
+  --glass-sheen: linear-gradient(135deg, rgba(255,255,255,.04), transparent 40%);
+  --glass-inner-light: inset 0 1px 0 rgba(255,255,255,.08);
+  --glass-border: rgba(255,255,255,.06);
+  --glass-border-top: rgba(255,255,255,.12);
+  /* glass-hissi v2 — cam zemin alfa ölçeği: --stuhub-glass-1/2'nin ~%40'ı.
+   * Neden ayrı token: glass-1/2 TSX'te krom yüzeylerde (input, chip, takvim
+   * hücresi, ikon butonu) de kullanılıyor; onları inceltmek kapsam dışı olurdu.
+   * Koyulaştırma YOK, yalnızca daha az beyaz perde → arkadaki masa görünür. */
+  --glass-surface-1: rgba(255,255,255,.03);
+  --glass-surface-2: rgba(255,255,255,.02);
+  --glass-surface-1-hover: rgba(255,255,255,.05);
+  /* Kenar ışığı + spekular ring tek katmanda: üst 1px .18 (istenen .14 kenar
+   * ışığıyla AYNI piksel satırı — üst üste bindirilmedi), yanlar .06, alt siyah
+   * .25 cam kalınlığı (ring'in .02'lik alt satırı bunun altında kalır). */
+  --glass-edge: inset 0 1px 0 rgba(255,255,255,.18), inset 1px 0 0 rgba(255,255,255,.06), inset -1px 0 0 rgba(255,255,255,.06), inset 0 -1px 0 rgba(0,0,0,.25);
+  /* Sol-üst köşe spekular lekesi — --glass-sheen'in ÜSTÜNE biner. */
+  --glass-gleam: radial-gradient(closest-side at 18% 12%, rgba(255,255,255,.08), transparent);
+  --shadow-card-hover: 0 14px 36px rgba(0,0,0,.45);
+  --shadow-card: 0 8px 24px rgba(0,0,0,.35);
+  --stuhub-accent: #fff;
+  --stuhub-accent-hover: #e7e7ea;
+  --stuhub-on-accent: #000;
+  --stuhub-accent-glass: rgba(255,255,255,.10);
+  --stuhub-accent-glass-border: rgba(255,255,255,.20);
+  --stuhub-success: #b7d1bf;
+  --stuhub-error: #d2b5b5;
+  --stuhub-on-error: #000;
+  --stuhub-warning: #d5c9a8;
+  --stuhub-info: #bacbd2;
+  --stuhub-ai: #c6bdd0;
+  --stuhub-callout-bg: rgba(213,201,168,.08);
+  --stuhub-callout-border: rgba(213,201,168,.18);
+  --radius-chip: 10px;
+  --radius-control: 14px;
+  --radius-panel: 20px;
+  --radius-pill: 9999px;
+  --ease-out: cubic-bezier(0,0,.2,1);
+  --ease-out-expo: cubic-bezier(.16,1,.3,1);
+  /* Motion system (Visual Excellence P1): tam ölçek — micro/state/entrance/scene
+   * + spring/emphasis eğrileri + kademeli giriş birimi. Tüm animasyonlar bu
+   * token'lardan türemeli; sayfa bazlı magic number yasak. */
   --duration-micro: 120ms;
   --duration-state: 200ms;
   --duration-entrance: 320ms;
+  --duration-scene: 480ms;
+  --ease-spring: cubic-bezier(.34,1.56,.64,1);
+  --ease-emphasis: cubic-bezier(.2,.9,.25,1);
+  --stagger-unit: 45ms;
+  --distance-entrance: 8px;
+  --sidebar-collapsed: 72px;
+  --sidebar-expanded: 240px;
 }
 
 @theme {
-  /* Renkler — Tailwind utility'leri: bg-stuhub-glass-1, text-stuhub-text, … */
   --color-stuhub-bg: var(--stuhub-bg);
   --color-stuhub-bg-elevated: var(--stuhub-bg-elevated);
-  --color-stuhub-surface: var(--stuhub-surface);
-  --color-stuhub-surface-hover: var(--stuhub-surface-hover);
   --color-stuhub-glass-1: var(--stuhub-glass-1);
+  --color-stuhub-surface: var(--stuhub-glass-1);
   --color-stuhub-glass-1-hover: var(--stuhub-glass-1-hover);
   --color-stuhub-glass-2: var(--stuhub-glass-2);
   --color-stuhub-glass-2-hover: var(--stuhub-glass-2-hover);
@@ -100,162 +121,497 @@
   --color-stuhub-accent-glass-border: var(--stuhub-accent-glass-border);
   --color-stuhub-success: var(--stuhub-success);
   --color-stuhub-error: var(--stuhub-error);
-  --color-stuhub-on-error: var(--stuhub-on-error);
   --color-stuhub-warning: var(--stuhub-warning);
   --color-stuhub-info: var(--stuhub-info);
+  --color-stuhub-ai: var(--stuhub-ai);
   --color-stuhub-callout-bg: var(--stuhub-callout-bg);
   --color-stuhub-callout-border: var(--stuhub-callout-border);
+  --font-sans: "Montserrat", system-ui, sans-serif;
+  --text-xs: 12px; --text-sm: 14px; --text-base: 16px; --text-lg: 18px;
+  --text-xl: 20px; --text-2xl: 24px; --text-3xl: 30px; --text-4xl: 36px;
+  --radius-chip: 10px; --radius-control: 14px; --radius-panel: 20px; --radius-pill: 9999px;
+  --radius-sm: var(--radius-chip); --radius-md: var(--radius-control); --radius-lg: var(--radius-panel);
+}
 
-  /* Tipografi ölçeği (px): 12/14/16/18/20/24/30/36 */
-  --text-xs: 12px;
-  --text-sm: 14px;
-  --text-base: 16px;
-  --text-lg: 18px;
-  --text-xl: 20px;
-  --text-2xl: 24px;
-  --text-3xl: 30px;
-  --text-4xl: 36px;
+* { box-sizing: border-box; }
+html { color-scheme: dark; background: #000; font-family: "Montserrat", system-ui, sans-serif; }
+body { min-height: 100dvh; margin: 0; background: var(--stuhub-bg); color: var(--stuhub-text); }
+/* Gorsel arkaplan: calisma masasi (siyah zemin, beyaz detay ~%40 gorunurluk).
+   Kaynak: apps/frontend/public/bg/calisma-masasi.png */
+body {
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(0, 0, 0, 0) 30%, rgba(0, 0, 0, 0.75) 100%),
+    linear-gradient(rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.78)),
+    url("/bg/calisma-masasi.png") center / cover no-repeat fixed,
+    var(--stuhub-bg);
+}
+button, a, input, textarea, select { font: inherit; }
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 2px solid rgba(255,255,255,.9);
+  outline-offset: 2px;
+}
+/* Lucide icons (§52): 1.5px stroke everywhere; keep baseline alignment stable */
+.lucide { stroke-width: 1.5px; display: inline-block; vertical-align: -0.125em; flex-shrink: 0; }
 
-  /* Font aileleri */
-  --font-sans: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
-
-  /* Radius kilidi — dört seviye, TASARIM-SISTEMI.md §3. Eski sm/md/lg de eşlendi
-     ki henüz göç etmemiş sınıflar kırılmasın. */
-  --radius-chip: 10px;
-  --radius-control: 14px;
-  --radius-panel: 20px;
-  --radius-pill: 9999px;
-  --radius-sm: var(--radius-chip);
-  --radius-md: var(--radius-control);
-  --radius-lg: var(--radius-panel);
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(680px circle at 12% 8%, rgba(255,255,255,.035), transparent 68%),
+    radial-gradient(760px circle at 86% 88%, rgba(190,200,210,.028), transparent 72%),
+    var(--stuhub-bg);
 }
 
 @layer components {
-  /* Birincil cam yüzey — kart, panel, modal */
   .glass-panel {
-    background-color: var(--stuhub-glass-1);
-    backdrop-filter: blur(var(--blur-glass-1));
-    -webkit-backdrop-filter: blur(var(--blur-glass-1));
-    border: 1px solid var(--stuhub-border);
+    /* Net cam: düşük alfalı zemin → arkadaki görsel kart içinde okunur; renk
+     * parlaklığı zeminden değil backdrop-filter brightness/saturate'inden gelir. */
+    background: var(--glass-gleam), var(--glass-sheen), var(--glass-surface-1);
+    backdrop-filter: blur(var(--blur-glass-1)) brightness(1.15) saturate(1.1);
+    -webkit-backdrop-filter: blur(var(--blur-glass-1)) brightness(1.15) saturate(1.1);
+    border: 1px solid var(--glass-border);
+    border-top-color: var(--glass-border-top);
     border-radius: var(--radius-panel);
-    box-shadow: var(--shadow-glass);
+    box-shadow: var(--glass-inner-light), var(--glass-edge), var(--shadow-glass);
   }
-
-  /* İkincil cam yüzey — pasif/subtle panel, rozet zemini */
   .glass-panel-subtle {
-    background-color: var(--stuhub-glass-2);
-    backdrop-filter: blur(var(--blur-glass-2));
-    -webkit-backdrop-filter: blur(var(--blur-glass-2));
-    border: 1px solid var(--stuhub-border);
+    background: var(--glass-gleam), var(--glass-sheen), var(--glass-surface-2);
+    backdrop-filter: blur(var(--blur-glass-2)) brightness(1.15) saturate(1.1);
+    -webkit-backdrop-filter: blur(var(--blur-glass-2)) brightness(1.15) saturate(1.1);
+    border: 1px solid var(--glass-border);
+    border-top-color: var(--glass-border-top);
     border-radius: var(--radius-panel);
+    box-shadow: var(--glass-inner-light), var(--glass-edge);
   }
-
-  /* Etkileşim katmanı — glass-panel/-subtle ile birlikte kullanılır */
   .glass-interactive {
-    transition:
-      background-color var(--duration-micro) var(--ease-out-expo),
-      border-color var(--duration-micro) var(--ease-out-expo),
-      transform var(--duration-micro) var(--ease-out-expo);
+    transition: background-color var(--duration-micro) var(--ease-out-expo), border-color var(--duration-micro) var(--ease-out-expo), transform var(--duration-micro) var(--ease-out-expo), filter var(--duration-micro) var(--ease-out-expo), box-shadow var(--duration-state) var(--ease-out-expo);
     cursor: pointer;
   }
   .glass-interactive:hover {
-    background-color: var(--stuhub-glass-1-hover);
+    /* Sheen korunur — hover'da gradient kaybolup düz renge düşmesin. */
+    background: var(--glass-gleam), var(--glass-sheen), var(--glass-surface-1-hover);
     border-color: var(--stuhub-border-strong);
-    transform: translateY(-1px);
+    filter: brightness(1.035);
+    /* 2px kalkma; box-shadow tamamen ezildiği için inset'ler burada tekrar yazılır. */
+    transform: translateY(-2px);
+    box-shadow: var(--glass-inner-light), var(--glass-edge), var(--shadow-card-hover);
   }
-  .glass-interactive:active {
-    transform: scale(0.98);
-  }
-
-  /* Görünür kaydırma çubuğu olmadan kaydırma — TikTok/Reels tarzı tam ekran feed'ler
-   * (QuizFeed) için: içerik yine kaydırılabilir, kalın gri çubuk sadece gizlenir. */
-  .no-scrollbar {
-    scrollbar-width: none; /* Firefox */
-    -ms-overflow-style: none; /* eski Edge */
-  }
-  .no-scrollbar::-webkit-scrollbar {
-    display: none; /* Chrome/Safari/yeni Edge */
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .glass-interactive,
-    .glass-interactive:hover,
-    .glass-interactive:active {
-      transform: none;
-      transition-duration: 1ms;
-    }
+  /* Klavye odağı: accent dış halka (global outline'ın hemen altında glow) */
+  .glass-interactive:focus-visible {
+    box-shadow: 0 0 0 2px var(--stuhub-accent-glass-border), var(--glass-inner-light), var(--glass-edge), var(--shadow-card);
   }
 
-  /* Birincil eylem butonu — dolu beyaz aksan (TASARIM-SISTEMI.md §4 geri bildirim
-     döngüsü). `disabled` durumu opacity-fade DEĞİL: gerçek bir pasif cam yüzeye
-     (`--stuhub-glass-2`) düşer — "tıklanabilir gibi görünüp tıklanamıyor" hissini
-     önler (Kerem geri bildirimi, 2026-09-04). Sistem geneli TEK buton kalıbı; her
-     bileşen bunu kullanır, kendi disabled stilini icat etmez. */
+  /* Light sweep (glass-hissi v2 — imza efekt): hover girişinde kart üzerinden
+   * soldan sağa BİR KEZ geçen dikey ışık şeridi. ::after tam kart genişliğinde
+   * kalır (translateX ±120% tam geçiş verir); şerit gradientin %38–62 bandıdır
+   * (~%24 genişlik, tepe alfa .08) → "0 → 8 → 0" beyaz. Yalnızca transform +
+   * opacity; repaint yok, taşma kartın overflow'u tarafından kırpılır. */
+  .glass-interactive { position: relative; overflow: hidden; }
+  .glass-interactive::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 38%, rgba(255,255,255,.08) 50%, transparent 62%);
+    transform: translateX(-120%);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .glass-interactive:hover::after { animation: glass-sweep 600ms var(--ease-out-expo) 1; }
+  @keyframes glass-sweep {
+    from { transform: translateX(-120%); opacity: 0; }
+    20%, 80% { opacity: 1; }
+    to { transform: translateX(120%); opacity: 0; }
+  }
+  .glass-interactive:active { transform: scale(.985); }
+
   .btn-primary {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--radius-control);
-    padding: 0.5rem 1rem;
-    font-size: 0.875rem;
-    font-weight: 500;
-    background-color: var(--stuhub-accent);
-    color: var(--stuhub-on-accent);
-    transition:
-      background-color var(--duration-micro) var(--ease-out-expo),
-      color var(--duration-micro) var(--ease-out-expo),
-      transform var(--duration-micro) var(--ease-out-expo);
+    display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+    min-height: 40px; padding: 0 .95rem; border-radius: var(--radius-control);
+    background: var(--stuhub-accent); color: var(--stuhub-on-accent); font-weight: 600;
+    transition: background-color var(--duration-micro) var(--ease-out-expo), transform var(--duration-micro) var(--ease-out-expo);
   }
-  .btn-primary:hover:not(:disabled) {
-    background-color: var(--stuhub-accent-hover);
+  .btn-primary:hover:not(:disabled) { background: var(--stuhub-accent-hover); }
+  .btn-primary:active:not(:disabled) { transform: scale(.98); }
+  .btn-primary:disabled { background: var(--stuhub-glass-2); color: var(--stuhub-text-muted); cursor: not-allowed; }
+
+  .icon-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 38px; height: 38px; border-radius: var(--radius-control);
+    color: var(--stuhub-text-secondary); background: var(--stuhub-glass-2);
+    border: 1px solid var(--stuhub-border); transition: all var(--duration-micro) var(--ease-out-expo);
   }
-  .btn-primary:active:not(:disabled) {
-    transform: scale(0.98);
+  .icon-btn:hover { color: var(--stuhub-text); background: var(--stuhub-glass-2-hover); border-color: var(--stuhub-border-strong); }
+  .icon-btn:active { transform: scale(.98); }
+
+  /* Katman sırası: sidebar (60) < header (70) < popover (80) — desktop'ta header üstte.
+     Mobilde sidebar 80'e çıkar (aşağıdaki media query); backdrop 55 her ikisinin altında. */
+  .app-header {
+    position: sticky; top: 0; z-index: 70; min-height: 70px;
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+    padding: 12px clamp(12px, 1.5vw, 28px);
+    background: rgba(0,0,0,.45); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
   }
-  .btn-primary:disabled {
-    background-color: var(--stuhub-glass-2);
-    color: var(--stuhub-text-muted);
-    cursor: not-allowed;
+  .app-header__left { justify-self: start; display: flex; align-items: center; }
+  .app-header__right { justify-self: end; display:flex; align-items:center; gap: 8px; }
+  .app-header__brand { justify-self:center; display:flex; align-items:center; gap:10px; min-width:0; }
+  .search-control {
+    /* Sidebar tepe bandında arama — hover ile açılan sidebar'ın ilk satırı. */
+    display:flex; align-items:center; gap:10px; width:100%; min-width:0;
+    margin-inline:auto; justify-self:center;
+    padding: 9px 14px; border-radius: var(--radius-pill); border: 1px solid var(--stuhub-border);
+    background: var(--stuhub-glass-2); color: var(--stuhub-text-secondary); transition:all var(--duration-micro) var(--ease-out-expo);
   }
-  @media (prefers-reduced-motion: reduce) {
-    .btn-primary,
-    .btn-primary:active:not(:disabled) {
-      transform: none;
-      transition-duration: 1ms;
-    }
+  .search-control:hover { background: var(--stuhub-glass-2-hover); color: var(--stuhub-text); border-color: var(--stuhub-border-strong); }
+  .search-control__hint { font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .search-control kbd { margin-left:auto; flex-shrink:0; font-size:11px; color:var(--stuhub-text-muted); border:1px solid var(--stuhub-border); background:var(--stuhub-glass-1, rgba(255,255,255,.03)); padding:2px 6px; border-radius:var(--radius-chip); }
+  .profile-trigger { display:flex; align-items:center; gap:7px; height:38px; padding: 3px 7px 3px 3px; border-radius: var(--radius-pill); border:1px solid var(--stuhub-border); background:var(--stuhub-glass-2); color:var(--stuhub-text-secondary); }
+  .profile-trigger:hover { background:var(--stuhub-glass-2-hover); border-color:var(--stuhub-border-strong); color:var(--stuhub-text); }
+  .avatar { display:flex; align-items:center; justify-content:center; border-radius:var(--radius-pill); background:var(--stuhub-accent-glass); border:1px solid var(--stuhub-accent-glass-border); color:var(--stuhub-text); font-weight:700; }
+  .avatar--small { width:30px; height:30px; font-size:11px; }
+  .avatar--large { width:50px; height:50px; font-size:15px; }
+  .popover-panel { position:absolute; z-index:80; background:rgba(0,0,0,.88); backdrop-filter:blur(6px); border:1px solid var(--stuhub-border); border-radius:var(--radius-panel); box-shadow:var(--shadow-glass); padding:14px; }
+  .popover-panel__heading { font-size:12px; text-transform:uppercase; letter-spacing:.12em; color:var(--stuhub-text-muted); padding:4px 5px 10px; }
+  .empty-inline { display:flex; align-items:center; gap:10px; color:var(--stuhub-text-secondary); font-size:13px; padding:14px 6px; }
+  .profile-card__identity { display:flex; align-items:center; gap:12px; padding:4px; }
+  .profile-tier { margin-top:14px; padding:9px 10px; border:1px solid var(--stuhub-border); border-radius:var(--radius-chip); background:var(--stuhub-glass-2); font-size:11px; letter-spacing:.12em; font-weight:600; }
+  .profile-card__links { margin-top:10px; display:grid; gap:4px; }
+  .list-row { display:flex; align-items:center; width:100%; min-height:38px; padding:7px 9px; border-radius:var(--radius-control); color:var(--stuhub-text-secondary); font-size:13px; }
+  .list-row:hover { background:var(--stuhub-glass-2-hover); color:var(--stuhub-text); }
+  .list-row--emphasis { color:var(--stuhub-text); }
+  .list-row--destructive:hover { color:var(--stuhub-error); background:rgba(210,181,181,.08); }
+
+  .app-sidebar { position:fixed; inset:0 auto 0 0; z-index:60; display:flex; flex-direction:column; width:var(--sidebar-collapsed); background:rgba(0,0,0,.45); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); transition:width var(--duration-state) var(--ease-out-expo); }
+  .app-sidebar--open { width:var(--sidebar-expanded); }
+  .app-sidebar__brand { min-height:70px; display:flex; align-items:center; gap:10px; padding:10px; }
+  /* Mobil brand satırı yalnızca kapatma düğmesi taşır */
+  .app-sidebar__brand { justify-content:flex-end; }
+  /* Arama artık sidebar'ın tepesinde (header'daki markanın altındaki bant) */
+  .app-sidebar__search { padding:10px clamp(10px,1vw,16px); }
+  /* Collapsed: pill/glass yerine nav ikonlarıyla aynı dilde ortalanmış ikon butonu */
+  .app-sidebar--collapsed .search-control {
+    justify-content:center; gap:0; padding:0; width:100%; min-width:0; min-height:40px;
+    border-radius:var(--radius-control); border-color:transparent; background:transparent; color:var(--stuhub-text-secondary);
   }
+  .app-sidebar--collapsed .search-control:hover { background:var(--stuhub-glass-2-hover); border-color:var(--stuhub-border); color:var(--stuhub-text); }
+  .app-sidebar--collapsed .search-control__hint, .app-sidebar--collapsed .search-control kbd { display:none; }
+  .brand-mark { flex:0 0 48px; width:48px; height:48px; display:flex; align-items:center; justify-content:center; border-radius:var(--radius-control); overflow:hidden; object-fit:contain; }
+  .brand-mark img { width:42px; height:42px; object-fit:contain; }
+  .brand-wordmark { font-size:15px; font-weight:700; letter-spacing:-.02em; }
+  .brand-context { margin-top:2px; font-size:11px; color:var(--stuhub-text-muted); }
+  .app-sidebar__nav { flex:1; overflow-y:auto; padding: clamp(10px,1vw,16px); display:flex; flex-direction:column; gap:6px; }
+  .app-sidebar__footer { padding:clamp(10px,1vw,16px); display:grid; gap:6px; }
+  /* Yönerge §26: workspace sağ üst kontrolleri */
+  .workspace-chrome { position:absolute; top:clamp(14px,1.4vw,22px); right:clamp(16px,2vw,34px); display:flex; gap:8px; z-index:30; }
+  /* Yönerge §7: sidebar içindeki profil kontrolü — glass account card tetikleyicisi */
+  .profile-trigger { display:flex; align-items:center; gap:7px; width:100%; min-height:40px; padding:4px 8px 4px 4px; border-radius: var(--radius-control); border:1px solid transparent; background:transparent; color:var(--stuhub-text-secondary); transition:all var(--duration-micro) var(--ease-out-expo); }
+  .profile-trigger:hover { background:var(--stuhub-glass-2-hover); border-color:var(--stuhub-border); color:var(--stuhub-text); }
+  .sidebar-item-wrap { position:relative; }
+  .nav-item { display:flex; align-items:center; gap:10px; min-height:40px; padding:8px 10px; border-radius:var(--radius-control); color:var(--stuhub-text-secondary); border:1px solid transparent; transition:all var(--duration-micro) var(--ease-out-expo); }
+  .nav-item:hover { background:var(--stuhub-glass-2-hover); color:var(--stuhub-text); border-color:var(--stuhub-border); }
+  .nav-item--active { background:var(--stuhub-accent-glass); border-color:var(--stuhub-accent-glass-border); color:var(--stuhub-text); }
+  .nav-item--collapsed { justify-content:center; padding-inline:0; width:100%; }
+  .nav-item--collapsed .nav-item__label { display:none; }
+  /* Collapsed sidebar'da profil tetikleyicisi yalnızca avatar gösterir */
+  .app-sidebar--collapsed .profile-trigger .nav-item__label { display:none; }
+  .app-sidebar--collapsed .profile-trigger { justify-content:center; padding-inline:0; }
+  .nav-item__label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sidebar-backdrop { position:fixed; inset:0; z-index:55; background:rgba(0,0,0,.26); backdrop-filter:blur(2px); }
+  .mobile-close { margin-left:auto; }
+
+  .app-main { min-height:100dvh; transition:padding-left var(--duration-state) var(--ease-out-expo); padding-left:var(--sidebar-collapsed); }
+  .app-main--sidebar-open { padding-left:var(--sidebar-expanded); }
+  /* Yönerge §26: workspace fullscreen — shell gizlenir, workspace maksimum alan.
+     Browser fullscreen'den FARKLIDIR: sidebar+header gizlenir, browser chrome kalır. */
+  .app-main--workspace-fullscreen { padding-left:0; }
+  .app-main--workspace-fullscreen .app-header { display:none; }
+  .app-main--workspace-fullscreen .app-sidebar { display:none; }
+  .app-content { min-height:calc(100dvh - 70px); padding:clamp(18px,2vw,28px) clamp(16px,2vw,34px) clamp(32px,3vw,48px); }
+  .content-skeleton { display:grid; gap:18px; }
+  /* Route choreography (P4): rota değişince App tetikler — içerik 8px yükselerek
+   * girer. Remount YOK; React state korunur, yalnızca animasyon replay.
+   * OPACITY YOK: rise-in'in opacity:0 from-frame'i sekme throttle/compositor
+   * stall durumunda donuyor ve sayfa bomboş kalıyordu (canlı yakalandı). Route
+   * girişi yalnızca translate — en kötü durum: içerik 8px kaymış ama GÖRÜNÜR. */
+  .app-content.route-entering { animation: route-rise var(--duration-entrance) var(--ease-out-expo) backwards; }
+  @keyframes route-rise { from { transform: translateY(var(--distance-entrance)); } to { transform: translateY(0); } }
+  .skeleton-block { border-radius:var(--radius-panel); background:linear-gradient(90deg, var(--stuhub-glass-2), rgba(255,255,255,.075), var(--stuhub-glass-2)); background-size:220% 100%; animation:skeleton-shimmer 2.8s ease-in-out infinite; }
+  .skeleton-block--title { width:min(320px,55vw); height:34px; }
+  .skeleton-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr)); gap:14px; }
+  .skeleton-block--card { min-height:150px; }
+  @keyframes skeleton-shimmer { 0%,100%{background-position:200% 0} 50%{background-position:-20% 0} }
+
+  /* Yönerge §99: ultrawide'da giant centered whitespace / dev kartlar YOK —
+     content hattı kontrollü genişler, grid'ler auto-fit ile kolon ekler. */
+  .page-shell { width:100%; max-width:1680px; margin-inline:auto; }
+  .page-header { display:flex; align-items:flex-end; justify-content:space-between; gap:18px; margin-bottom:24px; min-width:0; }
+  .page-header > div { min-width:0; }
+  /* break-words + overflow-wrap: uzun ders/chapter başlıkları satırı taşırıp
+   * yatay kaydırmaya ve üst üste binmeye yol açıyordu (kullanıcı raporu: uzun
+   * başlıkta görsel bug). Kelime içinde kırılma en kötü durumda devreye girer. */
+  .page-title { font-size:clamp(22px,2.2vw,30px); line-height:1.2; font-weight:600; letter-spacing:-.03em; overflow-wrap:anywhere; word-break:break-word; min-width:0; }
+  .page-subtitle { margin-top:7px; color:var(--stuhub-text-secondary); font-size:13px; line-height:1.6; overflow-wrap:anywhere; min-width:0; }
+  .section-title { font-size:18px; line-height:1.35; font-weight:600; letter-spacing:-.02em; }
+  /* Kart hücresi = kart genişliği (sayfa tarafındaki max-w-[420px] ile eşit):
+     kolon üst sınırı 420px → hücre karttan geniş kalıp araya dev boşluk girmiyor. */
+  .glass-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(clamp(220px,22vw,320px),1fr)); gap:14px; align-items:stretch; }
+  .course-grid, .chapter-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,420px)); gap:14px; align-items:stretch; }
+  /* P5 render-perf: ekran dışı kart çocukları atlanır (içerik tabanlı boyut
+   * korunduğu için scrollbar zıplamaz).contain: paint — hover sheen taşmasını izole eder. */
+  .course-grid > *, .chapter-grid > *, .term-grid > *, .list-stack > * {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 220px;
+  }
+  .course-card, .chapter-card { aspect-ratio:3/2; min-height:180px; padding:18px; display:flex; flex-direction:column; justify-content:space-between; box-shadow: var(--glass-inner-light), var(--glass-edge), var(--shadow-card); border-color: var(--glass-border); border-top-color: var(--glass-border-top); }
+  /* Kart meta rotation (§36/§37): sabit geometri, hover çıkışında layout zıplamaz. */
+  .card-meta-stack { display:grid; gap:6px; min-height:44px; align-content:end; }
+  .card-meta { display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--stuhub-text-secondary); min-width:0; }
+  .card-meta svg { flex-shrink:0; opacity:.75; }
+  .card-meta span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .card-meta--faded { color:var(--stuhub-text-muted); }
+  .card-progress { display:flex; align-items:center; gap:10px; }
+  .card-progress__track { flex:1; height:3px; border-radius:var(--radius-pill); background:rgba(255,255,255,.08); overflow:hidden; }
+  .card-progress__fill { display:block; height:100%; border-radius:var(--radius-pill); background:rgba(255,255,255,.62); }
+  .card-progress__value { font-size:11.5px; color:var(--stuhub-text-secondary); font-variant-numeric:tabular-nums; }
+  .chapter-card__head { display:flex; align-items:center; gap:8px; min-width:0; }
+  .chapter-card__title { font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .chapter-card__check { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:var(--radius-pill); background:var(--stuhub-accent-glass); color:var(--stuhub-accent); flex-shrink:0; }
+  .chapter-card__actions { display:inline-flex; gap:2px; margin-left:auto; }
+  .chapter-card__go { color:var(--stuhub-text-muted); align-self:flex-end; opacity:.6; }
+  .icon-btn { display:inline-flex; align-items:center; justify-content:center; border-radius:var(--radius-control); padding:6px; color:var(--stuhub-text-secondary); transition:background var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo); }
+  .icon-btn:hover { background:var(--stuhub-glass-2-hover); }
+  .icon-btn--danger:hover { background:rgba(220,60,60,.12); color:var(--stuhub-error); }
+  .secondary-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:clamp(12px,1.25vw,18px); }
+  .list-stack { display:grid; gap:10px; }
+  .list-card { display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:62px; padding:12px 15px; box-shadow: var(--glass-inner-light), var(--glass-edge), var(--shadow-card); border-color: var(--glass-border); border-top-color: var(--glass-border-top); }
+  .topic-list { display:grid; gap:4px; }
+  .topic-row { display:grid; grid-template-columns:1fr auto; gap:12px; align-items:center; padding:10px 12px; border-bottom:1px solid var(--stuhub-border); }
+  .thin-progress { height:2px; border-radius:var(--radius-pill); background:rgba(255,255,255,.08); overflow:hidden; }
+  .thin-progress > span { display:block; height:100%; background:rgba(255,255,255,.65); }
 }
 
-html {
-  color-scheme: dark;
-  background-color: var(--stuhub-bg);
-  font-family: var(--font-sans);
+/* Desktop: sidebar içeriği header'ın 70px'lik şeridinin ALTINDAN başlar (kesişme yok).
+   Mobilde bu padding YOK — sidebar header'ı kaplar, kendi brand satırını kullanır. */
+@media (min-width: 768px) {
+  .app-sidebar { padding-top:70px; }
 }
 
-body {
-  min-height: 100dvh;
-  position: relative;
+@media (max-width: 767px) {
+  /* Mobil: sidebar header'ın ÜSTÜNE kayar (80 > header 70); kapat düğmesi erişilebilir kalır. */
+  .app-sidebar { z-index:80; width:min(86vw, 320px); transform:translateX(-100%); transition:transform var(--duration-state) var(--ease-out-expo); }
+  .app-sidebar--open { transform:translateX(0); width:min(86vw,320px); }
+  .app-sidebar--collapsed { transform:translateX(-100%); }
+  .app-main, .app-main--sidebar-open, .app-main--sidebar-collapsed { padding-left:0; }
+  .app-header { grid-template-columns:auto 1fr auto; gap:10px; }
+  .search-control { min-width:0; width:100%; }
+  .search-control__hint, .search-control kbd { display:none; }
+  .app-header__right { gap:5px; }
+  .secondary-grid { grid-template-columns:1fr; }
+  .page-header { align-items:flex-start; flex-direction:column; }
 }
 
-/* Arkaplan dekoru — StuHub'a özgü motif: jenerik "eğitim clipart"ı (ampul/atom/DNA/
-   deney tüpü) yerine ürünün kendi görsel dilinden 4 öğe kullanır: streak alevi (Ana
-   Sayfa'daki 🔥 halkasıyla aynı form), üretilen not sayfası, quiz doğru işareti,
-   flashcard destesi (2026-09-08 kritik incelemede "jenerik AI-SaaS" bulgusu üzerine
-   değiştirildi — bkz. impeccable critique). Amaç hâlâ aynı: düz renk zeminle cam
-   panellerin (backdrop-blur) ayırt edilebilir olması. Tek renk ailesi (beyaz, düşük
-   opaklık), 640px kare karo, sonsuz `repeat`, `fixed` — scroll ile kaymaz. */
-body::before {
-  content: '';
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior:auto !important; }
+  .glass-interactive, .glass-interactive:hover, .glass-interactive:active, .app-sidebar, .app-main { transition-duration:1ms !important; }
+  /* .app-sidebar bilinçli olarak transform:none listesinin DIŞINDA:
+   * mobil off-canvas gizleme translateX(-100%) ile yapılıyor; transform:none
+   * onu iptal edip sidebar'ı reduced-motion'da kalıcı görünür yapıyordu.
+   * Animasyonsuzluk yukarıdaki transition-duration:1ms ile sağlanıyor. */
+  .glass-interactive, .glass-interactive:hover, .glass-interactive:active, .app-main { transform:none !important; }
+  /* glass-hissi v2: light sweep de kapalı — ::after taban durumunda kalır
+   * (opacity:0, kart dışında); shadow bloom'u yukarıdaki 1ms geçiş süresi öldürür. */
+  .glass-interactive::after, .glass-interactive:hover::after { animation: none !important; }
+  .skeleton-block { animation:none; }
+  /* P1: giriş koreografisi dahil tüm animasyonlu yüzeyler kapalı */
+  .anim-rise, .anim-fade { animation: none !important; opacity: 1 !important; transform: none !important; }
+}
+
+/* ── Motion system: giriş koreografisi (P1) ─────────────────────────────
+ * .anim-rise : opacity + 8px yükseliş — sayfa/panel girişleri için varsayılan
+ * .anim-fade : yalnızca opacity — az-alt içerik için
+ * Kademelendirme: --stagger-index (0,1,2…) × --stagger-unit (45ms).
+ * transform/opacity yalnız — 60fps bütçesi; layout özellikleri animasyona girmez. */
+@keyframes rise-in { from { opacity: 0; transform: translateY(var(--distance-entrance)); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* ── Toast sistemi (P3) ──────────────────────────────────────────────────
+ * Sağ altta istiflenen bildirimler; success/info 4.2s sonra kendini kapatır,
+ * hatalar kapatana kadar kalır. role=alert (hata) / role=status (diğer). */
+.toast-host {
   position: fixed;
-  inset: 0;
-  z-index: -1;
-  background-color: var(--stuhub-bg);
-  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NDAgNjQwIj4KICA8ZyBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoMjU1LDI1NSwyNTUsMC4xMikiIHN0cm9rZS13aWR0aD0iMyIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj4KICAgIDwhLS0gU3RyZWFrIGFsZXZpIChTdHVIdWInxLFuIGtlbmRpIHN0cmVhayBoYWxrYXPEsSBtb3RpZmluZGVuKSAtLT4KICAgIDxwYXRoIGQ9Ik0xMjAsNjAgQzk1LDk1IDg1LDEyMCAxMDAsMTUwIEMxMDgsMTY2IDEyOCwxNzIgMTQwLDE2MCBDMTQ4LDE3OCAxMzIsMTk2IDExMiwxOTYgQzgwLDE5NiA1OCwxNzAgNTgsMTQwIEM1OCwxMDggODIsODAgMTA4LDU4IEMxMTIsNzIgMTE2LDg0IDEyMCw2MCBaIi8+CiAgICA8IS0tIE5vdCBzYXlmYXPEsSArIMO8cmV0aWxlbiBpw6dlcmlrIHNhdMSxcmxhcsSxICjDvHLDvG7DvG4gYW5hIMOnxLFrdMSxc8SxKSAtLT4KICAgIDxwYXRoIGQ9Ik00MjAsNjAgTDUwMCw2MCBMNTIwLDgwIEw1MjAsMTgwIEw0MjAsMTgwIFoiLz4KICAgIDxwYXRoIGQ9Ik01MDAsNjAgTDUwMCw4MCBMNTIwLDgwIi8+CiAgICA8cGF0aCBkPSJNNDM2LDEwNCBMNTA0LDEwNCBNNDM2LDEyNCBMNTA0LDEyNCBNNDM2LDE0NCBMNDgwLDE0NCIvPgogICAgPCEtLSBRdWl6IGRvxJ9ydSBpxZ9hcmV0aSAoZGFpcmVkZSB0aWspIC0tPgogICAgPGNpcmNsZSBjeD0iMjAwIiBjeT0iNDIwIiByPSIzNCIvPgogICAgPHBhdGggZD0iTTE4Niw0MjAgTDE5Nyw0MzIgTDIxNiw0MDYiLz4KICAgIDwhLS0gRmxhc2hjYXJkIChrYXJ0IGRlc3Rlc2kpIC0tPgogICAgPHBhdGggZD0iTTQ2MCw0MDAgTDU1Niw0MDAgTDU1Niw0NjQgTDQ2MCw0NjQgWiIvPgogICAgPHBhdGggZD0iTTQ0OCw0MTIgTDQ0OCw0NzYgTDU0NCw0NzYiLz4KICA8L2c+Cjwvc3ZnPgo=");
-  background-size: 640px 640px;
-  background-repeat: repeat;
+  right: clamp(14px, 2vw, 26px);
+  bottom: clamp(14px, 2vw, 26px);
+  z-index: 120;
+  display: grid;
+  gap: 8px;
+  max-width: min(360px, calc(100vw - 32px));
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border-radius: var(--radius-control);
+  background: rgba(0,0,0,.92);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid var(--stuhub-border-strong);
+  box-shadow: var(--shadow-glass);
+  font-size: 13px;
+  color: var(--stuhub-text);
+  animation: toast-in var(--duration-entrance) var(--ease-spring) both;
+}
+.toast--success svg { color: var(--stuhub-success); }
+.toast--error svg { color: var(--stuhub-error); }
+.toast--error { border-color: rgba(210,181,181,.4); }
+.toast--info svg { color: var(--stuhub-info); }
+.toast__msg { flex: 1; min-width: 0; }
+.toast__close {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: var(--radius-chip);
+  color: var(--stuhub-text-muted); flex-shrink: 0;
+}
+.toast__close:hover { color: var(--stuhub-text); background: var(--stuhub-glass-2-hover); }
+@keyframes toast-in { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+
+/* ── Flashcard yön damgaları (P5) ────────────────────────────────────────
+ * Sürükleme sırasında opaklığı JS ile ölçeklenen rozetler; kartın altında kalır. */
+.swipe-stamp {
+  position: absolute;
+  top: 14px;
+  z-index: 2;
+  padding: 4px 12px;
+  border-radius: var(--radius-chip);
+  border: 1.5px solid currentColor;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .14em;
   pointer-events: none;
 }
+/* Üst-orta hizada, hafif sağ/sol ofsetli — translateX(-50%) rozet merkezini
+ * yüzde konumuna oturtur: sağ damga merkezi %57, sol damga merkezi %43. */
+.swipe-stamp--right { left: 57%; color: var(--stuhub-success); transform: translateX(-50%) rotate(4deg); }
+.swipe-stamp--left { left: 43%; color: var(--stuhub-error); transform: translateX(-50%) rotate(-4deg); }
 
-::selection {
-  background-color: rgba(255, 255, 255, 0.18);
+/* Takvim gününe not ekleme micro-bounce (P5): form açıldığında hücre vurgusu */
+@keyframes cell-pop { 0% { transform: scale(1); } 40% { transform: scale(1.035); } 100% { transform: scale(1); } }
+.cal-cell--adding { animation: cell-pop 260ms var(--ease-spring); border-color: var(--stuhub-accent-glass-border) !important; }
+@media (prefers-reduced-motion: reduce) { .cal-cell--adding { animation: none; } }
+.anim-rise { animation: rise-in var(--duration-entrance) var(--ease-out-expo) backwards; animation-delay: calc(var(--stagger-index, 0) * var(--stagger-unit)); }
+.anim-fade { animation: fade-in var(--duration-entrance) var(--ease-out) backwards; animation-delay: calc(var(--stagger-index, 0) * var(--stagger-unit)); }
+/* Auto-stagger: grid'lerin çocukları sıralı girer (JSX'te index vermek gereksiz) */
+/* fill-mode `backwards` bilinçli: `both` kullanılırsa animasyon yarıda kesildiğinde
+ * (HMR stil yeniden yüklemesi, gizli sekme throttling'i) eleman `from` karesinde
+ * yani opacity:0'da SONSUZ KADAR donabiliyordu (bazı pencere boyutlarında boş siyah
+ * sayfa raporunun kök nedeni). `to` karesi doğal durumla aynı olduğundan `backwards`
+ * en kötü durumda içeriği görünür bırakır. */
+.home-kpis > *, .home-grid > *, .glass-grid > *, .course-grid > *, .chapter-grid > *, .term-grid > *, .list-stack > * { animation: rise-in var(--duration-entrance) var(--ease-out-expo) backwards; }
+.home-kpis > :nth-child(2), .home-grid > :nth-child(2), .glass-grid > :nth-child(2), .list-stack > :nth-child(2) { animation-delay: calc(1 * var(--stagger-unit)); }
+.home-kpis > :nth-child(3), .home-grid > :nth-child(3), .glass-grid > :nth-child(3), .list-stack > :nth-child(3) { animation-delay: calc(2 * var(--stagger-unit)); }
+.home-kpis > :nth-child(n+4), .home-grid > :nth-child(n+4), .glass-grid > :nth-child(n+4), .list-stack > :nth-child(n+4) { animation-delay: calc(3 * var(--stagger-unit)); }
+
+.app-loading { min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px; background:var(--stuhub-bg); }  .app-loading img { width:150px; height:auto; object-fit:contain; opacity:.92; }
+  /* P5: logo yüklenemezse display:none (onError) — bozuk görsel ikonu ASLA görünmesin.
+   * Yer tutucu yükseklik korunur; loading skeleton taşmayı önler. */
+  .app-loading img[data-hidden] { display: none; }
+.app-loading__skeleton { width:min(280px,65vw); height:5px; border-radius:9999px; background:var(--stuhub-glass-2); position:relative; overflow:hidden; }
+.app-loading__skeleton::after { content:""; position:absolute; inset:0; transform:translateX(-100%); background:linear-gradient(90deg, transparent, rgba(255,255,255,.08), transparent); animation:skeleton-shimmer 2.8s ease-in-out infinite; }
+
+@layer components {
+  .welcome-panel { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; padding:clamp(18px,2vw,28px); margin-bottom:clamp(14px,1.5vw,22px); }
+  .eyebrow { font-size:10px; line-height:1.3; text-transform:uppercase; letter-spacing:.16em; color:var(--stuhub-text-muted); font-weight:600; }
+  .home-kpis { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:clamp(12px,1.2vw,18px); margin-bottom:clamp(14px,1.5vw,22px); }
+  .metric-card { min-height:112px; padding:17px; display:grid; grid-template-columns:auto 1fr; align-content:center; column-gap:10px; row-gap:5px; }
+  .metric-card strong { grid-column:1 / -1; font-size:28px; font-weight:600; letter-spacing:-.03em; }
+  .metric-card > span:last-child { grid-column:1 / -1; font-size:13px; color:var(--stuhub-text-secondary); }
+  .home-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:clamp(12px,1.2vw,18px); margin-bottom:clamp(14px,1.5vw,22px); }
+  .feature-card { min-height:180px; padding:18px; }
+  .feature-card__top { display:flex; align-items:center; gap:9px; font-size:14px; font-weight:600; }
+  .weekly-bars { margin-top:24px; display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:10px; align-items:end; height:100px; }
+  .weekly-bar { height:100%; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:8px; font-size:10px; color:var(--stuhub-text-muted); }
+  .weekly-bar__fill { width:100%; min-height:8px; border-radius:var(--radius-chip) var(--radius-chip) 4px 4px; background:rgba(255,255,255,.28); border:1px solid rgba(255,255,255,.06); transform-origin:bottom; animation:bar-grow var(--duration-scene) var(--ease-out-expo) both; }
+  /* Gün sırasına göre kademeli büyüme — veri hikayesi soldan sağa okunur */
+  .weekly-bar:nth-child(2) .weekly-bar__fill { animation-delay: calc(1 * var(--stagger-unit)); }
+  .weekly-bar:nth-child(3) .weekly-bar__fill { animation-delay: calc(2 * var(--stagger-unit)); }
+  .weekly-bar:nth-child(4) .weekly-bar__fill { animation-delay: calc(3 * var(--stagger-unit)); }
+  .weekly-bar:nth-child(5) .weekly-bar__fill { animation-delay: calc(4 * var(--stagger-unit)); }
+  .weekly-bar:nth-child(6) .weekly-bar__fill { animation-delay: calc(5 * var(--stagger-unit)); }
+  .weekly-bar:nth-child(7) .weekly-bar__fill { animation-delay: calc(6 * var(--stagger-unit)); }
+  @keyframes bar-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+  @media (prefers-reduced-motion: reduce) { .weekly-bar__fill { animation: none; } }
+  /* Yönerge §32: monochrome luminosity hiyerarşisi — hover'da gün parlar */
+  .weekly-bar:hover .weekly-bar__fill { background:rgba(255,255,255,.5); }
+  .weekly-bar--today .weekly-bar__fill { background:rgba(255,255,255,.62); }
+  .pricing-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:clamp(14px,1.6vw,22px); align-items:stretch; }
+  .plan-card { min-height:360px; padding:22px; display:flex; flex-direction:column; justify-content:space-between; }
+  .plan-card h2 { margin-top:8px; font-size:28px; letter-spacing:-.03em; font-weight:600; }
+  .plan-card--plus { border-color:rgba(255,255,255,.13); transform:translateY(-2px); }
+  .plan-card--pro { border-color:rgba(255,255,255,.18); box-shadow:0 12px 38px rgba(0,0,0,.5); transform:translateY(-4px); }
+  .plan-features { margin-top:22px; display:grid; gap:10px; }
+  .plan-features p { display:flex; gap:9px; align-items:flex-start; font-size:13px; color:var(--stuhub-text-secondary); }
+  @media (prefers-reduced-motion: reduce) { .plan-card--plus,.plan-card--pro { transform:none; } }
+}
+
+@media (max-width: 900px) {
+  .home-kpis { grid-template-columns:1fr; }
+  .home-grid, .pricing-grid { grid-template-columns:1fr; }
+  .welcome-panel { align-items:flex-start; flex-direction:column; }
+}
+@layer components {
+  .settings-layout { display:grid; grid-template-columns:minmax(190px,220px) minmax(0,1fr); gap:clamp(16px,2vw,28px); align-items:start; }
+  .settings-nav { position:sticky; top:90px; padding:8px; display:grid; gap:3px; }
+  .settings-nav__item { min-height:40px; padding:8px 10px; border-radius:var(--radius-control); text-align:left; color:var(--stuhub-text-secondary); font-size:13px; }
+  .settings-nav__item:hover { background:var(--stuhub-glass-2-hover); color:var(--stuhub-text); }
+  .settings-nav__item--active { background:var(--stuhub-accent-glass); color:var(--stuhub-text); }
+  .settings-content { display:grid; gap:18px; }
+}
+@media (max-width: 800px) { .settings-layout { grid-template-columns:1fr; } .settings-nav { position:static; display:flex; overflow:auto; } .settings-nav__item { white-space:nowrap; } }
+
+/* ── Rehberli tur (yönerge §23) — subtle glass, low dim, current target görünür ── */
+@layer components {
+  .tour-overlay { position:fixed; inset:0; z-index:110; background:rgba(0,0,0,.4); backdrop-filter:blur(1.5px); }
+  .tour-popover { position:fixed; z-index:111; background:rgba(0,0,0,.92); backdrop-filter:blur(16px); border:1px solid var(--stuhub-border); border-radius:var(--radius-panel); box-shadow:var(--shadow-glass); padding:18px; }
+  [data-tour-id] { position:relative; }
+  [data-tour-id]::after { content:""; position:absolute; inset:-4px; border-radius:calc(var(--radius-control) + 4px); border:1.5px solid rgba(255,255,255,.55); box-shadow:0 0 0 4px rgba(255,255,255,.08); pointer-events:none; z-index:112; transition:opacity var(--duration-micro) var(--ease-out-expo); opacity:0; }
+  [data-tour-id].tour-target::after { opacity:1; }
+}
+@media (prefers-reduced-motion: reduce) { .tour-overlay { backdrop-filter:none; } }
+
+/* Sıkıntı #7: scroll alanı işlevsel kalsın, scrollbar görsel olarak gizli */
+@layer components {
+  /* TabBar kayan highlight (P2 shared-layout morph): tek transform animasyonu,
+   * button'ların altında kalır; renk geçişi button'larda ayrı (color only). */
+  .tabbar-highlight {
+    position: absolute;
+    left: 0;
+    top: 0;
+    border-radius: var(--radius-pill);
+    background: var(--stuhub-accent-glass);
+    border: 1px solid var(--stuhub-accent-glass-border);
+    box-shadow: 0 1px 6px rgba(0,0,0,.35);
+    transition: transform var(--duration-state) var(--ease-out-expo),
+                width var(--duration-state) var(--ease-out-expo),
+                height var(--duration-state) var(--ease-out-expo);
+    pointer-events: none;
+  }
+  .feed-card-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .feed-card-scroll::-webkit-scrollbar { display: none; }
+  /* Scrollbar politikası (kullanıcı kararı): İNTERAKTİF yüzeylerde (quiz feed,
+   * flashcard, çalışma alanları) scrollbar ASLA görünmez — kaydırma dokunmatik/
+   * tekerlekle akar. Ana sayfa listelerinde temalı ince scrollbar kalır.
+   * Global varsayılan ince + koyu; interaktif yüzeyler .scroll-none alır. */
+  * { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.16) transparent; }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); border-radius: var(--radius-pill); border: 3px solid transparent; background-clip: content-box; }
+  *::-webkit-scrollbar-thumb:hover { background-color: rgba(255,255,255,.26); }
+  *::-webkit-scrollbar-corner { background: transparent; }
+  .scroll-none, .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+  .scroll-none::-webkit-scrollbar, .no-scrollbar::-webkit-scrollbar { display: none; }
+  /* Sıkıntı #3: dönem kartları geniş hücreler — auto-fit dar sütunlarda sıramasın.
+     Üst sınır 420px: hücre = kart (sayfa max-w-[420px]), araya dev boşluk girmiyor. */
+  .term-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,420px)); gap:14px; align-items:start; }
 }

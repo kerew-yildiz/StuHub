@@ -1,7 +1,7 @@
-import { BookOpen, WarningCircle } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 
 import { getCoverage, type ChapterCoverage } from '../api/coverage'
+import { BookOpen, CircleAlert } from 'lucide-react'
 
 export interface CoverageIndicatorProps {
   chapterId: number
@@ -107,7 +107,7 @@ export function CoverageIndicator({ chapterId, className }: CoverageIndicatorPro
     <div className={panelClass}>
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="flex items-center gap-2 text-sm font-medium text-stuhub-text">
-          <BookOpen size={16} weight="regular" className="text-stuhub-text-secondary" />
+          <BookOpen size={16} className="text-stuhub-text-secondary" />
           Kaynak kapsaması
         </h3>
         {coverage.total_pages > 0 && (
@@ -119,7 +119,7 @@ export function CoverageIndicator({ chapterId, className }: CoverageIndicatorPro
 
       {coverage.orphaned_source_ids.length > 0 && (
         <p className="mt-3 flex items-start gap-2 text-xs text-stuhub-warning">
-          <WarningCircle size={14} weight="fill" className="mt-0.5 shrink-0" />
+          <CircleAlert size={14} className="mt-0.5 shrink-0" />
           Bu oran güvenilmez: not, artık bu derste bulunmayan eski bir kaynağa atıf
           yapıyor. Notu yeniden oluşturmayı dene.
         </p>

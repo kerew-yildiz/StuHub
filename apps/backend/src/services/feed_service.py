@@ -21,6 +21,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import random
 import sqlite3
 from datetime import UTC, datetime, timedelta
 
@@ -165,6 +166,10 @@ async def serve_batch(
             (*params, limit * 3),
         )
         candidates = [dict(row) for row in await cursor.fetchall()]
+        # Kaydırarak Quiz §41: parti sırası randomize edilir (tüm ders chapter'ları
+        # karışık). Sıralama stable shuffle (indeks anahtarlı) — Python sort'u
+        # deterministik, testler tekrarlanabilir kalır.
+        candidates.sort(key=lambda _: random.random())
 
         served: list[dict] = []
         for row in candidates:
@@ -625,18 +630,36 @@ def _topic_from_qid(qid: object, topic_names: list[str]) -> str:
     return "Genel"
 
 
-async def _chapter_topic_names(db, chapter_id: int, tenant_id: str) -> list[str]:
-    """Bölümün en son notundaki konu adları (ustalık çubuğunun paydası)."""
+async def _chapter_topic_names(
+    db, chapter_ids: list[int], tenant_id: str
+) -> dict[int, list[str]]:
+    """chapter_id → en son notundaki konu adları (ustalık çubuğunun paydası).
+
+    Tek sorgu: `course_mastery` bu fonksiyonu tüm bölümler için çağırıyordu; bölüm
+    başına ayrı sorgu (N+1) yerine IN listesiyle hepsinin en son notu bir kerede
+    okunur (kalıp: `guide_service._course_chapter_notes`). Notu olmayan bölüm
+    sonuçta yer almaz — çağıran `.get(chapter_id, [])` ile boş listeye düşer.
+    """
+    if not chapter_ids:
+        return {}
+    placeholders = ", ".join(["?"] * len(chapter_ids))
     cursor = await db.execute(
-        "SELECT topics_json FROM notes WHERE chapter_id = ? AND tenant_id = ? "
-        "ORDER BY id DESC LIMIT 1",
-        (chapter_id, tenant_id),
+        "SELECT n.chapter_id AS chapter_id, n.topics_json AS topics_json "  # nosec B608 - araya giren metin sabit `?` yer tutucularıdır; değerler parametreyle geçer
+        f"FROM notes n WHERE n.tenant_id = ? AND n.chapter_id IN ({placeholders}) "
+        "AND n.id = ("
+        "  SELECT MAX(n2.id) FROM notes n2 "
+        "  WHERE n2.chapter_id = n.chapter_id AND n2.tenant_id = n.tenant_id"
+        ")",
+        (tenant_id, *chapter_ids),
     )
-    row = await cursor.fetchone()
-    if row is None:
-        return []
-    topics = _loads_list(dict(row)["topics_json"])
-    return [str(t["topic"]) for t in topics if isinstance(t, dict) and t.get("topic")]
+    names: dict[int, list[str]] = {}
+    for row in await cursor.fetchall():
+        row = dict(row)
+        topics = _loads_list(row["topics_json"])
+        names[int(row["chapter_id"])] = [
+            str(t["topic"]) for t in topics if isinstance(t, dict) and t.get("topic")
+        ]
+    return names
 
 
 async def _topic_correct_counts(
@@ -728,7 +751,7 @@ async def chapter_mastery(chapter_id: int, tenant_id: str = LOCAL_TENANT_ID) -> 
     """Bir bölümün ustalık ilerlemesi (GET /api/chapters/{chapter_id}/mastery)."""
     db = await get_db()
     try:
-        topic_names = await _chapter_topic_names(db, chapter_id, tenant_id)
+        topic_names = (await _chapter_topic_names(db, [chapter_id], tenant_id)).get(chapter_id, [])
         topic_correct = (
             await _topic_correct_counts(db, tenant_id, chapter_id=chapter_id, course_id=None)
         ).get(chapter_id, {})
@@ -752,11 +775,12 @@ async def course_mastery(course_id: int, tenant_id: str = LOCAL_TENANT_ID) -> di
         per_chapter_correct = await _topic_correct_counts(
             db, tenant_id, chapter_id=None, course_id=course_id
         )
+        names_by_chapter = await _chapter_topic_names(db, chapter_ids, tenant_id)
         topics: list[dict] = []
         total_correct = 0
         total = 0
         for cid in chapter_ids:
-            names = await _chapter_topic_names(db, cid, tenant_id)
+            names = names_by_chapter.get(cid, [])
             chapter_payload = _mastery_payload(names, per_chapter_correct.get(cid, {}))
             topics.extend(chapter_payload["topics"])
             total_correct += chapter_payload["correct"]

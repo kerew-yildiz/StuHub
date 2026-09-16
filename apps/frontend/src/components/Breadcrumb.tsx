@@ -1,4 +1,4 @@
-import { CaretRight } from '@phosphor-icons/react'
+import { ChevronRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 export interface BreadcrumbItem {
@@ -29,7 +29,7 @@ export function Breadcrumb({ items }: BreadcrumbProps) {
         return (
           <span key={`${item.label}-${index}`} className="flex items-center gap-1.5">
             {index > 0 && (
-              <CaretRight
+              <ChevronRight
                 className="h-3.5 w-3.5 shrink-0 text-stuhub-text-muted"
                 aria-hidden="true"
               />

@@ -1,15 +1,15 @@
-import { BookmarkSimple, CircleNotch, WarningCircle } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 
 import { unsaveQuestion } from '../api/feed'
 import { listSavedQuestions, type SavedQuestion } from '../api/saved'
+import { Bookmark, LoaderCircle, CircleAlert } from 'lucide-react'
 
 type LoadState = 'loading' | 'ready' | 'error'
 
 /** Kaydedilen sorular sayfası — feed'de "kaydet" ile işaretlenmiş sorular, ders/chapter
  * bilgisiyle birlikte. Kayıt kaldırma optimistik: listeden hemen çıkar, sunucu hatasında
  * geri eklenir. */
-export function SavedQuestionsPage() {
+export function SavedQuestionsPage({ courseId, embedded = false }: { courseId?: number; embedded?: boolean }) {
   const [questions, setQuestions] = useState<SavedQuestion[]>([])
   const [state, setState] = useState<LoadState>('loading')
   const [removeError, setRemoveError] = useState('')
@@ -19,7 +19,7 @@ export function SavedQuestionsPage() {
     listSavedQuestions()
       .then((list) => {
         if (!cancelled) {
-          setQuestions(list)
+          setQuestions(courseId ? list.filter((item) => item.course_id === courseId) : list)
           setState('ready')
         }
       })
@@ -29,7 +29,7 @@ export function SavedQuestionsPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [courseId])
 
   const handleRemove = async (feedId: number) => {
     setRemoveError('')
@@ -44,12 +44,12 @@ export function SavedQuestionsPage() {
   }
 
   return (
-    <section>
-      <div>
-        <h1 className="text-3xl font-semibold">Kaydedilenler</h1>
-        <p className="mt-2 text-stuhub-text-secondary">
-          Feed'de kaydettiğin sorular burada listelenir.
-        </p>
+    <section className={embedded ? 'page-shell' : 'page-shell'}>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Kaydedilenler</h1>
+          <p className="page-subtitle">Feed'de kaydettiğin sorular burada listelenir.</p>
+        </div>
       </div>
 
       {removeError && (
@@ -60,21 +60,21 @@ export function SavedQuestionsPage() {
 
       {state === 'loading' && (
         <p className="mt-8 flex items-center gap-2 text-sm text-stuhub-text-secondary" role="status">
-          <CircleNotch size={18} className="animate-spin" />
+          <LoaderCircle size={18} className="animate-spin" />
           Yükleniyor…
         </p>
       )}
 
       {state === 'error' && (
         <p className="mt-8 flex items-center gap-2 text-sm text-stuhub-error" role="alert">
-          <WarningCircle size={18} weight="fill" />
+          <CircleAlert size={18} />
           Kaydedilen sorular alınamadı. Lütfen tekrar deneyin.
         </p>
       )}
 
       {state === 'ready' && questions.length === 0 && (
         <div className="glass-panel mt-8 flex flex-col items-center gap-2 p-8 text-center">
-          <BookmarkSimple size={28} className="text-stuhub-text-secondary" />
+          <Bookmark size={28} className="text-stuhub-text-secondary" />
           <p className="text-sm text-stuhub-text-secondary">
             Henüz kaydedilmiş soru yok. Quiz akışında bir sorunun yanındaki yer imi ikonuna
             dokunarak kaydedebilirsin.
@@ -101,7 +101,7 @@ export function SavedQuestionsPage() {
                   aria-label="Kaydı kaldır"
                   className="shrink-0 rounded-control p-1.5 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:text-stuhub-text"
                 >
-                  <BookmarkSimple size={20} weight="fill" />
+                  <Bookmark size={20} />
                 </button>
               </div>
 
@@ -113,7 +113,7 @@ export function SavedQuestionsPage() {
                     key={index}
                     className={`w-full rounded-control border px-4 py-2.5 text-left text-sm ${
                       index === q.correct_index
-                        ? 'border-stuhub-success bg-stuhub-success/10 text-stuhub-success'
+                        ? 'border-stuhub-success text-stuhub-success bg-stuhub-glass-2'
                         : 'border-stuhub-border text-stuhub-text-secondary'
                     }`}
                   >
@@ -123,7 +123,7 @@ export function SavedQuestionsPage() {
               </div>
 
               {q.explanation && (
-                <p className="mt-3 rounded-control bg-stuhub-success/10 px-4 py-3 text-sm leading-relaxed text-stuhub-text-secondary">
+                <p className="mt-3 rounded-control bg-stuhub-glass-2 border border-stuhub-border px-4 py-3 text-sm leading-relaxed text-stuhub-text-secondary">
                   {q.explanation}
                 </p>
               )}

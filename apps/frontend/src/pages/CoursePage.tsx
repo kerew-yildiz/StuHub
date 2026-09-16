@@ -1,18 +1,16 @@
-import { PencilSimple, X } from '@phosphor-icons/react'
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { chaptersApi, type Chapter } from '../api/chapters'
 import { coursesApi, type Course } from '../api/courses'
-import { courseFlashcardsExportUrl, downloadFile } from '../api/exports'
-import { fetchDueCards, type DueCard } from '../api/flashcards'
+import { downloadAuthed, type FlashcardExportFormat } from '../api/exports'
+import { fetchDueCards, listCourseFlashcardSets, type DueCard, type FlashcardSet } from '../api/flashcards'
 import { indexingApi, type IndexingJob } from '../api/indexing'
 import { materialsApi, type Material } from '../api/materials'
-import { listOverallQuizzes, removeOverallQuiz, type OverallOutcome, type OverallQuiz } from '../api/overall'
+import { type OverallOutcome } from '../api/overall'
 import { slidesApi } from '../api/slides'
-import { termsApi } from '../api/terms'
 import { AbandonedTopicsList } from '../components/AbandonedTopicsList'
-import { Breadcrumb } from '../components/Breadcrumb'
+import { AddContentCard } from '../components/AddContentCard'
 import { ChapterForm } from '../components/ChapterForm'
 import { ChatPanel } from '../components/ChatPanel'
 import { ComparisonTable } from '../components/ComparisonTable'
@@ -28,70 +26,33 @@ import { GlossaryPanel } from '../components/GlossaryPanel'
 import { GuidePanel } from '../components/GuidePanel'
 import { MaterialUploadForm } from '../components/MaterialUploadForm'
 import { NextActionCard } from '../components/NextActionCard'
-import { OverallQuizPlayer } from '../components/OverallQuizPlayer'
 import { QuizFeed } from '../components/QuizFeed'
 import { RetentionCurve } from '../components/RetentionCurve'
 import { RetentionProgressBadge } from '../components/RetentionProgressBadge'
 import { StudyTimer } from '../components/StudyTimer'
-import { TabBar } from '../components/TabBar'
 import { WeakTopicHeatmap } from '../components/WeakTopicHeatmap'
+import { CourseNotesPanel } from '../components/CourseNotesPanel'
+import { WorkspaceChrome } from '../components/WorkspaceChrome'
+import { SavedQuestionsPage } from './SavedQuestionsPage'
+import { ChapterCard } from '../components/CourseCard'
 import { useAnimatedProgress } from '../lib/useAnimatedProgress'
 import { confirmDialog } from '../stores/confirmStore'
-import { useGenerationStore } from '../stores/generationStore'
+import { getCardSummary, type ChapterCardSummary } from '../api/cardSummary'
+import { ArrowRight, X } from 'lucide-react'
 
 type LoadState = 'loading' | 'ready' | 'error'
 
-const COURSE_TABS = [
-  { id: 'overview', label: 'Genel Bakış' },
-  { id: 'quiz', label: 'Genel Quiz' },
-  { id: 'ask', label: 'Materyale Sor' },
-  { id: 'cards', label: "Bugünün Kartları" },
-  { id: 'guide', label: 'Rehber' },
-  { id: 'essay', label: 'Ödev Değerlendir' },
-  { id: 'errors', label: 'Hatalarım' },
-  { id: 'heatmap', label: 'Zayıf Konular' },
-  { id: 'exam', label: 'Sınav Planı' },
-  { id: 'feed', label: 'Kaydırarak Quiz' },
-  { id: 'study', label: 'Karşılaştır & Sözlük' },
-  { id: 'smart', label: 'Bugün Ne Çalışsam' },
-  { id: 'draft', label: 'Ödev Taslak Koçu' },
-] as const
-
-type CourseTab = (typeof COURSE_TABS)[number]['id']
-
-// Belirsiz/jargon etiketler ("Kaydırarak Quiz", "Ödev Taslak Koçu"...) için tek
-// satırlık bağlamsal açıklama — sekme değişince altında görünür (2026-09-08 kritik
-// incelemede "Jordan/ilk-kullanıcı" bulgusu: hangi sekmenin ne yaptığı belli değildi).
-const COURSE_TAB_DESCRIPTIONS: Record<CourseTab, string> = {
-  overview: 'Chapter\'ları ve materyalleri buradan yönetirsin.',
-  quiz: "Dersin tüm chapter notlarından tek seferlik geniş bir quiz üretir.",
-  ask: 'Materyale doğrudan soru sorup kaynaklı yanıt alırsın.',
-  cards: 'Bugün tekrar etmen gereken flashcard\'ları gösterir.',
-  guide: 'Hocanın sunumundan üretilen konu rehberini gösterir.',
-  essay: 'Yazdığın bir ödevi kaynağa dayalı olarak değerlendirir.',
-  errors: 'Quizlerde yanlış yaptığın soruları biriktirir.',
-  heatmap: 'En çok hata yaptığın konuları ısı haritasıyla gösterir.',
-  exam: 'Sınav tarihini girip geri sayım + tekrar planı oluşturursun.',
-  feed: 'Sosyal medya tarzı, kaydırarak ilerleyen kısa quiz akışı.',
-  study: 'Konuları karşılaştırır ve terim sözlüğüne bakarsın.',
-  smart: 'Bugün hangi konuya çalışman gerektiğini önerir.',
-  draft: 'Bitmemiş ödev taslağına puan vermeden yönlendirme verir.',
-}
-
+type CourseTab = 'overview' | 'ask' | 'cards' | 'guide' | 'essay' | 'errors' | 'heatmap' | 'exam' | 'feed' | 'study' | 'smart' | 'draft'
 // 13 sekme tek sıra hâlinde bilişsel yük eşiğinin (≤4 görünür seçenek) çok üstündeydi
 // ve mobilde ilk ekranın tamamını kaplıyordu (2026-09-08 kritik incelemede tespit
 // edildi). Öğrenci çalışma akışına göre 4 üst gruba ayrıldı; her grup ≤4 alt sekme
 // taşır.
 const COURSE_TAB_GROUPS = [
   { id: 'learn', label: 'Öğren', tabIds: ['overview', 'guide', 'study'] },
-  { id: 'practice', label: 'Pratik Yap', tabIds: ['quiz', 'cards', 'feed', 'ask'] },
+  { id: 'practice', label: 'Pratik Yap', tabIds: ['cards', 'feed', 'ask'] },
   { id: 'exam-prep', label: 'Sınava Hazırlan', tabIds: ['exam', 'heatmap', 'errors', 'smart'] },
   { id: 'homework', label: 'Ödev', tabIds: ['essay', 'draft'] },
 ] as const satisfies readonly { id: string; label: string; tabIds: readonly CourseTab[] }[]
-
-function groupOf(tabId: CourseTab): (typeof COURSE_TAB_GROUPS)[number]['id'] {
-  return COURSE_TAB_GROUPS.find((group) => (group.tabIds as readonly string[]).includes(tabId))!.id
-}
 
 /** İndeksleme ilerleme çubuğu — hedefe 1'er birim animasyonla yaklaşır. */
 function JobProgressBar({ target }: { target: number }) {
@@ -183,10 +144,10 @@ function ChapterEditForm({
 export function CoursePage() {
   const { courseId } = useParams<{ courseId: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const numericId = Number(courseId)
 
   const [course, setCourse] = useState<Course | null>(null)
-  const [termName, setTermName] = useState<string | null>(null)
   const [chapters, setChapters] = useState<Chapter[]>([])
   const [materials, setMaterials] = useState<Material[]>([])
   const [jobs, setJobs] = useState<IndexingJob[]>([])
@@ -196,6 +157,25 @@ export function CoursePage() {
   const [editingChapter, setEditingChapter] = useState<Chapter | null>(null)
   const [previewMaterial, setPreviewMaterial] = useState<Material | null>(null)
   const [tab, setTab] = useState<CourseTab>('overview')
+  // Chapter kart hover rotation verisi (§37) — tek istekte toplu (card-summary).
+  const [cardSummaries, setCardSummaries] = useState<Map<number, ChapterCardSummary>>(new Map())
+
+  useEffect(() => {
+    const view = searchParams.get('view')
+    const map: Record<string, CourseTab> = {
+      'swipe-quiz': 'feed',
+      'material-ask': 'ask',
+      'flashcards': 'cards',
+      'assignment-evaluation': 'essay',
+      'assignment-draft-coach': 'draft',
+      // Sıkıntı: dashboard kartları bu URL'leri açıyordu ama eşleme yoktu —
+      // kullanıcı boş overview görüyordu (Hatalarım / Isı haritası "çalışmıyor").
+      'errors': 'errors',
+      'heatmap': 'heatmap',
+    }
+    if (view && map[view]) setTab(map[view])
+    else if (!view) setTab('overview')
+  }, [searchParams])
 
   // Klavye kısayolu 1-4: ders bölümleri arasında geçiş (Öğren/Pratik Yap/Sınava
   // Hazırlan/Ödev) — metin girişi odaktayken tetiklenmez (2026-09-08 kritik
@@ -217,15 +197,12 @@ export function CoursePage() {
   }, [])
 
   // genel quiz durumu — küresel üretim deposu (madde 2)
-  const [overallQuizzes, setOverallQuizzes] = useState<OverallQuiz[]>([])
   // bugünün due kartları + oynatıcı (Faz V2.2)
   const [dueCards, setDueCards] = useState<DueCard[]>([])
   const [playingDue, setPlayingDue] = useState<DueCard[] | null>(null)
-  const overallJob = useGenerationStore((s) =>
-    s.jobs.find((j) => j.kind === 'overall' && j.targetId === numericId),
-  )
-  const quizProgress = useAnimatedProgress(overallJob?.percent ?? 0)
-  const [quizKey, setQuizKey] = useState(0)
+  // §42: ders görünümünde flashcard setleri chapter'a göre gruplu
+  const [courseCardSets, setCourseCardSets] = useState<FlashcardSet[]>([])
+  const [playingSet, setPlayingSet] = useState<FlashcardSet | null>(null)
   // sınav simülasyonu — seçilen sınav + oynatıcı sonucu (Plan #35/#44)
   const [simulatingExam, setSimulatingExam] = useState<{ id: number; title: string } | null>(null)
   const [examOutcome, setExamOutcome] = useState<{
@@ -247,54 +224,42 @@ export function CoursePage() {
     if (!numericId) return
     setState('loading')
     try {
-      const [courseData, chapterList, materialList, jobList, quizList, dueCardList] =
+      const [courseData, chapterList, materialList, jobList, dueCardList] =
         await Promise.all([
           coursesApi.get(numericId),
           chaptersApi.listByCourse(numericId),
           materialsApi.listByCourse(numericId),
           indexingApi.listByCourse(numericId),
-          listOverallQuizzes(numericId),
           fetchDueCards(numericId, 20),
         ])
       setCourse(courseData)
       setChapters(chapterList)
       setMaterials(materialList)
       setJobs(jobList)
-      setOverallQuizzes(quizList)
       setDueCards(dueCardList)
       setState('ready')
-      termsApi
-        .get(courseData.term_id)
-        .then((term) => setTermName(term.name))
-        .catch(() => setTermName(null))
+      // §42 kart gruplaması kritik değil — hata olsa grid render'ına devam etsin.
+      listCourseFlashcardSets(numericId)
+        .then(setCourseCardSets)
+        .catch(() => undefined)
+      // Kart özetleri kritik değil — hata bondanda grid rendersin devam etsin.
+      getCardSummary(numericId)
+        .then((summary) => {
+          setCardSummaries(new Map(summary.chapters.map((chapter) => [chapter.chapter_id, chapter])))
+        })
+        .catch(() => undefined)
     } catch {
       setState('error')
       setError('Ders yüklenemedi. Lütfen tekrar deneyin.')
     }
   }, [numericId])
 
-  const handleGenerateOverallQuiz = async () => {
-    setError('')
-    await useGenerationStore
-      .getState()
-      .generateOverallQuiz(numericId, course?.name ?? 'Ders')
-    setQuizKey((k) => k + 1)
-    await load()
-  }
-
-  const handleDeleteOverallQuiz = async (quizId: number) => {
-    if (!(await confirmDialog('Bu genel quiz ve denemeleri silinecek. Emin misin?'))) return
-    try {
-      await removeOverallQuiz(quizId)
-      setOverallQuizzes((prev) => prev.filter((q) => q.id !== quizId))
-    } catch {
-      setError('Genel quiz silinemedi. Lütfen tekrar deneyin.')
-    }
-  }
-
   const refreshDueCards = async () => {
     if (!numericId) return
     setDueCards(await fetchDueCards(numericId, 20))
+    listCourseFlashcardSets(numericId)
+      .then(setCourseCardSets)
+      .catch(() => undefined)
   }
 
   const closeDuePlayer = () => {
@@ -377,25 +342,33 @@ export function CoursePage() {
     }
   }
 
+  // K5: düz `<a href>` indirmesi SaaS modda `Authorization` başlığını taşımıyor
+  // ve 401 alıyordu — içerik artık authFetch + blob ile indirilir.
+  const handleExportFlashcards = async (format: FlashcardExportFormat) => {
+    const ok = await downloadAuthed(
+      `/courses/${numericId}/flashcards/export?format=${format}`,
+      `stuhub-kartlar-${numericId}.${format}`,
+    )
+    if (!ok) setError('Kartlar indirilemedi. Lütfen tekrar deneyin.')
+  }
+
   const jobFor = (materialId: number): IndexingJob | undefined =>
     [...jobs].reverse().find((j) => j.material_id === materialId)
 
+  // Aktif workspace'in listeye dönüş hedefi — yönerge §27: X current feature
+  // listesine gider, global home'a DEĞİL. Genel dashboard'da chrome gizlenir.
+  const viewParam = searchParams.get('view')
+  const exitTo = viewParam ? `/dersler/${numericId}` : `/dersler/${numericId}`
+  const isWorkspace = Boolean(viewParam) || tab !== 'overview'
+
   return (
-    <section>
-      <Breadcrumb
-        items={[
-          { label: 'Dönemler', to: '/' },
-          { label: termName ?? 'Dönem', to: `/donemler/${course?.term_id ?? ''}` },
-          { label: course?.name ?? 'Ders' },
-        ]}
-      />
-      <div className="mt-2">
-        <div className="flex items-center gap-3">
-          <h1 className="text-3xl font-semibold">{course?.name ?? 'Ders'}</h1>
+    <section className="page-shell">
+      {isWorkspace && <WorkspaceChrome exitTo={exitTo} exitLabel="Ders dashboard'una dön" />}
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">{course?.name ?? 'Ders'}</h1>
+          {course?.instructor && <p className="page-subtitle">{course.instructor}</p>}
         </div>
-        {course?.instructor && (
-          <p className="mt-1 text-sm text-stuhub-text-secondary">{course.instructor}</p>
-        )}
       </div>
 
       {error && (
@@ -408,34 +381,29 @@ export function CoursePage() {
         <p className="mt-8 text-sm text-stuhub-text-secondary">Yükleniyor…</p>
       )}
 
-      <div className="mt-8 space-y-2">
-        <TabBar
-          tabs={COURSE_TAB_GROUPS.map((group, index) => ({
-            ...group,
-            shortcutHint: String(index + 1),
-          }))}
-          activeId={groupOf(tab)}
-          onSelect={(groupId) => {
-            const group = COURSE_TAB_GROUPS.find((g) => g.id === groupId)
-            if (group) setTab(group.tabIds[0])
-          }}
-          ariaLabel="Ders bölümü"
-        />
-        <TabBar
-          tabs={COURSE_TABS.filter((t) => groupOf(t.id) === groupOf(tab))}
-          activeId={tab}
-          onSelect={(id) => setTab(id as CourseTab)}
-          ariaLabel="Ders modu"
-        />
-        <p className="px-1 text-sm text-stuhub-text-secondary">{COURSE_TAB_DESCRIPTIONS[tab]}</p>
-      </div>
+      {(searchParams.get('view') === 'notes') && <CourseNotesPanel courseId={numericId} />}
 
-      {tab === 'overview' && (
+      {(searchParams.get('view') === 'saved') && <SavedQuestionsPage courseId={numericId} embedded />}
+
+      {tab === 'overview' && !searchParams.get('view') && (
         <>
+          <div className="secondary-grid mt-8">
+            <button type="button" onClick={() => navigate(`/dersler/${numericId}?view=errors`)} className="glass-panel glass-interactive p-5 text-left" data-tour-id="course-mistakes">
+              <p className="eyebrow">HATALARIM</p>
+              <p className="mt-2 text-lg font-semibold">Son yaptığın hatalara göz at</p>
+              <p className="mt-1 text-sm text-stuhub-text-secondary">Geçmiş quiz hatalarını incele ve tekrar çalış.</p>
+            </button>
+            <button type="button" onClick={() => navigate(`/dersler/${numericId}?view=heatmap`)} className="glass-panel glass-interactive p-5 text-left" data-tour-id="course-weak-topics">
+              <p className="eyebrow">ZAYIF KONULAR</p>
+              <p className="mt-2 text-lg font-semibold">En çok desteğe ihtiyaç duyan konular</p>
+              <p className="mt-1 text-sm text-stuhub-text-secondary">Quiz, kart ve chat sinyallerini birlikte değerlendir.</p>
+            </button>
+          </div>
+
           {/* Chapter'lar */}
           <div className="mt-10">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Chapter'lar</h2>
+          <h2 className="section-title">Chapter'lar</h2>
           {!showChapterForm && (
             <button
               type="button"
@@ -453,51 +421,22 @@ export function CoursePage() {
           </div>
         )}
 
-        <div className="mt-4 space-y-3">
-          {chapters.length === 0 && (
-            <p className="text-sm text-stuhub-text-secondary">
-              Henüz chapter yok. İlk chapter'ını ekleyerek başla.
-            </p>
+        <div className="mt-4 chapter-grid">
+          {chapters.length === 0 && !showChapterForm && (
+            <AddContentCard
+              label="Chapter ekle"
+              description="Henüz chapter yok — ilk chapter'ını ekleyerek başla."
+              onClick={() => setShowChapterForm(true)}
+            />
           )}
           {chapters.map((chapter) => (
-            <div key={chapter.id} className="space-y-2">
-              <div
-                role="link"
-                tabIndex={0}
-                onClick={() => navigate(`/dersler/${numericId}/defter/${chapter.id}`)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    navigate(`/dersler/${numericId}/defter/${chapter.id}`)
-                  }
-                }}
-                className="glass-panel glass-interactive flex cursor-pointer items-center justify-between px-5 py-4"
-              >
-                <span className="font-medium">{chapter.title}</span>
-                <span
-                  className="flex shrink-0 items-center gap-2"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setEditingChapter(chapter)}
-                    className="rounded-control p-2 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-glass-2-hover"
-                    title="Düzenle"
-                    aria-label={`${chapter.title} chapter'ını düzenle`}
-                  >
-                    <PencilSimple className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteChapter(chapter.id)}
-                    className="rounded-control p-2 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10 hover:text-stuhub-error"
-                    title="Sil"
-                    aria-label={`${chapter.title} chapter'ını sil`}
-                  >
-                    <X className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </span>
-              </div>
+            <div key={chapter.id} className="max-w-[420px] space-y-2">
+              <ChapterCard
+                chapter={chapter}
+                summary={cardSummaries.get(chapter.id) ?? null}
+                onEdit={(target) => setEditingChapter(target)}
+                onDelete={(target) => void handleDeleteChapter(target.id)}
+              />
               {editingChapter?.id === chapter.id && (
                 <ChapterEditForm
                   chapter={chapter}
@@ -507,6 +446,13 @@ export function CoursePage() {
               )}
             </div>
           ))}
+          {chapters.length > 0 && !showChapterForm && (
+            <AddContentCard
+              label="Chapter ekle"
+              description="Yeni bir chapter ekleyerek konularını oluştur."
+              onClick={() => setShowChapterForm(true)}
+            />
+          )}
         </div>
       </div>
 
@@ -570,7 +516,7 @@ export function CoursePage() {
                         Tekrar dene
                       </button>
                     )}
-                    {material.filepath.toLowerCase().endsWith('.pdf') && (
+                    {material.file_ext === 'pdf' && (
                       <button
                         type="button"
                         onClick={() => setPreviewMaterial(material)}
@@ -581,7 +527,7 @@ export function CoursePage() {
                     )}
                     <button
                       type="button"
-                      onClick={() => handleDeleteMaterial(material.id)}
+                      onClick={() => void handleDeleteMaterial(material.id)}
                       className="rounded-control p-1.5 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10 hover:text-stuhub-error"
                       title="Sil"
                       aria-label="Materyali sil"
@@ -606,86 +552,6 @@ export function CoursePage() {
         />
       )}
 
-      {tab === 'quiz' && (
-        <>
-          {/* Genel quiz */}
-          <div className="mt-12">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-semibold">Genel Quiz</h2>
-            <p className="mt-1 text-sm text-stuhub-text-secondary">
-              Dersin tüm chapter notlarından 55 soru: çoktan seçmeli, doğru-yanlış, boşluk
-              doldurma ve açık uçlu (otomatik puanlama). Tüm quizler kaydedilir.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void handleGenerateOverallQuiz()}
-            disabled={overallJob?.status === 'running'}
-            className="btn-primary"
-          >
-            {overallJob?.status === 'running' ? 'Üretiliyor…' : 'Yeni Genel Quiz Oluştur'}
-          </button>
-        </div>
-
-        {overallJob?.status === 'running' && (
-          <div className="glass-panel mt-4 p-5">
-            <p className="text-sm font-medium">{overallJob.message}</p>
-            <div className="mt-3 h-2 w-full overflow-hidden rounded-pill bg-stuhub-border">
-              <div
-                className="h-full rounded-pill bg-stuhub-accent transition-[width] duration-[var(--duration-state)] ease-[var(--ease-out-expo)]"
-                style={{ width: `${Math.max(quizProgress, 2)}%` }}
-              />
-            </div>
-            <p className="mt-2 text-xs text-stuhub-text-secondary">
-              %{Math.round(quizProgress)} tamamlandı
-            </p>
-          </div>
-        )}
-
-        <div className="mt-5 space-y-4">
-          {overallQuizzes.length === 0 && overallJob?.status !== 'running' && (
-            <p className="text-sm text-stuhub-text-secondary">
-              Henüz genel quiz yok. Önce chapter'lar için not oluşturup buradan başlat.
-            </p>
-          )}
-          {overallQuizzes.map((overallQuiz, index) => (
-            <details key={overallQuiz.id} open={index === 0}>
-              <summary className="glass-panel flex cursor-pointer items-center justify-between px-5 py-3 font-medium">
-                <span>
-                  Genel Quiz {overallQuizzes.length - index} ·{' '}
-                  {overallQuiz.questions_json.questions.length} soru ·{' '}
-                  {overallQuiz.created_at
-                    ? new Date(overallQuiz.created_at).toLocaleDateString('tr-TR')
-                    : ''}
-                </span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    void handleDeleteOverallQuiz(overallQuiz.id)
-                  }}
-                  className="rounded-control p-1.5 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-error/10 hover:text-stuhub-error"
-                  title="Sil"
-                  aria-label="Genel quiz'i sil"
-                >
-                  <X className="h-4 w-4" aria-hidden="true" />
-                </button>
-              </summary>
-              <div className="mt-3">
-                <OverallQuizPlayer
-                  key={`${overallQuiz.id}-${quizKey}`}
-                  quiz={overallQuiz}
-                  onDelete={(id) => void handleDeleteOverallQuiz(id)}
-                />
-              </div>
-            </details>
-          ))}
-        </div>
-      </div>
-        </>
-      )}
-
       {tab === 'cards' && (
         <>
           {/* Bugünün kartları — due tekrar kuyruğu (Faz V2.2) */}
@@ -695,14 +561,14 @@ export function CoursePage() {
           <div className="flex gap-3">
             <button
               type="button"
-              onClick={() => downloadFile(courseFlashcardsExportUrl(numericId, 'apkg'))}
+              onClick={() => void handleExportFlashcards('apkg')}
               className="glass-panel-subtle glass-interactive rounded-control px-3 py-1 text-xs font-medium text-stuhub-text-secondary"
             >
               Tüm kartları Anki'ye aktar (.apkg)
             </button>
             <button
               type="button"
-              onClick={() => downloadFile(courseFlashcardsExportUrl(numericId, 'csv'))}
+              onClick={() => void handleExportFlashcards('csv')}
               className="glass-panel-subtle glass-interactive rounded-control px-3 py-1 text-xs font-medium text-stuhub-text-secondary"
             >
               CSV
@@ -734,6 +600,76 @@ export function CoursePage() {
           <p className="mt-1 text-sm text-stuhub-text-secondary">Tekrar bekleyen kart yok.</p>
         )}
       </div>
+
+          {/* §42: tüm setler — chapter'a göre gruplu, dikey */}
+          <div className="mt-12">
+            {playingSet ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold">Kart Çalışımı</h2>
+                  <button
+                    type="button"
+                    className="glass-panel-subtle glass-interactive rounded-control px-3 py-1 text-xs font-medium text-stuhub-text-secondary"
+                    onClick={() => setPlayingSet(null)}
+                  >
+                    Sete dön
+                  </button>
+                </div>
+                <div className="mt-4">
+                  <FlashcardPlayer
+                    dueCards={playingSet.cards_json.map((card, cardIndex) => ({
+                      set_id: playingSet.id,
+                      card_index: cardIndex,
+                      card,
+                      review: null,
+                      due: true,
+                    }))}
+                    onFinished={() => {
+                      setPlayingSet(null)
+                      void refreshDueCards()
+                    }}
+                    onExit={() => setPlayingSet(null)}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+            <h2 className="text-xl font-semibold">Chapter'lara Göre Kartlar</h2>
+            {courseCardSets.length === 0 && (
+              <p className="mt-1 text-sm text-stuhub-text-secondary">
+                Henüz kart seti yok. Bir chapter açıp “Kart Oluştur” ile başla.
+              </p>
+            )}
+            {chapters.map((chapter) => {
+              const chapterSets = courseCardSets.filter((set) => set.chapter_id === chapter.id)
+              if (chapterSets.length === 0) return null
+              return (
+                <div key={chapter.id} className="mt-6">
+                  <p className="eyebrow">{chapter.title}</p>
+                  <div className="list-stack mt-3">
+                    {chapterSets.map((set) => (
+                      <button
+                        key={set.id}
+                        type="button"
+                        className="glass-panel glass-interactive list-card text-left"
+                        onClick={() => setPlayingSet(set)}
+                      >
+                        <div>
+                          <p className="font-medium">
+                            {new Date(set.created_at ?? Date.now()).toLocaleDateString('tr-TR')} tarihli set
+                          </p>
+                          <p className="mt-1 text-xs text-stuhub-text-secondary">{set.card_count} kart</p>
+                        </div>
+                        <ArrowRight size={17} aria-hidden="true" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+              </>
+            )}
+          </div>
         </>
       )}
 
@@ -770,9 +706,9 @@ export function CoursePage() {
         </>
       )}
 
-      {tab === 'errors' && <ErrorLogPanel courseId={numericId} />}
+      {tab === 'errors' && <span data-tour-id="course-mistakes" className="block"><ErrorLogPanel courseId={numericId} /></span>}
 
-      {tab === 'heatmap' && <WeakTopicHeatmap courseId={numericId} />}
+      {tab === 'heatmap' && <span data-tour-id="course-weak-topics" className="block"><WeakTopicHeatmap courseId={numericId} /></span>}
 
       {tab === 'exam' && (
         <div className="mt-8 space-y-8">
@@ -840,10 +776,12 @@ export function CoursePage() {
 
       {tab === 'smart' && (
         <div className="mt-8 space-y-8">
-          <NextActionCard
-            courseId={numericId}
-            onOpenChapter={(chapterId) => navigate(`/dersler/${numericId}/defter/${chapterId}`)}
-          />
+          <div className="glass-panel p-5">
+            <NextActionCard
+              courseId={numericId}
+              onOpenChapter={(chapterId) => navigate(`/dersler/${numericId}/defter/${chapterId}`)}
+            />
+          </div>
           <RetentionProgressBadge courseId={numericId} />
           <StudyTimer courseId={numericId} />
           <AbandonedTopicsList courseId={numericId} />

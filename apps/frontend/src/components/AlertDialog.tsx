@@ -1,7 +1,8 @@
-import { Info } from '@phosphor-icons/react'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 import { useAlertStore } from '../stores/alertStore'
+import { useFocusTrap } from '../hooks/useFocusTrap'
+import { Info } from 'lucide-react'
 
 /**
  * Tema uyumlu tek-butonlu bilgi diyaloğu — `window.alert()` yerine.
@@ -12,6 +13,8 @@ export function AlertDialog() {
   const open = useAlertStore((s) => s.open)
   const message = useAlertStore((s) => s.message)
   const respond = useAlertStore((s) => s.respond)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(dialogRef, open)
 
   useEffect(() => {
     if (!open) return
@@ -31,6 +34,7 @@ export function AlertDialog() {
       onClick={() => respond()}
     >
       <div
+        ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="alert-dialog-message"
@@ -38,7 +42,7 @@ export function AlertDialog() {
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start gap-3">
-          <Info size={20} weight="fill" className="mt-0.5 shrink-0 text-stuhub-accent" aria-hidden="true" />
+          <Info size={20} className="mt-0.5 shrink-0 text-stuhub-accent" aria-hidden="true" />
           <p id="alert-dialog-message" className="text-sm leading-relaxed text-stuhub-text">
             {message}
           </p>

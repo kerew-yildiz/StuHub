@@ -1,8 +1,8 @@
-import { ArrowDown, BookmarkSimple, CheckCircle, CircleNotch, Quotes, SkipForward, XCircle } from '@phosphor-icons/react'
 import { useEffect, useRef } from 'react'
 
 import type { AnswerResult, FeedDifficulty, FeedQuestion } from '../api/feed'
 import type { Citation } from '../api/notes'
+import { ArrowDown, Bookmark, CheckCircle, LoaderCircle, Quote, SkipForward, XCircle } from 'lucide-react'
 
 interface QuizFeedCardProps {
   question: FeedQuestion
@@ -69,7 +69,8 @@ export function QuizFeedCard({
   }
 
   return (
-    <div className="glass-panel flex h-full flex-col gap-4 overflow-y-auto p-6">
+    // scrollbar gizli ama kaydırma işlevsel (sıkıntı #7 — swipe feed estetiği)
+    <div className="glass-panel feed-card-scroll flex h-full flex-col gap-4 overflow-y-auto p-6">
       <div className="flex items-center justify-between gap-2 text-xs text-stuhub-text-secondary">
         <div className="flex items-center gap-2">
           {question.topic && (
@@ -88,7 +89,7 @@ export function QuizFeedCard({
           aria-pressed={question.saved}
           className="shrink-0 rounded-control p-1.5 text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:text-stuhub-text"
         >
-          <BookmarkSimple size={20} weight={question.saved ? 'fill' : 'regular'} />
+          <Bookmark size={20} />
         </button>
       </div>
 
@@ -123,7 +124,7 @@ export function QuizFeedCard({
 
       {locked && !result && (
         <p className="flex items-center gap-2 text-sm text-stuhub-text-secondary" role="status">
-          <CircleNotch size={16} className="animate-spin" />
+          <LoaderCircle size={16} className="animate-spin" />
           Cevabın değerlendiriliyor…
         </p>
       )}
@@ -157,7 +158,7 @@ export function QuizFeedCard({
                   key={`${citation.id}-${index}`}
                   className="glass-panel-subtle flex items-center gap-1 rounded-pill px-2.5 py-1 text-xs text-stuhub-text-secondary"
                 >
-                  <Quotes size={12} />
+                  <Quote size={12} />
                   {citationLabel(citation)}
                 </span>
               ))}
@@ -182,7 +183,7 @@ export function QuizFeedCard({
             type="button"
             onClick={onSkip}
             disabled={locked}
-            className="flex items-center gap-1.5 rounded-pill px-3 py-1.5 text-xs text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:text-stuhub-text disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-pill px-3 py-1.5 text-xs text-stuhub-text-secondary transition-colors duration-[var(--duration-micro)] hover:text-stuhub-text"
           >
             <SkipForward size={14} />
             Atla

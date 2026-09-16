@@ -1,10 +1,11 @@
-import { ArrowRight, Funnel, Repeat, WarningCircle } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 
 import { listErrors, type ErrorLogEntry } from '../api/errors'
+import { ArrowRight, Funnel, Repeat, CircleAlert } from 'lucide-react'
 
 export interface ErrorLogPanelProps {
   courseId: number
+  chapterId?: number
 }
 
 const CONTROL_CLASS =
@@ -18,7 +19,7 @@ function formatDate(value: string): string {
 }
 
 /** Hata günlüğü — geçmiş quiz denemelerindeki yanlış cevaplar, konu/tarih süzgeçli (plan #5). */
-export function ErrorLogPanel({ courseId }: ErrorLogPanelProps) {
+export function ErrorLogPanel({ courseId, chapterId }: ErrorLogPanelProps) {
   const [entries, setEntries] = useState<ErrorLogEntry[]>([])
   const [topics, setTopics] = useState<string[]>([])
   const [topic, setTopic] = useState('')
@@ -33,7 +34,7 @@ export function ErrorLogPanel({ courseId }: ErrorLogPanelProps) {
     setError('')
     void (async () => {
       try {
-        const data = await listErrors(courseId, { topic, since, onlyRepeated })
+        const data = await listErrors(courseId, { chapterId, topic, since, onlyRepeated })
         if (cancelled) return
         setEntries(data)
         // Süzgeç yoksa yanıt tüm hataları içerir: konu listesi buradan beslenir
@@ -50,7 +51,7 @@ export function ErrorLogPanel({ courseId }: ErrorLogPanelProps) {
     return () => {
       cancelled = true
     }
-  }, [courseId, topic, since, onlyRepeated])
+  }, [courseId, chapterId, topic, since, onlyRepeated])
 
   const hasFilter = Boolean(topic || since || onlyRepeated)
 
@@ -131,7 +132,7 @@ export function ErrorLogPanel({ courseId }: ErrorLogPanelProps) {
 
       {!loading && !error && entries.length === 0 && (
         <div className="glass-panel mt-4 flex items-start gap-3 px-5 py-4">
-          <WarningCircle className="mt-0.5 h-5 w-5 shrink-0 text-stuhub-text-secondary" aria-hidden="true" />
+          <CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-stuhub-text-secondary" aria-hidden="true" />
           <p className="text-sm text-stuhub-text-secondary">
             {hasFilter
               ? 'Bu süzgeçlerle eşleşen hata yok. Süzgeçleri gevşetip tekrar dene.'

@@ -15,7 +15,10 @@ function SummaryView({ guide }: { guide: SummaryGuide }) {
     <div className="glass-panel p-5">
       <div className="text-sm leading-relaxed">
         <ReactMarkdown
-          urlTransform={(url) => url}
+          /* URL allow-list — NoteViewer ile aynı kural (javascript:/data: engellenir). */
+          urlTransform={(url) =>
+            /^(https?:|mailto:|tel:|[./#])/i.test(url) ? url : ''
+          }
           components={{
             p: ({ children }) => <p className="my-2">{children}</p>,
             ul: ({ children }) => <ul className="mt-1 list-disc space-y-1 pl-6">{children}</ul>,

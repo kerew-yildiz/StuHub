@@ -1,11 +1,12 @@
-import { BookOpen, FilePdf, X } from '@phosphor-icons/react'
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 
 import { chaptersApi } from '../api/chapters'
 import { getNote, type Citation } from '../api/notes'
+import { useFocusTrap } from '../hooks/useFocusTrap'
 import { CitationPopup } from './CitationPopup'
 import { FilePreviewModal } from './FilePreviewModal'
+import { BookOpen, FileText, X } from 'lucide-react'
 
 export interface WrongAnswerLinksProps {
   /** Yanlış cevaplanan sorunun atıfları — boşsa hiçbir bağlantı gösterilmez (kırık link üretilmez). */
@@ -92,6 +93,8 @@ function NoteSectionModal({
   onClose: () => void
 }) {
   const closeRef = useRef<HTMLButtonElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(dialogRef, true)
 
   useEffect(() => {
     closeRef.current?.focus()
@@ -108,6 +111,7 @@ function NoteSectionModal({
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="note-section-title"
@@ -143,6 +147,8 @@ function NoteSectionModal({
           )}
           {state === 'ready' && section && (
             <ReactMarkdown
+              /* URL allow-list — diğer markdown yüzeyleriyle aynı kural. */
+              urlTransform={(url) => (/^(https?:|mailto:|tel:|[./#])/i.test(url) ? url : '')}
               components={{
                 h1: ({ children }) => <h3 className="mt-3 mb-2 text-base font-semibold">{children}</h3>,
                 h2: ({ children }) => <h3 className="mt-3 mb-2 text-base font-semibold">{children}</h3>,
@@ -233,7 +239,7 @@ export function WrongAnswerLinks({ citations, topic, chapterId, courseId }: Wron
       )}
       {sourceCitation && (
         <button type="button" onClick={handleOpenSource} className={chipClass}>
-          <FilePdf size={14} aria-hidden="true" />
+          <FileText size={14} aria-hidden="true" />
           {locationLabel ? `Kaynak sayfa · ${locationLabel}` : 'Kaynak sayfa'}
         </button>
       )}

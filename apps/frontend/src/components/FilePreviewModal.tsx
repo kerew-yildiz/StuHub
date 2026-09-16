@@ -1,7 +1,8 @@
-import { X } from '@phosphor-icons/react'
 import { useEffect, useRef } from 'react'
 
 import { useAuthedFileUrl } from '../lib/useAuthedFileUrl'
+import { useFocusTrap } from '../hooks/useFocusTrap'
+import { X } from 'lucide-react'
 
 interface FilePreviewModalProps {
   /** `authFetch` kuralına uygun `/api` ÖNEKSİZ yol (örn. `/materials/5/file`). */
@@ -19,6 +20,8 @@ interface FilePreviewModalProps {
  * (bkz. `lib/useAuthedFileUrl.ts`). */
 export function FilePreviewModal({ path, title, page, onClose }: FilePreviewModalProps) {
   const closeRef = useRef<HTMLButtonElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(dialogRef, true)
   const { blobUrl, loading, error } = useAuthedFileUrl(path)
 
   useEffect(() => {
@@ -36,6 +39,7 @@ export function FilePreviewModal({ path, title, page, onClose }: FilePreviewModa
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="file-preview-title"
@@ -57,8 +61,8 @@ export function FilePreviewModal({ path, title, page, onClose }: FilePreviewModa
           </button>
         </div>
         {error ? (
-          <p className="flex h-[75vh] w-full items-center justify-center text-sm text-stuhub-text-secondary">
-            Dosya yüklenemedi. Lütfen tekrar deneyin.
+          <p className="flex h-[75vh] w-full items-center justify-center px-6 text-center text-sm text-stuhub-text-secondary">
+            {error}
           </p>
         ) : loading || !blobUrl ? (
           <p className="flex h-[75vh] w-full items-center justify-center text-sm text-stuhub-text-secondary">

@@ -16,6 +16,8 @@ export interface ErrorLogEntry {
 
 /** Hata listesi süzgeçleri (hepsi opsiyonel). */
 export interface ErrorLogParams {
+  /** Yalnızca bu chapter'daki hatalar */
+  chapterId?: number
   /** Yalnızca bu konudaki hatalar */
   topic?: string
   /** ISO tarih (YYYY-MM-DD veya tam ISO); bu andan sonraki hatalar */
@@ -30,6 +32,7 @@ export async function listErrors(
   params: ErrorLogParams = {},
 ): Promise<ErrorLogEntry[]> {
   const query = new URLSearchParams()
+  if (params.chapterId) query.set('chapter_id', String(params.chapterId))
   if (params.topic) query.set('topic', params.topic)
   if (params.since) query.set('since', params.since)
   if (params.onlyRepeated) query.set('only_repeated', 'true')

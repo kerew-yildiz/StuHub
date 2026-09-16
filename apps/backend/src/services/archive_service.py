@@ -48,8 +48,10 @@ def _safe_filename(name: str | None, fallback: str) -> str:
 
 
 # Sabit SQL şablonları — dinamik SQL kurulumu YASAK (B608 politikası).
-# id listesi tek parametre olarak JSON dizisiyle geçer (json_each).
-_SELECT_BY_IDS: dict[tuple[str, str], str] = {
+# İki diyalekt (settings.saas_mode ile seçilir): `?::bigint[]` SQLite'ta geçersizdir;
+# Postgres'te ise `json_each.value` json tipinde olduğundan `bigint = json` karşılaştırması
+# patlar (K5-archive 500). Yerel mod: JSON dizisi metni + json_each.
+_SELECT_BY_IDS_SQLITE: dict[tuple[str, str], str] = {
     ("chapters", "course_id"): (
         "SELECT * FROM chapters WHERE course_id IN (SELECT value FROM json_each(?))"
         " AND tenant_id = ? ORDER BY id"
@@ -80,18 +82,55 @@ _SELECT_BY_IDS: dict[tuple[str, str], str] = {
     ),
 }
 
+# SaaS (Postgres) diyalekti — id listesi tek parametre olarak düz Python listesi geçer;
+# pg_compat bunu `$1::bigint[]` olarak bağlar.
+_SELECT_BY_IDS_PG: dict[tuple[str, str], str] = {
+    ("chapters", "course_id"): (
+        "SELECT * FROM chapters WHERE course_id = ANY(?::bigint[])"
+        " AND tenant_id = ? ORDER BY id"
+    ),
+    ("notes", "chapter_id"): (
+        "SELECT * FROM notes WHERE chapter_id = ANY(?::bigint[])"
+        " AND tenant_id = ? ORDER BY id"
+    ),
+    ("quizzes", "chapter_id"): (
+        "SELECT * FROM quizzes WHERE chapter_id = ANY(?::bigint[])"
+        " AND tenant_id = ? ORDER BY id"
+    ),
+    ("flashcard_sets", "course_id"): (
+        "SELECT * FROM flashcard_sets WHERE course_id = ANY(?::bigint[])"
+        " AND tenant_id = ? ORDER BY id"
+    ),
+    ("chat_messages", "course_id"): (
+        "SELECT * FROM chat_messages WHERE course_id = ANY(?::bigint[])"
+        " AND tenant_id = ? ORDER BY id"
+    ),
+    ("study_guides", "course_id"): (
+        "SELECT * FROM study_guides WHERE course_id = ANY(?::bigint[])"
+        " AND tenant_id = ? ORDER BY id"
+    ),
+    ("materials", "course_id"): (
+        "SELECT * FROM materials WHERE course_id = ANY(?::bigint[])"
+        " AND tenant_id = ? ORDER BY id"
+    ),
+}
+
 
 async def _fetch_rows(
     table: str, where_col: str, ids: list[int], tenant_id: str = LOCAL_TENANT_ID
 ) -> list[dict]:
     if not ids:
         return []
-    query = _SELECT_BY_IDS.get((table, where_col))
+    saas = settings.saas_mode
+    templates = _SELECT_BY_IDS_PG if saas else _SELECT_BY_IDS_SQLITE
+    query = templates.get((table, where_col))
     if query is None:
         raise ValueError(f"desteklenmeyen sorgu: {table}.{where_col}")
+    # SQLite json_each JSON dizisi metni bekler; Postgres bigint[] düz liste ister.
+    params = (ids if saas else json.dumps(ids), tenant_id)
     db = await get_db()
     try:
-        cursor = await db.execute(query, (json.dumps(ids), tenant_id))
+        cursor = await db.execute(query, params)
         rows = [dict(row) for row in await cursor.fetchall()]
     finally:
         await db.close()
@@ -142,21 +181,28 @@ async def build_term_archive(
 
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False))
+        archive.writestr(
+            "manifest.json", json.dumps(manifest, ensure_ascii=False, default=str)
+        )
         for course in courses:
             prefix = f"courses/{course['id']}"
             archive.writestr(
-                f"{prefix}/course.json", json.dumps(course, ensure_ascii=False)
+                f"{prefix}/course.json",
+                json.dumps(course, ensure_ascii=False, default=str),
             )
             archive.writestr(
                 f"{prefix}/chapters.json",
-                json.dumps(chapters_by_course.get(course["id"], []), ensure_ascii=False),
+                json.dumps(
+                    chapters_by_course.get(course["id"], []),
+                    ensure_ascii=False,
+                    default=str,
+                ),
             )
             if include_files:
                 for row in materials.get(course["id"], []):
                     archive.writestr(
                         f"{prefix}/materials/{row['id']}.json",
-                        json.dumps(row, ensure_ascii=False),
+                        json.dumps(row, ensure_ascii=False, default=str),
                     )
                     path = Path(row["filepath"])
                     if path.exists() and path.is_file():
@@ -166,28 +212,28 @@ async def build_term_archive(
         for row in await _fetch_rows("notes", "chapter_id", chapter_ids, tenant_id):
             prefix = f"chapters/{row['chapter_id']}"
             archive.writestr(
-                f"{prefix}/note-{row['id']}.json", json.dumps(row, ensure_ascii=False)
+                f"{prefix}/note-{row['id']}.json", json.dumps(row, ensure_ascii=False, default=str)
             )
         for row in await _fetch_rows("quizzes", "chapter_id", chapter_ids, tenant_id):
             prefix = f"chapters/{row['chapter_id']}"
             archive.writestr(
-                f"{prefix}/quiz-{row['id']}.json", json.dumps(row, ensure_ascii=False)
+                f"{prefix}/quiz-{row['id']}.json", json.dumps(row, ensure_ascii=False, default=str)
             )
 
         for row in await _fetch_rows("flashcard_sets", "course_id", course_ids, tenant_id):
             archive.writestr(
                 f"courses/{row['course_id']}/flashcards/{row['id']}.json",
-                json.dumps(row, ensure_ascii=False),
+                json.dumps(row, ensure_ascii=False, default=str),
             )
         for row in await _fetch_rows("chat_messages", "course_id", course_ids, tenant_id):
             archive.writestr(
                 f"courses/{row['course_id']}/chats/{row['id']}.json",
-                json.dumps(row, ensure_ascii=False),
+                json.dumps(row, ensure_ascii=False, default=str),
             )
         for row in await _fetch_rows("study_guides", "course_id", course_ids, tenant_id):
             archive.writestr(
                 f"courses/{row['course_id']}/guides/{row['id']}.json",
-                json.dumps(row, ensure_ascii=False),
+                json.dumps(row, ensure_ascii=False, default=str),
             )
     return buffer.getvalue()
 

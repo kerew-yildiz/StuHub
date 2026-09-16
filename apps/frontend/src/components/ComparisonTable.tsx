@@ -1,6 +1,6 @@
-import { ArrowsLeftRight, Check, CircleNotch, Lightbulb, Warning } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 
+import { ArrowLeftRight, Check, LoaderCircle, Lightbulb, TriangleAlert } from 'lucide-react'
 import {
   generateComparison,
   getComparison,
@@ -85,7 +85,7 @@ export function ComparisonTable({ courseId }: ComparisonTableProps) {
 
       {!loading && terms.length === 0 && (
         <div className="glass-panel mt-4 flex items-start gap-3 px-5 py-4">
-          <Warning className="mt-0.5 h-5 w-5 shrink-0 text-stuhub-text-secondary" aria-hidden="true" />
+          <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-stuhub-text-secondary" aria-hidden="true" />
           <p className="text-sm text-stuhub-text-secondary">
             Karşılaştırılacak kavram yok. Önce bölüm özetleri üret — kavramlar özetlerin anahtar
             terimlerinden gelir.
@@ -108,7 +108,7 @@ export function ComparisonTable({ courseId }: ComparisonTableProps) {
                   onClick={() => toggle(term)}
                   disabled={!isSelected && atLimit}
                   aria-pressed={isSelected}
-                  className={`glass-interactive flex items-center gap-1.5 rounded-pill px-3.5 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40 ${
+                  className={`glass-interactive flex items-center gap-1.5 rounded-pill px-3.5 py-1.5 text-sm font-medium disabled:cursor-not-allowed ${
                     isSelected
                       ? 'border border-stuhub-accent-glass-border bg-stuhub-accent-glass text-stuhub-text'
                       : 'glass-panel-subtle border border-transparent text-stuhub-text-secondary'
@@ -125,12 +125,12 @@ export function ComparisonTable({ courseId }: ComparisonTableProps) {
             type="button"
             onClick={() => void run()}
             disabled={selected.length < 2 || generating}
-            className="btn-primary mt-4 flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn-primary mt-4 flex items-center gap-2 disabled:cursor-not-allowed"
           >
             {generating ? (
-              <CircleNotch className="h-4 w-4 animate-spin" aria-hidden="true" />
+              <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
             ) : (
-              <ArrowsLeftRight className="h-4 w-4" aria-hidden="true" />
+              <ArrowLeftRight className="h-4 w-4" aria-hidden="true" />
             )}
             {generating ? 'Karşılaştırılıyor…' : 'Karşılaştır'}
           </button>
@@ -152,7 +152,7 @@ export function ComparisonTable({ courseId }: ComparisonTableProps) {
             <article key={`${pair.a}-${pair.b}`} className="glass-panel px-5 py-4">
               <h3 className="flex flex-wrap items-center gap-2 text-base font-semibold">
                 {pair.a}
-                <ArrowsLeftRight className="h-4 w-4 text-stuhub-text-secondary" aria-hidden="true" />
+                <ArrowLeftRight className="h-4 w-4 text-stuhub-text-secondary" aria-hidden="true" />
                 {pair.b}
               </h3>
 

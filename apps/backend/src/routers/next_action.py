@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 from ..auth import get_tenant_id
 from ..db import get_db
-from .errors import list_course_errors
+from .errors import collect_course_errors
 
 router = APIRouter(prefix="/api", tags=["next-action"])
 
@@ -72,7 +72,7 @@ async def _overdue_card_set(db, course_id: int, tenant_id: str) -> int | None:
 
 async def _repeated_error_topic(course_id: int, tenant_id: str) -> str | None:
     """Hata günlüğünde 2+ kez tekrar eden ilk (en yeni) konu adını döner."""
-    entries = await list_course_errors(
+    entries = await collect_course_errors(
         course_id, topic=None, since=None, only_repeated=True, tenant_id=tenant_id
     )
     return entries[0].topic if entries else None

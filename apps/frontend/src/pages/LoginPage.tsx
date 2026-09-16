@@ -106,7 +106,7 @@ export function LoginPage() {
               type="submit"
               disabled={loading}
               onClick={() => setMode('signup')}
-              className="flex-1 rounded-sm border border-stuhub-border px-4 py-2 text-sm font-medium transition-colors duration-150 hover:border-stuhub-border-strong disabled:opacity-60"
+              className="flex-1 rounded-sm border border-stuhub-border px-4 py-2 text-sm font-medium transition-colors duration-150 hover:border-stuhub-border-strong"
             >
               {loading && mode === 'signup' ? 'Hesap oluşturuluyor…' : 'Hesap oluştur'}
             </button>
