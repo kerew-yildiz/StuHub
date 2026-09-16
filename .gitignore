@@ -54,3 +54,10 @@ Thumbs.db
 # Commit edilirse CI'daki `ruff check .` düşer (5 lint hatası taşıyor).
 apps/backend/_stream_test3.py
 apps/backend/_uvicorn_native.log
+
+# ── Agentic operasyon dosyalari (Vault'ta durur, depoda degil) ────────
+master_worker_system/
+_*.cmd
+_*.txt
+_*.log
+_opencode_canli_test.json
