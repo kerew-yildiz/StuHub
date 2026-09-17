@@ -64,7 +64,7 @@ export function LoginPage() {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-stuhub-accent"
+              className="w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-3 py-2 text-sm outline-none transition-colors duration-[var(--duration-micro)] focus:border-stuhub-accent"
             />
           </div>
           <div>
@@ -78,7 +78,7 @@ export function LoginPage() {
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-stuhub-accent"
+              className="w-full rounded-sm border border-stuhub-border bg-stuhub-bg px-3 py-2 text-sm outline-none transition-colors duration-[var(--duration-micro)] focus:border-stuhub-accent"
             />
           </div>
 
@@ -106,7 +106,7 @@ export function LoginPage() {
               type="submit"
               disabled={loading}
               onClick={() => setMode('signup')}
-              className="flex-1 rounded-sm border border-stuhub-border px-4 py-2 text-sm font-medium transition-colors duration-150 hover:border-stuhub-border-strong"
+              className="flex-1 rounded-sm border border-stuhub-border px-4 py-2 text-sm font-medium transition-colors duration-[var(--duration-micro)] hover:border-stuhub-border-strong"
             >
               {loading && mode === 'signup' ? 'Hesap oluşturuluyor…' : 'Hesap oluştur'}
             </button>

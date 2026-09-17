@@ -69,6 +69,17 @@ class LLMProvider:
     session_header: str | None = None
     """Oturum kimliğinin gönderileceği HTTP başlığı (varsa) — değeri statik değil,
     `request_params()` istek başına kiracı + iş bağlamından türetir."""
+    max_output_tokens: int | None = None
+    """Tek yanıtta üretilebilecek azami token. Çağıran `chat_*`'a özel `max_tokens`
+    vermezse `llm_service` bunu kullanır; `None` → `MAX_TOKENS_DEFAULT` (2048).
+
+    Reasoning sağlayıcılarında gizli reasoning token'ları DA bu bütçeden harcanır:
+    varsayılan 2048 bütçe uzun promptta yalnızca reasoning'e gider ve yanıt
+    `finish_reason=length` + BOŞ içerikle döner (bkz. opencode girdisi ve
+    llm_service._max_tokens_for)."""
+    request_timeout: float = 20.0
+    """Tek HTTP isteği için zaman aşımı (sn). Geniş bütçeyle reasoning yapan sağlayıcıda
+    yanıt 20 sn'yi aşabildiğinden yükseltilir (bkz. opencode girdisi)."""
 
 
 
@@ -92,6 +103,15 @@ PROVIDER_CHAIN: list[LLMProvider] = [
             "reasoning_effort": "high",
             "extra_headers": {"User-Agent": "StuHub/1.0"},
         },
+        # 2026-09-17 (json-hata P0): `reasoning_effort=high` ile gizli reasoning
+        # token'ları DA completion bütçesinden harcanıyor. 2048'lik varsayılan bütçe
+        # büyük chapter promptunda (8K kr slayt) yalnızca reasoning'e gidiyor ve yanıt
+        # `finish_reason=length` + BOŞ `content` ile dönüyordu; chat_json 3 kez
+        # ayrıştıramayınca "Model geçerli JSON üretemedi" hatası çıkıyordu (canlı
+        # ölçüm: 2048'de boş/length, 8192'de ~29 sn'de tam JSON; reasoning ~17,7K kr
+        # + içerik ~2,1K kr = ~6,5K token). Zaman aşımı da 20 sn'de bu yanıtı kesiyordu.
+        max_output_tokens=8192,
+        request_timeout=90.0,
     ),
     LLMProvider(
         name="gemini",

@@ -45,8 +45,18 @@ KURALLAR:
 2. correct/missing/incorrect/unnecessary listelerini doldur; boş kategoriye "yok" yaz.
 3. explanation alanında puanı gerekçelendir.
 4. ideal_answer: anahtardan ve kaynaklardan tam bir örnek cevap yaz, atıfları [n] ile işaretle.
+   İdeal cevap, öğrencinin cevabının "düzeltilmiş + tamamlanmış" hali gibi okunmalı: öğrencinin
+   doğru ifadelerini koru, eksik noktaları ekle, yanlış ifadeleri düzelt.
 5. confidence: 0-1 arası puanlamaya güvenin.
-6. Yalnızca JSON döndür: {{"score": 7, "correct": ["..."], "missing": ["..."], "incorrect": ["..."], "unnecessary": ["..."], "explanation": "...", "ideal_answer": "...", "confidence": 0.9}}
+6. misconception: "incorrect" maddelerinin her biri için, öğrencinin bu yanlış bilgiye NEDEN
+   düşmüş olabileceğini tek cümleyle yaz (hangi kavramla karıştırma, hangi genelleme).
+   Yanlış yoksa boş liste.
+7. next_step: öğrencinin bu konuyu kalıcı öğrenmesi için TEK, somut ve uygulanabilir bir sonraki
+   adım yaz (ör. "X ile Y kavramlarını ayırt eden 3 soru çöz" gibi; "daha çok çalış" gibi genel
+   tavsiye YASAK). Adım, cevabında eksik olan noktayı hedefleyecek.
+8. Yalnızca JSON döndür: {{"score": 7, "correct": [...], "missing": [...], "incorrect": [...],
+   "unnecessary": [...], "misconception": [{{"point": "...", "why": "..."}}], "explanation": "...",
+   "ideal_answer": "...", "next_step": "...", "confidence": 0.9}}
 
 SORU: {question}
 CEVAP ANAHTARI: {answer_key}

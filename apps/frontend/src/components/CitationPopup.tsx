@@ -28,7 +28,7 @@ function SourceUrl({ url }: { url: string }) {
         href={url}
         target="_blank"
         rel="noreferrer"
-        className="mt-1 inline-block break-all text-stuhub-accent underline decoration-stuhub-accent/40 underline-offset-2 transition-colors duration-150 hover:text-stuhub-accent-hover"
+        className="mt-1 inline-block break-all text-stuhub-accent underline decoration-stuhub-accent/40 underline-offset-2 transition-colors duration-[var(--duration-micro)] hover:text-stuhub-accent-hover"
       >
         {url}
       </a>
@@ -78,7 +78,7 @@ export function CitationPopup({ citation, onClose, preloadedText, sourceLabel }:
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-stuhub-overlay-soft p-4"
       onClick={onClose}
     >
       <div

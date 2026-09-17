@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
-import { importArchive } from '../api/archive'
 import { termsApi, type Term, type TermInput } from '../api/terms'
 import { AddContentCard } from '../components/AddContentCard'
 import { StreakRing } from '../components/StreakRing'
@@ -119,11 +118,6 @@ export function TermsPage() {
   const [error, setError] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editingTerm, setEditingTerm] = useState<Term | null>(null)
-  const [includeFiles, setIncludeFiles] = useState(false)
-  const [importing, setImporting] = useState(false)
-  const [notice, setNotice] = useState('')
-  const [importError, setImportError] = useState('')
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
     setState('loading')
@@ -166,24 +160,6 @@ export function TermsPage() {
     }
   }
 
-  const handleImportFile = async (file: File) => {
-    setImporting(true)
-    setImportError('')
-    setNotice('')
-    try {
-      const result = await importArchive(file, includeFiles)
-      setNotice(`"${result.term_name}" içe aktarıldı (${result.materials_imported} materyal)`)
-      await load()
-    } catch (err) {
-      setImportError(
-        err instanceof Error ? err.message : 'Arşiv içe aktarılamadı. Lütfen tekrar deneyin.',
-      )
-    } finally {
-      setImporting(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
-    }
-  }
-
   return (
     <section className="page-shell">
       <div className="page-header">
@@ -197,44 +173,13 @@ export function TermsPage() {
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
         <div className="flex flex-wrap items-center gap-3">
           {!showForm && (
-            <>
-              <label className="flex items-center gap-2 text-sm text-stuhub-text-secondary">
-                <input
-                  type="checkbox"
-                  checked={includeFiles}
-                  onChange={(e) => setIncludeFiles(e.target.checked)}
-                />
-                Materyal dosyalarıyla
-              </label>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={importing}
-                className="glass-panel-subtle glass-interactive rounded-control px-4 py-2 text-sm font-medium text-stuhub-text-secondary"
-              >
-                {importing ? 'İçe aktarılıyor…' : 'Arşiv İçe Aktar'}
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".zip"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  // importing guard'i: çift tetikleme (hızlı çift tıklama + change)
-                  // aynı arşivi iki dönem olarak içe aktarırdı.
-                  if (file && !importing) void handleImportFile(file)
-                  e.target.value = ''
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowForm(true)}
-                className="btn-primary"
-              >
-                Yeni dönem
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={() => setShowForm(true)}
+              className="btn-primary"
+            >
+              Yeni dönem
+            </button>
           )}
         </div>
       </div>
@@ -242,18 +187,6 @@ export function TermsPage() {
       {error && (
         <p role="alert" className="mt-4 rounded-control bg-stuhub-error/10 px-4 py-2 text-sm text-stuhub-error">
           {error}
-        </p>
-      )}
-
-      {notice && (
-        <p role="status" className="mt-4 rounded-control bg-stuhub-success/10 px-4 py-2 text-sm text-stuhub-success">
-          {notice}
-        </p>
-      )}
-
-      {importError && (
-        <p role="alert" className="mt-4 rounded-control bg-stuhub-error/10 px-4 py-2 text-sm text-stuhub-error">
-          {importError}
         </p>
       )}
 

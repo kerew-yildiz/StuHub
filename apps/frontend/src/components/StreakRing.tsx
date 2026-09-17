@@ -38,7 +38,7 @@ function ProgressRing({ percent }: { percent: number }) {
         strokeDasharray={circumference}
         strokeDashoffset={offset}
         transform="rotate(-90 48 48)"
-        className="transition-[stroke-dashoffset] duration-150 ease-out"
+        className="transition-[stroke-dashoffset] duration-[var(--duration-micro)] ease-[var(--ease-out)]"
       />
       <text
         x="48"

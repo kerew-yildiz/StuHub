@@ -3,7 +3,19 @@ import { settingsApi } from '../api/settings'
 /** Kabul edilen arkaplan degerleri.
  * Yeni arkaplan secenegi eklerken: buraya degeri ekle + styles/personalization.css'e
  * ayni katman yapisiyla html[data-stuhub-bg='<deger>'] body kuralini ekle. */
-export const BACKGROUND_VALUES = ['calisma-masasi', 'zirve'] as const
+export const BACKGROUND_VALUES = [
+  'calisma-masasi',
+  'zirve',
+  // Arkaplan katalogu genisletmesi (planlar/ARKAPLAN-PROMPTLARI.md sirasi).
+  'uyanis',
+  'merdiven',
+  'yolculuk',
+  'ufuk',
+  'yuk-tasima',
+  'sinav-sabahi',
+  'kale',
+  'yelken',
+] as const
 
 export type BackgroundValue = (typeof BACKGROUND_VALUES)[number]
 

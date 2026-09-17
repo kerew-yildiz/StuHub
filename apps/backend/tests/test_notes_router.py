@@ -17,6 +17,19 @@ async def _make_chapter(client) -> int:
     return resp.json()["id"]
 
 
+async def _insert_note(chapter_id: int, content_md: str = "# Giriş\n\nİçerik metni.") -> int:
+    import aiosqlite
+
+    async with aiosqlite.connect(settings.db_path) as conn:
+        cursor = await conn.execute(
+            "INSERT INTO notes (chapter_id, content_md, citations_json, topics_json, model_used) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (chapter_id, content_md, "{}", "[]", "gemini-2.5-flash"),
+        )
+        await conn.commit()
+        return cursor.lastrowid
+
+
 def test_sse_format():
     line = notes_router._sse({"type": "status", "percent": 5, "message": "Hazırlanıyor…"})
     assert line.startswith("data: {")
@@ -91,6 +104,25 @@ async def test_export_note_pdf(client):
     text = "".join(str(page.get_text()) for page in doc)
     assert "Türkçe" in text or "çiçek" in text
     doc.close()
+
+
+async def test_export_note_markdown(client):
+    """Not MD export'u düz metin indirir (exports router kaldırıldı; uç notes'ta yaşar)."""
+    chapter_id = await _make_chapter(client)
+    note_id = await _insert_note(chapter_id)
+
+    resp = await client.get(f"/api/notes/{note_id}/export", params={"format": "md"})
+    assert resp.status_code == 200
+    assert "text/markdown" in resp.headers["content-type"]
+    assert "# Bağlı Listeler" in resp.text
+
+
+async def test_export_note_invalid_format(client):
+    chapter_id = await _make_chapter(client)
+    note_id = await _insert_note(chapter_id)
+
+    resp = await client.get(f"/api/notes/{note_id}/export", params={"format": "docx"})
+    assert resp.status_code == 422
 
 
 async def test_get_latest_note_roundtrip(client):

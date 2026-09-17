@@ -29,11 +29,11 @@ vi.mock('../api/chapters', () => ({
 const LAYERS: Array<{ route: string; labels: string[] }> = [
   {
     route: '/',
-    labels: ['Ana Sayfa', 'Dönemler', 'Takvim', 'Sınav Planı', 'Bugün Ne Çalışsam?', 'Ayarlar'],
+    labels: ['Ana Sayfa', 'Dönemler', 'Takvim', 'Sınav Planı', 'Ayarlar'],
   },
   {
     route: '/donemler/3',
-    labels: ['2026 Güz', 'Dersler', 'Takvim', 'Sınav Planı', 'Bugün Ne Çalışsam?', 'Ayarlar'],
+    labels: ['2026 Güz', 'Dersler', 'Takvim', 'Sınav Planı', 'Ayarlar'],
   },
   {
     route: '/dersler/7?view=notes',
@@ -93,6 +93,16 @@ describe('Sidebar gezinme linklerinin erişilebilir adı', () => {
     for (const { route, labels } of LAYERS) {
       const style = renderSidebar(route, true)
       await expectAllLinksNamed(labels)
+      cleanup()
+      style.remove()
+    }
+  })
+
+  it('"Bugün Ne Çalışsam?" ogesi sidebar\'da yok — tek giriş anasayfadaki kart', async () => {
+    for (const { route } of LAYERS) {
+      const style = renderSidebar(route, true)
+      await screen.findByRole('link', { name: 'Ayarlar' })
+      expect(screen.queryByRole('link', { name: /çalışsam/i })).toBeNull()
       cleanup()
       style.remove()
     }

@@ -107,7 +107,7 @@ export function CommandPalette() {
   return (
     <div
       role="presentation"
-      className="fixed inset-0 z-[100] flex items-start justify-center bg-black/50 p-4 pt-[15vh] backdrop-blur-sm"
+      className="fixed inset-0 z-[100] flex items-start justify-center bg-stuhub-overlay p-4 pt-[15vh] backdrop-blur-sm"
       onClick={() => close()}
     >
       <div

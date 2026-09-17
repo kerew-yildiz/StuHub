@@ -113,13 +113,9 @@ Tarayıcıda **http://localhost:5173** açılır. Backend kapalıysa üstte uyar
 - Ders sayfası **Ödev Değerlendir** sekmesi → talimat + (opsiyonel) ölçütler + ödev metni →
   **0–100 rubrikli puan**, ölçüt kırılımı, güçlü/zayıf yönler ve alıntılı yorumlar.
 
-**Export & arşiv:**
-- Not: **PDF İndir** + **MD İndir**. Kartlar: set başına **Anki (.apkg)** + **CSV**;
-  ders sayfasından tüm kartları tek Anki paketinde indirin (deck adı `StuHub::{Ders}`).
-- Dönem sayfası → **Dönem Arşivi İndir** (zip; "materyal dosyalarıyla" seçeneği).
-  Dönemler sayfası → **Arşiv İçe Aktar** (zip seçin) — yeni dönem olarak eklenir
-  (mevcut veri asla silinmez; çakışan isme "(içe aktarıldı)" eklenir). Çok cihaz
-  taşımanın yerel yolu budur.
+**Export:**
+- Not: **PDF İndir** + **MD İndir**. Kartlar için dışa aktarma yoktur — kartlar
+  uygulama içinde (ders ve defter sayfalarından) çalışılır.
 
 **Alışkanlıklar ve mobil:**
 - Dönemler sayfasında **streak halkası** (günlük hedef: Ayarlar'dan değiştirilebilir).

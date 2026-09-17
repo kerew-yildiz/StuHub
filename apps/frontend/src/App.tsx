@@ -1,16 +1,16 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Route, Routes, useLocation } from 'react-router-dom'
-
-import { useStudyTimeTracker } from './hooks/useStudyTimeTracker'
 
 import { AlertDialog } from './components/AlertDialog'
 import { AppHeader } from './components/AppHeader'
 import { CommandPalette } from './components/CommandPalette'
 import { ConfirmDialog } from './components/ConfirmDialog'
+import { CursorRing } from './components/CursorRing'
 import { GlobalGenerationPanel } from './components/GlobalGenerationPanel'
 import { HealthBanner } from './components/HealthBanner'
 import { HelpPanel } from './components/HelpPanel'
 import { Sidebar } from './components/Sidebar'
+import { StudyTimeTracker } from './components/StudyTimeTracker'
 import { ToastHost } from './components/ToastHost'
 import { LoginPage } from './pages/LoginPage'
 import { useAuthStore } from './stores/authStore'
@@ -39,6 +39,39 @@ function PageSkeleton() {
   )
 }
 
+/** Sidebar İTME (push) davranışı: `repeat(auto-fill|auto-fit, …)` grid'lerinde kolon
+ * sayısı kapsayıcı genişliğine bağlıdır; içerik 168px daralınca eşik geçilir ve ızgara
+ * hareketin ORTASINDA yeniden akar (ölçüm: tek karede kart genişliğinde 98-99px sıçrama
+ * + kart satır değiştirir; bkz. raporlar/sidebar-itme.md). Geçiş boyunca kolon sayısı
+ * hedef değerde sabitlenir → yeniden akış jest ANINDA (t=0) olur; hareket boyunca ızgara
+ * kapsayıcıyı izler (1fr), kartlar kesintisiz boyutlanır. Sabit kolonlu grid'ler
+ * (home-kpis, secondary-grid, settings-layout…) zaten kesintisiz → kapsam dışı. */
+const ITME_GRID_SECICI = '.course-grid, .chapter-grid, .glass-grid, .term-grid, .skeleton-grid'
+
+/** Hedef kolon sayısını ölçer ve grid'leri o sayıda sabitler; sabitlemeyi bırakan
+ * fonksiyon döner.
+ *
+ * Ölçüm: `.app-main` padding'i GEÇİCİ olarak hedef sidebar genişliğine alınır (inline
+ * override, animasyonlu `--sidebar-w` değişkenine dokunulmaz → koşan bir geçiş
+ * kesilmez), kolon sayıları okunur, inline stil geri alınır. Okuma+yazma aynı görevde
+ * olduğu için ara durum ekrana boyanmaz. */
+function itmeGridleriniSabitle(hedefSidebar: string): () => void {
+  const ana = document.querySelector<HTMLElement>('.app-main')
+  const gridler = Array.from(document.querySelectorAll<HTMLElement>(ITME_GRID_SECICI))
+  if (!ana || !gridler.length) return () => undefined
+  const eskiStil = ana.getAttribute('style')
+  ana.style.paddingLeft = hedefSidebar
+  const kolonlar = gridler.map((g) => getComputedStyle(g).gridTemplateColumns.split(' ').length)
+  if (eskiStil === null) ana.removeAttribute('style')
+  else ana.setAttribute('style', eskiStil)
+  gridler.forEach((grid, index) => {
+    if (kolonlar[index] > 1) grid.style.gridTemplateColumns = `repeat(${kolonlar[index]}, minmax(0, 1fr))`
+  })
+  return () => {
+    for (const grid of gridler) grid.style.removeProperty('grid-template-columns')
+  }
+}
+
 export default function App() {
   const loading = useAuthStore((s) => s.loading)
   const saasMode = useAuthStore((s) => s.saasMode)
@@ -46,11 +79,46 @@ export default function App() {
   const init = useAuthStore((s) => s.init)
   const workspaceFullscreen = useShellStore((s) => s.workspaceFullscreen)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const itmeSabitlemeyiBirakRef = useRef<(() => void) | null>(null)
+
+  /** Sidebar jest anında grid kolon sayısını sabitler; geçiş bitince (animasyonlu
+   * genişlik HEDEF değere ulaşınca) bırakır. Bırakma ölçütü duvar saati DEĞİL,
+   * animasyonun kendisi: kare başına tek okuma; reduced-motion (1ms) ve yavaşlatılmış/
+   * kesintiye uğramış geçişlerde de doğru çalışır, sabitleme asılı kalmaz. */
+  const itmeBaslat = (acilacak: boolean) => {
+    itmeSabitlemeyiBirakRef.current?.()
+    itmeSabitlemeyiBirakRef.current = null
+    const birakSabitleme = itmeGridleriniSabitle(acilacak ? 'var(--sidebar-expanded)' : 'var(--sidebar-collapsed)')
+    const kabuk = document.querySelector<HTMLElement>('.stuhub-app')
+    if (!kabuk) { birakSabitleme(); return }
+    const hedef = parseFloat(getComputedStyle(kabuk).getPropertyValue(acilacak ? '--sidebar-expanded' : '--sidebar-collapsed'))
+    let kare = 0
+    const bitir = () => {
+      cancelAnimationFrame(kare)
+      birakSabitleme()
+      if (itmeSabitlemeyiBirakRef.current === bitir) itmeSabitlemeyiBirakRef.current = null
+    }
+    const kontrol = () => {
+      const suanki = parseFloat(getComputedStyle(kabuk).getPropertyValue('--sidebar-w'))
+      if (Number.isFinite(suanki) && Math.abs(suanki - hedef) < 0.5) bitir()
+      else kare = requestAnimationFrame(kontrol)
+    }
+    kare = requestAnimationFrame(kontrol)
+    itmeSabitlemeyiBirakRef.current = bitir
+  }
+
+  // Kapanışta (çıkış/rota yeniden kurulumu) sabitleme asılı kalmasın.
+  useEffect(() => () => { itmeSabitlemeyiBirakRef.current?.(); itmeSabitlemeyiBirakRef.current = null }, [])
 
   // Route choreography (P4): rota değişince içerik alanına rise-in replay.
   // Sınıf React state'i ile kontrol edilir — imperative class ekleme Suspense
   // re-render'ları tarafından ezilir. State-based toggle iki commit arasında
   // sınıfı gerçekten değiştirir → animasyon güvenle yeniden başlar.
+  // Sekme (görünüm) değişimi de AYNI koreografiyi tetikler: `?view=` geçişinde
+  // location.pathname sabit kaldığı için eski bağımlılık animasyonu kaçırıyor,
+  // içerik animasyonsuz takas ediliyordu (ölçüm: yalnızca height 10 ms).
+  // location.key her gezinmede (pathname VEYA search değişimi) değişir →
+  // rota ve sekme geçişi tek mekanizma, tek süre/egri.
   // (Tüm hooks early return'lerden ÖNCE — rules-of-hooks.)
   const location = useLocation()
   const [routeAnim, setRouteAnim] = useState(false)
@@ -59,14 +127,9 @@ export default function App() {
     const raf = requestAnimationFrame(() => setRouteAnim(true))
     const t = setTimeout(() => setRouteAnim(false), 600)
     return () => { cancelAnimationFrame(raf); clearTimeout(t) }
-  }, [location.pathname])
+  }, [location.key])
 
   useEffect(() => { void init() }, [init])
-
-  // Otomatik çalışma süresi takibi (sıkıntı #2) — koşulsuz çağrılır: `failed`
-  // durumundan normale dönüşte hook sayısı değişirse React "Rendered more hooks
-  // than during the previous render" ile çöker.
-  useStudyTimeTracker()
 
   if (loading) {
     return (
@@ -81,19 +144,24 @@ export default function App() {
 
 
   return (
-    <div className="stuhub-app">
+    <div className={`stuhub-app ${sidebarOpen ? 'stuhub-app--sidebar-open' : ''}`}>
+      <CursorRing />
+      {/* Otomatik çalışma süresi takibi — bilinçli olarak bileşen sınırında
+          (App'in hook listesi bu sayede sabit kalır; bkz. bileşen docstring'i). */}
+      <StudyTimeTracker />
       <Sidebar
         open={sidebarOpen}
         onHoverOpen={(value) => {
           // Hover yalnızca desktop'ta (md+) sidebar açar/kapar; mobil off-canvas kalır.
-          if (window.matchMedia('(min-width: 768px)').matches) setSidebarOpen(value)
+          if (window.matchMedia('(min-width: 768px)').matches) {
+            itmeBaslat(value)
+            setSidebarOpen(value)
+          }
         }}
         onCloseMobile={() => setSidebarOpen(false)}
       />
       <div
-        className={`app-main ${sidebarOpen ? 'app-main--sidebar-open' : 'app-main--sidebar-collapsed'} ${
-          workspaceFullscreen ? 'app-main--workspace-fullscreen' : ''
-        }`}
+        className={`app-main ${workspaceFullscreen ? 'app-main--workspace-fullscreen' : ''}`}
       >
         <AppHeader onMenu={() => setSidebarOpen(true)} />
         <HealthBanner />

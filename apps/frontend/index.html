@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="tr">
+<html lang="tr" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -8,6 +8,63 @@
       content="StuHub — ders notlarını ve quizlerini tek yerde toplayan yerel uygulama"
     />
     <meta name="theme-color" content="#000000" />
+    <!-- TEMA İLK BOYA (FOUC/beyaz-siyah flaş YOK): tema CSS'i dev sunucuda JS
+         modülüyle enjekte edildiği için ilk kareler HTML'den boyanır. Ayar
+         senkron okunur (localStorage aynası — kaynak: src/lib/theme.ts
+         THEME_STORAGE_KEY) ve `data-theme` HTML parse edilirken yazılır; hem
+         buradaki ilk-boya stilleri hem theme.css bu attribute'u okur. Sunucu
+         ayarı (settings API) açılışta ayrıca uygulanır ve aynayı günceller. -->
+    <script>
+      (function () {
+        var anahtar = 'stuhub-tema'
+        var ayar = 'dark'
+        try {
+          var kayit = localStorage.getItem(anahtar)
+          if (kayit === 'dark' || kayit === 'light' || kayit === 'system') ayar = kayit
+        } catch (e) {}
+        var tema =
+          ayar === 'system'
+            ? window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches
+              ? 'light'
+              : 'dark'
+            : ayar
+        document.documentElement.dataset.theme = tema
+        var meta = document.querySelector('meta[name="theme-color"]')
+        // Acik tema zemini = theme.css --stuhub-light-ton (dim); js henuz yok,
+        // bu yuzden deger burada da yazilir (uc yer birlikte degisir).
+        if (meta) meta.setAttribute('content', tema === 'light' ? '#ebebeb' : '#000000')
+      })()
+    </script>
+    <!-- Ilk boya zemini: dev sunucuda tema CSS'i JS moduluyle enjekte edildigi icin
+         CSS gelene kadarki kareler beyaz canvas olarak basiliyordu (rota/geri-don
+         flaslari). Deger theme.css ile ayni: html{background:var(--stuhub-bg)} —
+         tema attribute'una gore karanlik #000 / acik #ebebeb (dim).
+         `:not(.tema-hazir)`: uygulama acilista bu sinifi ekler (src/lib/theme.ts) →
+         ilk-boya kurali devre disi kalir ve zemin artik token'dan (--stuhub-bg,
+         tek parlaklik dugmesi) gelir. Boylece dim degeri degistiginde html zemini
+         de birlikte degisir. -->
+    <style>html:not(.tema-hazir){background:#000}html[data-theme="light"]:not(.tema-hazir){background:#ebebeb}</style>
+    <!-- Ilk boya iskeleti (SIYAH BOSLUK duzeltmesi): #root JS yuklenene kadar BOS
+         kaliyordu — dev sunucuda modul grafigi gelene kadar ekran tamamen siyah
+         (muse bulgulari: /kaydedilenler ve profil gecislerinde ~1.4 sn bos ekran).
+         Cozum: uygulamanin kendi Suspense iskeletiyle (App.tsx PageSkeleton) AYNI
+         siniflar ve AYNI geometri ilk HTML'e gomulur; React mount olunca #root
+         icerigi degistirilir. Degerler theme.css ile birebir:
+         .content-skeleton / .skeleton-block(lar) / .skeleton-grid + --header-h:72px,
+         --sidebar-collapsed:72px, .app-content padding clample'leri. -->
+    <style>
+      .ilk-boya { padding-left: 72px; padding-top: 72px; }
+      .ilk-boya .content-skeleton { min-height: calc(100dvh - 70px); padding: clamp(18px, 2vw, 28px) clamp(16px, 2vw, 34px) clamp(32px, 3vw, 48px); }
+      .content-skeleton { display: grid; gap: 18px; }
+      .skeleton-block { border-radius: 20px; background: linear-gradient(90deg, rgba(255,255,255,.045), rgba(255,255,255,.075), rgba(255,255,255,.045)); background-size: 220% 100%; animation: skeleton-shimmer 2.8s ease-in-out infinite; }
+      /* Açık tema: theme.css --stuhub-skeleton-1/2 ile aynı değerlerin kutup
+         çevrilmiş hali (ilk boyada CSS henüz yok, o yüzden burada da yazılır). */
+      html[data-theme="light"] .skeleton-block { background: linear-gradient(90deg, rgba(0,0,0,.045), rgba(0,0,0,.075), rgba(0,0,0,.045)); }
+      .skeleton-block--title { width: min(320px, 55vw); height: 34px; }
+      .skeleton-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(220px, 22vw, 320px), 1fr)); gap: 14px; align-items: stretch; }
+      .skeleton-block--card { aspect-ratio: 3/2; min-height: 180px; }
+      @keyframes skeleton-shimmer { 0%, 100% { background-position: 200% 0 } 50% { background-position: -20% 0 } }
+    </style>
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <!-- P5: Kritik fontları CSS'ten önce yükle — FOUT'ı keser. Regular+ SemiBold
          çoğu ekranın ilk boyasını taşır; Bold/Medium CSS üzerinden swap ile gelir. -->
@@ -16,7 +73,24 @@
     <title>StuHub</title>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Ilk boya iskeleti: React mount olana kadar (dev'de modul grafigi gelene
+         kadar) gorunen yer tutucu. Suspense fallback'i (PageSkeleton) ile ayni
+         siniflar/geometri — React ilk commit'te #root icerigini degistirir. -->
+    <div id="root">
+      <div class="ilk-boya">
+        <div class="content-skeleton" aria-busy="true" aria-label="İçerik yükleniyor">
+          <div class="skeleton-block skeleton-block--title"></div>
+          <div class="skeleton-grid">
+            <div class="skeleton-block skeleton-block--card"></div>
+            <div class="skeleton-block skeleton-block--card"></div>
+            <div class="skeleton-block skeleton-block--card"></div>
+            <div class="skeleton-block skeleton-block--card"></div>
+            <div class="skeleton-block skeleton-block--card"></div>
+            <div class="skeleton-block skeleton-block--card"></div>
+          </div>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

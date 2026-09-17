@@ -21,3 +21,22 @@ if (typeof SVGElement !== 'undefined') {
     proto.getComputedTextLength = () => 60
   }
 }
+
+// jsdom `window.matchMedia` uygulamıyor; uygulama kodunda media query okuyan
+// yüzeyler var (CursorRing `(pointer: fine)` + `(prefers-reduced-motion: reduce)`,
+// App/Sidebar `(min-width: 768px)`). Polyfill varsayılanı: HİÇBİR sorgu eşleşmez
+// (masaüstü/touch ayrımında güvenli taraf: CursorRing mount edilmez). Testler
+// gerektiğinde `vi.stubGlobal('matchMedia', …)` ile kendi mock'unu takar.
+if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
+  window.matchMedia = (sorgu: string) =>
+    ({
+      matches: false,
+      media: sorgu,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }) as MediaQueryList
+}

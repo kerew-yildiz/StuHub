@@ -8,7 +8,7 @@ import { chaptersApi, type Chapter } from '../api/chapters'
 import { coursesApi, type Course } from '../api/courses'
 import { termsApi, type Term } from '../api/terms'
 import {
-  BookOpen, Calendar, ChevronRight, ClipboardCheck, Crosshair, FileText,
+  BookOpen, Calendar, ChevronRight, ClipboardCheck, FileText,
   House, Layers, ListChecks, NotebookPen, Search, Settings, Sparkle, Trophy, X,
 } from 'lucide-react'
 
@@ -196,7 +196,6 @@ export function Sidebar({ open, onHoverOpen, onCloseMobile }: SidebarProps) {
     // ana layer'da Dersler girdisi kaldırıldı (sadece dönem layer'ında listelenir).
     { label: 'Takvim', to: '/takvim', icon: Calendar },
     { label: 'Sınav Planı', to: '/sinav-plani', icon: Trophy },
-    { label: 'Bugün Ne Çalışsam?', to: '/calisma', icon: Crosshair },
   ]
 
   const termItems: NavItem[] = currentTermId ? [
@@ -204,7 +203,6 @@ export function Sidebar({ open, onHoverOpen, onCloseMobile }: SidebarProps) {
     { label: 'Dersler', to: `/donemler/${currentTermId}`, icon: BookOpen },
     { label: 'Takvim', to: `/donemler/${currentTermId}?view=calendar`, icon: Calendar },
     { label: 'Sınav Planı', to: `/donemler/${currentTermId}?view=exam-plan`, icon: Trophy },
-    { label: 'Bugün Ne Çalışsam?', to: `/donemler/${currentTermId}?view=study-now`, icon: Crosshair },
   ] : []
 
   const courseBase = `/dersler/${currentCourseId}`

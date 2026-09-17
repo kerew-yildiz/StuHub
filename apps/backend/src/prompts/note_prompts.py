@@ -9,11 +9,17 @@ SUNUM:
 {slides}
 {kazanimlar}
 KURALLAR:
-1. Her konu için kısa ve net bir başlık yaz.
-2. keywords: konuyla ilgili anahtar terimler. {dil_talimati}
-3. slide_refs: konunun geçtiği slide numaraları.
-4. Yalnızca JSON döndür, şu şema ile:
-{{"topics": [{{"topic": "...", "keywords": ["...", "..."], "slide_refs": [1, 2]}}]}}
+1. Her konu için kısa ve net bir başlık yaz (en fazla 8 kelime).
+2. BÖLME ÖLÇÜTÜ: bir konu, öğrencinin tek oturumda işleyebileceği büyüklükte olmalı. Bir konu
+   8'den fazla yeni terim içeriyorsa veya slaytların yarısından fazlasına yayılıyorsa, onu
+   anlamlı alt parçalara böl. Birbirinden bağımsız iki kavramı tek konuda birleştirme.
+3. keywords: konuyla ilgili anahtar terimler (3-8 adet; öğrencinin sınavda görmesi muhtemel terimleri seç).
+   {dil_talimati}
+4. confusable_with: bu konunun içeriğiyle KARIŞTIRILMASI MUHTEMEL diğer konu başlıkları (yoksa boş liste).
+   Ölçüt: aynı dersin içinde benzer isimli, benzer süreçli veya zıt işlevli konular.
+5. slide_refs: konunun geçtiği slide numaraları.
+6. Yalnızca JSON döndür, şu şema ile:
+{{"topics": [{{"topic": "...", "keywords": ["...", "..."], "slide_refs": [1, 2], "confusable_with": ["..."]}}]}}
 """
 
 NOTE_GENERATION_PROMPT = (
@@ -25,7 +31,11 @@ KURALLAR:
     + """
 2. "{topic}" konusunu eksiksiz ve anlaşılır biçimde açıkla; öğrenci seviyesine uygun yaz. {dil_talimati}
 3. Her bilgi parçasının sonuna kaynak atıf numarasını [n] biçiminde koy (n: KAYNAKLAR listesindeki numara).
-4. YAPI (bu sırayla ve bu etiketlerle üret):
+4. Not "{topic}" KONUSUNU anlatır, sunumu anlatmaz: REHBER (sunum) yalnızca destekleyici malzemedir.
+   "Sunumda ... listelenir/verilir", "Slayt N'de ...", "[Slide N]" gibi sunumu anlatan ifadeler YASAK;
+   rehberdeki bilgiyi kendi cümlelerinle tanım + neden-sonuç/karşılaştırma/örnek içeren bir açıklamaya
+   çevir. Her kavram maddesi 2-3 cümlelik bağımsız bir açıklama olsun; çıplak madde listesi bırakma.
+5. YAPI (bu sırayla ve bu etiketlerle üret):
    a) Kısa giriş: konunun ne olduğu ve neden önemli olduğu (2-3 cümle).
    b) **Kavramlar**: her kavram tek bir madde olsun; kavram adı **kalın** yazılsın.
       Bir madde en fazla 3 satır olsun — uzun içeriği alt maddelere ayır.
@@ -36,9 +46,9 @@ KURALLAR:
       doğrulanabilir kısa cevaplı sorular. Her sorunun cevabını HEMEN ALTINA "**Cevap:**" olarak yaz.
       Sorular konuyu olduğu gibi tekrar ettirmesin; "neden", "ne olurdu", "hangisi farklı" tipinde olsun.
    e) **Hatırlatıcı**: konunun en kritik 3-5 bilgisini TEK SATIR özetler halinde ver.
-5. Bilişsel yük: kavram yoğunluğu yüksek bölümlerde paragrafları kısa tut; gereksiz tekrar, süs
+6. Bilişsel yük: kavram yoğunluğu yüksek bölümlerde paragrafları kısa tut; gereksiz tekrar, süs
    cümlesi, giriş/geçiş nezaket ifadesi YAZMA. Her cümle bilgi taşımalı.
-6. Bölümü tam olarak "### {topic}" başlığıyla başlat (başka bir markdown başlığı KULLANMA; alt
+7. Bölümü tam olarak "### {topic}" başlığıyla başlat (başka bir markdown başlığı KULLANMA; alt
    bölümleri yukarıdaki **kalın** etiketlerle ayır).
 
 KONU: {topic}
@@ -53,14 +63,24 @@ KAYNAKLAR:
 """
 )
 
-COVERAGE_CHECK_PROMPT = """Aşağıdaki konu kontrol listesi ve üretilmiş not var. Hangi konular notta YETERSİZ ya da EKSİK?
+COVERAGE_CHECK_PROMPT = """Aşağıdaki konu kontrol listesi ve üretilmiş not var. İki denetim yap:
+
+A) KAPSAM: hangi konular notta YETERSİZ ya da EKSİK?
+B) ÖĞRENME YAPISI: aşağıdaki bozukluklardan hangileri var?
+   - "Kendini sına" bölümü yok/boş ya da soruların cevapları yazılmamış
+   - Sorulardan biri yalnızca "…nedir?" biçiminde (konuyu tekrar ettiren, üst düzey düşünme istemeyen)
+   - Atıfsız [n] iddia
+   - Tek cümlede 3'ten fazla yeni kavram (bilişsel yük)
+   - Aynı bilgiyi üç kez tekrarlayan paragraf
 
 KONU LİSTESİ: {topics}
 
 NOT:
 {note}
 
-Yalnızca JSON döndür: {{"missing": ["konu başlığı", ...]}} (eksik yoksa boş liste)
+Yalnızca JSON döndür:
+{{"missing": ["konu başlığı", ...], "structure_issues": [{{"topic": "...", "issue": "kısa açıklama"}}]}}
+(eksik/bozukluk yoksa ilgili liste boş)
 """
 
 CITATION_CONFIRM_PROMPT = """Bir not parçasındaki alıntı, kaynak parçada birebir geçmiyor. Alıntı, kaynak parçanın içeriğini destekliyor mu?
@@ -94,7 +114,11 @@ NOTE_SLIDE_ONLY_PROMPT = """Ders kitabı ve web'de kaynak bulunamadı. Aşağıd
 
 KURALLAR:
 1. Bölümü tam olarak "### {topic}" başlığıyla başlat (başka başlık düzeyi/ifade kullanma).
-2. Madde işaretleri ve kısa paragraflar kullan; gereksiz tekrar yapma.
+2. Not konuyu anlatır, sunumu anlatmaz: "Sunumda ... listelenir/verilir", "Slayt N'de ...",
+   "[Slide N]" gibi sunumu anlatan ifadeler YASAK; rehberdeki maddeleri kendi cümlelerinle
+   tanım + neden-sonuç/karşılaştırma/örnek içeren açıklamalara çevir. Her kavram en az 2-3
+   cümleyle açıklanır; çıplak madde listesi bırakma.
+3. Madde işaretleri ve kısa paragraflar kullan; gereksiz tekrar yapma.
 
 REHBER:
 {slide_content}

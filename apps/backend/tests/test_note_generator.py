@@ -206,7 +206,7 @@ async def test_generate_notes_unresolvable_citation_never_fails(client, monkeypa
     assert not any(e["type"] == "error" for e in events)
     done = next(e for e in events if e["type"] == "done")
     assert TOPIC in done["note"]["content_md"]
-    assert note_generator.SLIDE_ONLY_NOTICE in done["note"]["content_md"]
+    assert "Tamamen alakasız bir cümle burada" in done["note"]["content_md"]
     # sorunlu konunun atıfları temizlenmiş olmalı (doğrulama geçti)
     topic_citations = done["note"]["citations_json"]["topics"][0]["citations"]
     assert topic_citations == []
@@ -265,7 +265,8 @@ async def test_slide_fallback_produces_full_section(client, monkeypatch):
     done = next(e for e in events if e["type"] == "done")
     content = done["note"]["content_md"]
     assert TOPIC in content
-    assert "ders sunumundan üretildi" in content
+    assert "Bağlı listeler doğrusal bir veri yapısıdır." in content
+    assert "ders sunumundan üretildi" not in content
     assert done["note"]["citations_json"]["topics"][0]["citations"] == []
 
 

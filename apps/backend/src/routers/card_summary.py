@@ -23,6 +23,7 @@ from pydantic import BaseModel
 
 from ..auth import get_tenant_id
 from ..db import get_db
+from ..services.study_time import study_totals
 
 router = APIRouter(prefix="/api", tags=["card-summary"])
 
@@ -48,9 +49,8 @@ class ChapterSummaryOut(BaseModel):
     chapter_id: int
     topics_total: int
     topics_completed: int
-    # Chapter bazlı çalışma süresi henüz izlenmiyor (study_sessions course bazlı) —
-    # null döner, arayüz satırı gizler.
-    total_study_sec: int | None = None
+    # Chapter'da geçen aktif süre (heartbeat kayıtları; migration 0015) — saniye.
+    total_study_sec: int = 0
     last_activity: str | None = None
 
 
@@ -479,13 +479,8 @@ async def course_card_summary(
                 title=exam_row["title"], exam_date=exam_date, days_left=days_left
             )
 
-        # ── Toplam çalışma süresi ───────────────────────────────────────
-        cursor = await db.execute(
-            "SELECT COALESCE(SUM(duration_sec), 0) AS total FROM study_sessions "
-            "WHERE course_id = ? AND tenant_id = ?",
-            (course_id, tenant_id),
-        )
-        total_study = int((await cursor.fetchone())["total"])
+        # ── Toplam çalışma süresi (ders + chapter; heartbeat kayıtları) ──
+        total_study, chapter_study = await study_totals(db, tenant_id, course_id)
 
         # ── Chapter özetleri ────────────────────────────────────────────
         chapters: list[ChapterSummaryOut] = []
@@ -501,6 +496,7 @@ async def course_card_summary(
                     chapter_id=cid,
                     topics_total=len(topics),
                     topics_completed=len(done),
+                    total_study_sec=chapter_study.get(cid, 0),
                     last_activity=_iso(last),
                 )
             )

@@ -270,6 +270,7 @@ CREATE TABLE IF NOT EXISTS study_sessions (
     id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id    UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
     course_id    BIGINT REFERENCES courses(id) ON DELETE CASCADE,
+    chapter_id   BIGINT REFERENCES chapters(id) ON DELETE CASCADE,
     session_id   TEXT NOT NULL,
     duration_sec INTEGER NOT NULL,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -278,8 +279,14 @@ CREATE TABLE IF NOT EXISTS study_sessions (
 -- süresi kaydı (migration 0013'ün PG karşılığı) NULL gerektirir. Idempotent:
 -- sütun zaten nullable ise işlem sessizce başarılı olur.
 ALTER TABLE study_sessions ALTER COLUMN course_id DROP NOT NULL;
+-- chapter_id migration 0015'in PG karşılığı: chapter görünümünde geçen aktif süre
+-- (heartbeat) satırları chapter'a bağlanır. Idempotent — sütun varsa sessizce geçer.
+ALTER TABLE study_sessions ADD COLUMN IF NOT EXISTS chapter_id BIGINT
+    REFERENCES chapters(id) ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS idx_study_sessions_tenant_course
     ON study_sessions(tenant_id, course_id);
+CREATE INDEX IF NOT EXISTS idx_study_sessions_tenant_chapter
+    ON study_sessions(tenant_id, chapter_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_study_sessions_session
     ON study_sessions(tenant_id, session_id);
 

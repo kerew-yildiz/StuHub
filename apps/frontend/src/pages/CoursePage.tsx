@@ -3,7 +3,6 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { chaptersApi, type Chapter } from '../api/chapters'
 import { coursesApi, type Course } from '../api/courses'
-import { downloadAuthed, type FlashcardExportFormat } from '../api/exports'
 import { fetchDueCards, listCourseFlashcardSets, type DueCard, type FlashcardSet } from '../api/flashcards'
 import { indexingApi, type IndexingJob } from '../api/indexing'
 import { materialsApi, type Material } from '../api/materials'
@@ -42,7 +41,35 @@ import { ArrowRight, X } from 'lucide-react'
 
 type LoadState = 'loading' | 'ready' | 'error'
 
-type CourseTab = 'overview' | 'ask' | 'cards' | 'guide' | 'essay' | 'errors' | 'heatmap' | 'exam' | 'feed' | 'study' | 'smart' | 'draft'
+type CourseView = 'overview' | 'notes' | 'saved' | 'ask' | 'cards' | 'guide' | 'essay' | 'errors' | 'heatmap' | 'exam' | 'feed' | 'study' | 'smart' | 'draft'
+
+/** URL `view` degeri -> aktif gorunum. Gorunum seciminin TEK kaynagi URL'dir; sayfa
+ * icinde ikinci bir "aktif sekme" state'i TUTULMAZ. Eski `tab` state'i URL ile senkron
+ * kalmadigi anda iki gorunum ayni anda render ediliyordu (Notlar listesi + Materyale Sor
+ * sohbeti tek sayfada üst üste biniyordu). Bilinmeyen/bos deger guvenli varsayilana duser. */
+const COURSE_VIEWS: Record<string, CourseView> = {
+  // Sidebar + dashboard sozlesmesi (mevcut URL'ler)
+  'swipe-quiz': 'feed',
+  'material-ask': 'ask',
+  flashcards: 'cards',
+  'assignment-evaluation': 'essay',
+  'assignment-draft-coach': 'draft',
+  notes: 'notes',
+  saved: 'saved',
+  errors: 'errors',
+  heatmap: 'heatmap',
+  exam: 'exam',
+  // Kanonik id'ler — her gorunum URL'den adreslenebilir (klavye kisayolu bunlari yazar).
+  overview: 'overview',
+  ask: 'ask',
+  cards: 'cards',
+  guide: 'guide',
+  essay: 'essay',
+  feed: 'feed',
+  study: 'study',
+  smart: 'smart',
+  draft: 'draft',
+}
 // 13 sekme tek sıra hâlinde bilişsel yük eşiğinin (≤4 görünür seçenek) çok üstündeydi
 // ve mobilde ilk ekranın tamamını kaplıyordu (2026-09-08 kritik incelemede tespit
 // edildi). Öğrenci çalışma akışına göre 4 üst gruba ayrıldı; her grup ≤4 alt sekme
@@ -52,7 +79,7 @@ const COURSE_TAB_GROUPS = [
   { id: 'practice', label: 'Pratik Yap', tabIds: ['cards', 'feed', 'ask'] },
   { id: 'exam-prep', label: 'Sınava Hazırlan', tabIds: ['exam', 'heatmap', 'errors', 'smart'] },
   { id: 'homework', label: 'Ödev', tabIds: ['essay', 'draft'] },
-] as const satisfies readonly { id: string; label: string; tabIds: readonly CourseTab[] }[]
+] as const satisfies readonly { id: string; label: string; tabIds: readonly CourseView[] }[]
 
 /** İndeksleme ilerleme çubuğu — hedefe 1'er birim animasyonla yaklaşır. */
 function JobProgressBar({ target }: { target: number }) {
@@ -156,30 +183,14 @@ export function CoursePage() {
   const [showChapterForm, setShowChapterForm] = useState(false)
   const [editingChapter, setEditingChapter] = useState<Chapter | null>(null)
   const [previewMaterial, setPreviewMaterial] = useState<Material | null>(null)
-  const [tab, setTab] = useState<CourseTab>('overview')
   // Chapter kart hover rotation verisi (§37) — tek istekte toplu (card-summary).
   const [cardSummaries, setCardSummaries] = useState<Map<number, ChapterCardSummary>>(new Map())
-
-  useEffect(() => {
-    const view = searchParams.get('view')
-    const map: Record<string, CourseTab> = {
-      'swipe-quiz': 'feed',
-      'material-ask': 'ask',
-      'flashcards': 'cards',
-      'assignment-evaluation': 'essay',
-      'assignment-draft-coach': 'draft',
-      // Sıkıntı: dashboard kartları bu URL'leri açıyordu ama eşleme yoktu —
-      // kullanıcı boş overview görüyordu (Hatalarım / Isı haritası "çalışmıyor").
-      'errors': 'errors',
-      'heatmap': 'heatmap',
-    }
-    if (view && map[view]) setTab(map[view])
-    else if (!view) setTab('overview')
-  }, [searchParams])
 
   // Klavye kısayolu 1-4: ders bölümleri arasında geçiş (Öğren/Pratik Yap/Sınava
   // Hazırlan/Ödev) — metin girişi odaktayken tetiklenmez (2026-09-08 kritik
   // incelemede "Alex/power-user" bulgusu: klavye kısayolu yoktu).
+  // Gorunum URL'den yonetildigi icin kisayol da URL'i gunceller: icerik, adres cubugu
+  // ve sidebar ayni seyi gosterir.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
@@ -190,11 +201,13 @@ export function CoursePage() {
       if (typing || event.metaKey || event.ctrlKey || event.altKey) return
       const index = Number(event.key) - 1
       const group = COURSE_TAB_GROUPS[index]
-      if (group) setTab(group.tabIds[0])
+      if (!group) return
+      const hedef = group.tabIds[0]
+      navigate(hedef === 'overview' ? `/dersler/${numericId}` : `/dersler/${numericId}?view=${hedef}`)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+  }, [navigate, numericId])
 
   // genel quiz durumu — küresel üretim deposu (madde 2)
   // bugünün due kartları + oynatıcı (Faz V2.2)
@@ -342,24 +355,16 @@ export function CoursePage() {
     }
   }
 
-  // K5: düz `<a href>` indirmesi SaaS modda `Authorization` başlığını taşımıyor
-  // ve 401 alıyordu — içerik artık authFetch + blob ile indirilir.
-  const handleExportFlashcards = async (format: FlashcardExportFormat) => {
-    const ok = await downloadAuthed(
-      `/courses/${numericId}/flashcards/export?format=${format}`,
-      `stuhub-kartlar-${numericId}.${format}`,
-    )
-    if (!ok) setError('Kartlar indirilemedi. Lütfen tekrar deneyin.')
-  }
-
   const jobFor = (materialId: number): IndexingJob | undefined =>
     [...jobs].reverse().find((j) => j.material_id === materialId)
 
   // Aktif workspace'in listeye dönüş hedefi — yönerge §27: X current feature
   // listesine gider, global home'a DEĞİL. Genel dashboard'da chrome gizlenir.
-  const viewParam = searchParams.get('view')
-  const exitTo = viewParam ? `/dersler/${numericId}` : `/dersler/${numericId}`
-  const isWorkspace = Boolean(viewParam) || tab !== 'overview'
+  // Aktif gorunum TEK kaynaktan turetilir: `view` query parametresi. Parametre yoksa
+  // ya da taninmiyorsa guvenli varsayilan 'overview'.
+  const activeView: CourseView = COURSE_VIEWS[searchParams.get('view') ?? ''] ?? 'overview'
+  const exitTo = `/dersler/${numericId}`
+  const isWorkspace = activeView !== 'overview'
 
   return (
     <section className="page-shell">
@@ -368,6 +373,9 @@ export function CoursePage() {
         <div>
           <h1 className="page-title">{course?.name ?? 'Ders'}</h1>
           {course?.instructor && <p className="page-subtitle">{course.instructor}</p>}
+          {/* Layout-shift: yükleme sırasında başlık altı satırının kutusu da
+           * rezerve edilir — içerik gelince alt bölümler 24px yukarı zıplamaz. */}
+          {state === 'loading' && !course?.instructor && <p className="page-subtitle">Yükleniyor…</p>}
         </div>
       </div>
 
@@ -377,15 +385,16 @@ export function CoursePage() {
         </p>
       )}
 
-      {state === 'loading' && (
-        <p className="mt-8 text-sm text-stuhub-text-secondary">Yükleniyor…</p>
-      )}
+      {/* TEK gorunum koku — aktif gorunum URL'den turetilir ve bloklar birbirini
+          DISLAR (ayni anda yalnizca bir kosul dogru olabilir). `key` gecis sirasinda
+          eski agacin gercekten unmount olmasini garanti eder; `data-view-root` DOM'da
+          kac gorunumun bagli oldugunu olculebilir kilar. */}
+      <div key={activeView} data-view-root={activeView}>
+        {activeView === 'notes' && <CourseNotesPanel courseId={numericId} />}
 
-      {(searchParams.get('view') === 'notes') && <CourseNotesPanel courseId={numericId} />}
+        {activeView === 'saved' && <SavedQuestionsPage courseId={numericId} embedded />}
 
-      {(searchParams.get('view') === 'saved') && <SavedQuestionsPage courseId={numericId} embedded />}
-
-      {tab === 'overview' && !searchParams.get('view') && (
+        {activeView === 'overview' && (
         <>
           <div className="secondary-grid mt-8">
             <button type="button" onClick={() => navigate(`/dersler/${numericId}?view=errors`)} className="glass-panel glass-interactive p-5 text-left" data-tour-id="course-mistakes">
@@ -422,7 +431,14 @@ export function CoursePage() {
         )}
 
         <div className="mt-4 chapter-grid">
-          {chapters.length === 0 && !showChapterForm && (
+          {/* Layout-shift: yüklenirken boş durum kartı yerine iskelet kartlar —
+           * gerçek .chapter-card geometrisi sayesinde içerik gelince satır
+           * yükseklikleri değişmez, alttaki bölümleri itmez. */}
+          {state === 'loading' &&
+            Array.from({ length: 6 }, (_, index) => (
+              <div key={`chapter-iskelet-${index}`} className="skeleton-block skeleton-block--card" aria-hidden="true" />
+            ))}
+          {state !== 'loading' && chapters.length === 0 && !showChapterForm && (
             <AddContentCard
               label="Chapter ekle"
               description="Henüz chapter yok — ilk chapter'ını ekleyerek başla."
@@ -456,7 +472,10 @@ export function CoursePage() {
         </div>
       </div>
 
-      {/* Materyaller */}
+      {/* Materyaller — Layout-shift: yükleme bitmeden render edilmez. Böylece
+          içerik gelişiyle birlikte YENİ bölüm olarak görünür (aşağıdaki
+          öğeleri iterek kayma üretmez). */}
+      {state !== 'loading' && (
       <div className="mt-12">
         <h2 className="text-xl font-semibold">Materyaller</h2>
         <p className="mt-1 text-sm text-stuhub-text-secondary">
@@ -541,40 +560,15 @@ export function CoursePage() {
           </div>
         </div>
       </div>
+      )}
         </>
       )}
 
-      {previewMaterial && (
-        <FilePreviewModal
-          path={`/materials/${previewMaterial.id}/file`}
-          title={previewMaterial.display_name}
-          onClose={() => setPreviewMaterial(null)}
-        />
-      )}
-
-      {tab === 'cards' && (
+      {activeView === 'cards' && (
         <>
           {/* Bugünün kartları — due tekrar kuyruğu (Faz V2.2) */}
           <div className="mt-12">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <h2 className="text-xl font-semibold">Bugünün Kartları</h2>
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => void handleExportFlashcards('apkg')}
-              className="glass-panel-subtle glass-interactive rounded-control px-3 py-1 text-xs font-medium text-stuhub-text-secondary"
-            >
-              Tüm kartları Anki'ye aktar (.apkg)
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleExportFlashcards('csv')}
-              className="glass-panel-subtle glass-interactive rounded-control px-3 py-1 text-xs font-medium text-stuhub-text-secondary"
-            >
-              CSV
-            </button>
-          </div>
-        </div>
+        <h2 className="text-xl font-semibold">Bugünün Kartları</h2>
         {playingDue ? (
           <div className="mt-4">
             <FlashcardPlayer
@@ -673,7 +667,7 @@ export function CoursePage() {
         </>
       )}
 
-      {tab === 'ask' && (
+      {activeView === 'ask' && (
         <>
           {/* Materyale Sor */}
           <div className="mt-12">
@@ -688,9 +682,9 @@ export function CoursePage() {
         </>
       )}
 
-      {tab === 'guide' && <GuidePanel scope="course" scopeId={numericId} />}
+      {activeView === 'guide' && <GuidePanel scope="course" scopeId={numericId} />}
 
-      {tab === 'essay' && (
+      {activeView === 'essay' && (
         <>
           {/* Ödev değerlendirme — AI puanlama (Faz V2.5) */}
           <div className="mt-12">
@@ -706,11 +700,11 @@ export function CoursePage() {
         </>
       )}
 
-      {tab === 'errors' && <span data-tour-id="course-mistakes" className="block"><ErrorLogPanel courseId={numericId} /></span>}
+      {activeView === 'errors' && <span data-tour-id="course-mistakes" className="block"><ErrorLogPanel courseId={numericId} /></span>}
 
-      {tab === 'heatmap' && <span data-tour-id="course-weak-topics" className="block"><WeakTopicHeatmap courseId={numericId} /></span>}
+      {activeView === 'heatmap' && <span data-tour-id="course-weak-topics" className="block"><WeakTopicHeatmap courseId={numericId} /></span>}
 
-      {tab === 'exam' && (
+      {activeView === 'exam' && (
         <div className="mt-8 space-y-8">
           {examOutcome ? (
             <div className="glass-panel space-y-4 p-5">
@@ -761,20 +755,20 @@ export function CoursePage() {
         </div>
       )}
 
-      {tab === 'feed' && (
+      {activeView === 'feed' && (
         <div className="mt-8">
           <QuizFeed courseId={numericId} />
         </div>
       )}
 
-      {tab === 'study' && (
+      {activeView === 'study' && (
         <div className="mt-8 space-y-8">
           <ComparisonTable courseId={numericId} />
           <GlossaryPanel courseId={numericId} />
         </div>
       )}
 
-      {tab === 'smart' && (
+      {activeView === 'smart' && (
         <div className="mt-8 space-y-8">
           <div className="glass-panel p-5">
             <NextActionCard
@@ -788,10 +782,21 @@ export function CoursePage() {
         </div>
       )}
 
-      {tab === 'draft' && (
+      {activeView === 'draft' && (
         <div className="mt-8">
           <EssayDraftCoach courseId={numericId} />
         </div>
+      )}
+      </div>
+
+      {/* Materyal onizleme — gorunum degil, ustte acilan modal; gorunum kokunun
+          disinda tutulur ki sekme gecisi onu yeniden mount etmesin. */}
+      {previewMaterial && (
+        <FilePreviewModal
+          path={`/materials/${previewMaterial.id}/file`}
+          title={previewMaterial.display_name}
+          onClose={() => setPreviewMaterial(null)}
+        />
       )}
     </section>
   )

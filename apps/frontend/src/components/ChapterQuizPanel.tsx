@@ -136,7 +136,7 @@ export function ChapterQuizPanel({ chapterId }: Props) {
         <h2 className="mt-3 text-xl font-semibold leading-8">{question.question}</h2>
         <div className="mt-7 grid gap-3">
           {question.options.map((option, optionIndex) => (
-            <button key={`${question.qid}-${optionIndex}`} type="button" className={`rounded-control border px-4 py-3 text-left text-sm transition-[background,border-color,transform] duration-[var(--duration-micro)] ${selected === optionIndex ? 'border-stuhub-border-strong bg-stuhub-accent-glass text-stuhub-text' : 'border-stuhub-border bg-stuhub-glass-2 text-stuhub-text-secondary hover:border-stuhub-border-strong hover:bg-stuhub-glass-2-hover'}`} onClick={() => setAnswers((prev) => ({ ...prev, [question.qid]: optionIndex }))}>
+            <button key={`${question.qid}-${optionIndex}`} type="button" className={`rounded-control border px-4 py-3 text-left text-sm transition-[background-color,border-color,transform] duration-[var(--duration-micro)] ${selected === optionIndex ? 'border-stuhub-border-strong bg-stuhub-accent-glass text-stuhub-text' : 'border-stuhub-border bg-stuhub-glass-2 text-stuhub-text-secondary hover:border-stuhub-border-strong hover:bg-stuhub-glass-2-hover'}`} onClick={() => setAnswers((prev) => ({ ...prev, [question.qid]: optionIndex }))}>
               <span className="mr-3 text-xs font-semibold text-stuhub-text-muted">{String.fromCharCode(65 + optionIndex)}</span>{option}
             </button>
           ))}

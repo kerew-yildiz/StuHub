@@ -208,7 +208,7 @@ async def export_note(
     db = await get_db()
     try:
         cursor = await db.execute(
-            "SELECT n.content_md, c.title, co.name AS course_name FROM notes n "
+            "SELECT n.content_md, n.topics_json, c.title, co.name AS course_name FROM notes n "
             "JOIN chapters c ON c.id = n.chapter_id "
             "JOIN courses co ON co.id = c.course_id "
             "WHERE n.id = ? AND n.tenant_id = ?",
@@ -233,7 +233,15 @@ async def export_note(
         )
 
     document_title = f"{row['course_name']} · {row['title']}"
-    pdf_bytes = note_markdown_to_pdf(row["content_md"], document_title, variant=variant)
+    # topics_json: konu başlıkları PDF'te yuvarlak konu kartı içinde basılır
+    # (eşleşme export_service içinde yapılır; bozuk kayıt sessizce yok sayılır).
+    try:
+        topics = [str(item["topic"]) for item in json.loads(row["topics_json"] or "[]")]
+    except (TypeError, ValueError, KeyError):
+        topics = []
+    pdf_bytes = note_markdown_to_pdf(
+        row["content_md"], document_title, variant=variant, topics=topics
+    )
     return Response(
         pdf_bytes,
         media_type="application/pdf",

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useHelpStore } from '../stores/helpStore'
 import { useFocusTrap } from '../hooks/useFocusTrap'
-import { Search, CircleHelp } from 'lucide-react'
+import { startHelpTour, useHelpTourOpen } from '../tour'
+import { Compass, Search, CircleHelp } from 'lucide-react'
 
 interface HelpEntry {
   id: string
@@ -125,6 +126,7 @@ export function HelpPanel({ showTrigger = true }: { showTrigger?: boolean }) {
   const open = useHelpStore((s) => s.open)
   const toggle = useHelpStore((s) => s.toggle)
   const close = useHelpStore((s) => s.close)
+  const turAcik = useHelpTourOpen()
   const [query, setQuery] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -136,6 +138,8 @@ export function HelpPanel({ showTrigger = true }: { showTrigger?: boolean }) {
       const typing =
         target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable
       if (event.key === '?' && !typing) {
+        // Tur açıkken panel açılmaz: iki katman üst üste binmesin (tur z-index 110).
+        if (turAcik) return
         event.preventDefault()
         toggle()
       } else if (event.key === 'Escape' && open) {
@@ -144,7 +148,7 @@ export function HelpPanel({ showTrigger = true }: { showTrigger?: boolean }) {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [open, toggle, close])
+  }, [open, toggle, close, turAcik])
 
   useEffect(() => {
     if (open) {
@@ -182,7 +186,7 @@ export function HelpPanel({ showTrigger = true }: { showTrigger?: boolean }) {
       {open && (
         <div
           role="presentation"
-          className="fixed inset-0 z-[100] flex items-start justify-center bg-black/50 p-4 pt-[10vh] backdrop-blur-sm"
+          className="fixed inset-0 z-[100] flex items-start justify-center bg-stuhub-overlay p-4 pt-[10vh] backdrop-blur-sm"
           onClick={close}
         >
           <div
@@ -208,6 +212,19 @@ export function HelpPanel({ showTrigger = true }: { showTrigger?: boolean }) {
               </kbd>
             </div>
             <div className="overflow-y-auto p-4">
+              {/* "?" yardımının product-tour kapısı: aynı tur, aynı API
+                  (startHelpTour) — panel kapanır, tur bulunduğun katmanda başlar. */}
+              <button
+                type="button"
+                onClick={() => {
+                  close()
+                  startHelpTour()
+                }}
+                className="glass-panel-subtle glass-interactive mb-5 flex w-full items-center justify-center gap-2 rounded-control px-3 py-2.5 text-sm font-medium text-stuhub-text"
+              >
+                <Compass size={16} aria-hidden="true" />
+                Adım adım turu başlat
+              </button>
               {grouped.length === 0 && (
                 <p className="py-6 text-center text-sm text-stuhub-text-secondary">Sonuç yok.</p>
               )}

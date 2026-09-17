@@ -301,3 +301,38 @@ async def test_chat_json_falls_back_to_next_provider_on_auth_error(monkeypatch):
     assert data == {"ok": True}
     cooldowns = await llm_service._load_cooldowns()
     assert "gemini" in cooldowns
+
+
+async def test_chat_json_cikti_butcesi_saglayici_kapasitesini_kullanir(monkeypatch):
+    """json-hata P0 regresyonu: opencode reasoning token'ları da completion bütçesinden
+    harcar — 2048 varsayılanı büyük promptta yalnızca reasoning'e gidip yanıt BOŞ
+    dönüyordu (`finish_reason=length`). Çağıran özel değer vermezse istek sağlayıcının
+    çıktı kapasitesiyle gitmeli; kapasitesi tanımsız sağlayıcıda varsayılan korunmalı."""
+    calls: list[dict] = []
+
+    class _CapturingCompletions:
+        async def create(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content='{"ok": true}'))],
+                usage=SimpleNamespace(prompt_tokens=1, completion_tokens=1),
+            )
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=_CapturingCompletions()))
+    monkeypatch.setattr(llm_service, "_client_for", lambda provider, keys=None: client)
+
+    monkeypatch.setattr(llm_service.settings, "opencode_api_key", "sk-test")
+    llm_service.reset_config_cache()
+    await llm_service.chat_json([{"role": "user", "content": "json üret"}])
+    assert calls[0]["max_tokens"] == 8192  # opencode kapasitesi (reasoning payı dahil)
+
+    # Kapasitesi tanımlı olmayan sağlayıcı (gemini) eski varsayılanla devam eder.
+    monkeypatch.setattr(llm_service.settings, "opencode_api_key", "")
+    monkeypatch.setattr(llm_service.settings, "google_api_key", "sk-test")
+    llm_service.reset_config_cache()
+    await llm_service.chat_json([{"role": "user", "content": "json üret"}])
+    assert calls[1]["max_tokens"] == llm_service.MAX_TOKENS_DEFAULT
+
+    # Çağıranın verdiği bütçe (ör. overall_generator 4096) her zaman kazanır.
+    await llm_service.chat_json([{"role": "user", "content": "json üret"}], max_tokens=4096)
+    assert calls[2]["max_tokens"] == 4096

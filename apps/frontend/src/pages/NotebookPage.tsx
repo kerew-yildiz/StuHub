@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom'
 
 import { chaptersApi, type Chapter } from '../api/chapters'
 import { coursesApi } from '../api/courses'
-import { downloadAuthed, type FlashcardExportFormat } from '../api/exports'
+import { downloadAuthed } from '../api/exports'
 import { deleteFlashcardSet, listFlashcardSets, type DueCard, type FlashcardSet } from '../api/flashcards'
 import { materialsApi } from '../api/materials'
 import { deleteNote, exportNotePdf, getNote, listChapterNotes, updateNote, type PdfVariant, type SavedNote } from '../api/notes'
@@ -30,7 +30,26 @@ import { Pencil, Printer, Monitor, Trash2, X } from 'lucide-react'
 
 type LoadState = 'loading' | 'ready' | 'error'
 
-type NotebookTab = 'overview' | 'notes' | 'cards' | 'quiz' | 'recall' | 'guide'
+type NotebookView = 'overview' | 'notes' | 'cards' | 'quiz' | 'recall' | 'guide' | 'ask' | 'mistakes'
+
+/** URL `view` degeri -> aktif gorunum. Gorunum seciminin TEK kaynagi URL'dir; ayri bir
+ * "aktif sekme" state'i tutulmaz (state URL ile senkron kalmadiginda iki gorunum ayni
+ * anda render ediliyordu: orn. Quiz paneli + Materyale Sor sohbeti). Bilinmeyen/bos
+ * deger guvenli varsayilana duser. */
+const NOTEBOOK_VIEWS: Record<string, NotebookView> = {
+  // Sidebar sozlesmesi (mevcut URL'ler)
+  notes: 'notes',
+  flashcards: 'cards',
+  quiz: 'quiz',
+  'material-ask': 'ask',
+  mistakes: 'mistakes',
+  // Kanonik id'ler — her gorunum URL'den adreslenebilir.
+  overview: 'overview',
+  cards: 'cards',
+  ask: 'ask',
+  recall: 'recall',
+  guide: 'guide',
+}
 
 /** Chapter detay sayfası — guide slides + not + quiz geçmişi (Faz 2/3/4 + iyileştirmeler). */
 export function NotebookPage() {
@@ -50,7 +69,6 @@ export function NotebookPage() {
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState('')
   const [pdfPreview, setPdfPreview] = useState<string | null>(null)
-  const [tab, setTab] = useState<NotebookTab>('notes')
   // Not düzenleme/silme (yönerge §39) — delete confirmation modal'lı.
   const [editingNote, setEditingNote] = useState(false)
   const [pdfMenuOpen, setPdfMenuOpen] = useState(false)
@@ -60,13 +78,9 @@ export function NotebookPage() {
   const [savingNote, setSavingNote] = useState(false)
   const [noteEditError, setNoteEditError] = useState('')
 
-  useEffect(() => {
-    const view = searchParams.get('view')
-    if (!view) { setTab('overview'); return }
-    const map: Record<string, NotebookTab> = { notes: 'notes', flashcards: 'cards', quiz: 'quiz' }
-    if (view === 'material-ask') return
-    if (map[view]) setTab(map[view])
-  }, [searchParams])
+  // Aktif gorunum TEK kaynaktan turetilir: `view` query parametresi (yoksa/taninmiyorsa
+  // guvenli varsayilan 'overview').
+  const activeView: NotebookView = NOTEBOOK_VIEWS[searchParams.get('view') ?? ''] ?? 'overview'
 
   // PDF akordeyonu dış tıklama + Escape ile kapanır.
   useEffect(() => {
@@ -246,16 +260,6 @@ export function NotebookPage() {
     }
   }
 
-  // K5: düz `<a href>` indirmesi SaaS modda `Authorization` başlığını taşımıyor
-  // ve 401 alıyordu — içerik artık authFetch + blob ile indirilir.
-  const handleExportFlashcardSet = async (setId: number, format: FlashcardExportFormat) => {
-    const ok = await downloadAuthed(
-      `/flashcard-sets/${setId}/export?format=${format}`,
-      `stuhub-kartlar-${setId}.${format}`,
-    )
-    if (!ok) setError('Kart seti indirilemedi. Lütfen tekrar deneyin.')
-  }
-
   const handleDownloadNoteMarkdown = async (noteId: number) => {
     const ok = await downloadAuthed(`/notes/${noteId}/export?format=md`, `stuhub-not-${noteId}.md`)
     if (!ok) setError('Not indirilemedi. Lütfen tekrar deneyin.')
@@ -299,7 +303,11 @@ export function NotebookPage() {
         <p className="mt-8 text-sm text-stuhub-text-secondary">Yükleniyor…</p>
       )}
 
-      {searchParams.get('view') === 'material-ask' && (
+      {/* TEK gorunum koku — aktif gorunum URL'den turetilir, bloklar birbirini DISLAR.
+          `key` geciste eski agacin gercekten unmount olmasini garanti eder;
+          `data-view-root` DOM'da kac gorunumun bagli oldugunu olculebilir kilar. */}
+      <div key={activeView} data-view-root={activeView}>
+        {activeView === 'ask' && (
         <div className="mt-8 workspace-card">
           <p className="eyebrow">MATERYALE SOR</p>
           <p className="mt-1 text-sm text-stuhub-text-secondary">
@@ -309,10 +317,10 @@ export function NotebookPage() {
             <ChatPanel courseId={Number(courseId)} />
           </div>
         </div>
-      )}
+        )}
 
       {/* Sıkıntı #10: Hatalarım artık ayrı workspace view — dashboard'da gömülü panel yok */}
-      {searchParams.get('view') === 'mistakes' && (
+      {activeView === 'mistakes' && (
         <div className="mt-8 workspace-card" data-tour-id="chapter-mistakes">
           <p className="eyebrow">HATALARIM</p>
           <p className="mt-1 text-sm text-stuhub-text-secondary">
@@ -324,7 +332,7 @@ export function NotebookPage() {
         </div>
       )}
 
-      {tab === 'overview' && !searchParams.get('view') && (
+      {activeView === 'overview' && (
         <div className="mt-8 space-y-8">
           <div className="glass-panel p-5">
             <div className="flex flex-wrap items-end justify-between gap-4">
@@ -390,14 +398,14 @@ export function NotebookPage() {
                   </div>
                 )
               }) : (
-                <div className="empty-state"><span>Bu chapter için henüz konu özeti oluşmadı.</span><button type="button" className="btn-primary" onClick={() => void handleGenerate()} disabled={!canGenerate || generatingNote}>{generatingNote ? 'Üretiliyor…' : 'Not üret'}</button></div>
+                <div className="empty-state flex flex-wrap items-center justify-between gap-3 px-3 py-2.5"><span className="min-w-0">Bu chapter için henüz konu özeti oluşmadı.</span><button type="button" className="btn-primary shrink-0" onClick={() => void handleGenerate()} disabled={!canGenerate || generatingNote}>{generatingNote ? 'Üretiliyor…' : 'Not üret'}</button></div>
               )}
             </div>
           </div>
         </div>
       )}
 
-      {tab === 'notes' && searchParams.get('view') !== 'material-ask' && (
+      {activeView === 'notes' && (
         <>
           {/* Kaynak kapsama göstergesi kaldırıldı (kullanıcı kararı: gereksiz/kafa karıştırıcı).
               CoverageIndicator bileşeni hâlâ sonra kullanılmak üzere duruyor. */}
@@ -637,7 +645,7 @@ export function NotebookPage() {
         </>
       )}
 
-      {tab === 'cards' && (
+      {activeView === 'cards' && (
         <>
           {/* Flashcard'lar — üretim + çalışma oynatıcısı (Faz V2.2) */}
           <div className="mt-8">
@@ -707,22 +715,6 @@ export function NotebookPage() {
                   <span className="flex shrink-0 items-center gap-3">
                     <button
                       type="button"
-                      onClick={() => void handleExportFlashcardSet(set.id, 'apkg')}
-                      className="glass-panel-subtle glass-interactive rounded-control px-2 py-1 text-xs font-medium text-stuhub-text-secondary"
-                      title="Anki'ye aktar (.apkg)"
-                    >
-                      Anki
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleExportFlashcardSet(set.id, 'csv')}
-                      className="glass-panel-subtle glass-interactive rounded-control px-2 py-1 text-xs font-medium text-stuhub-text-secondary"
-                      title="CSV indir"
-                    >
-                      CSV
-                    </button>
-                    <button
-                      type="button"
                       onClick={() => handleStudySet(set)}
                       className="rounded-control bg-stuhub-accent px-3 py-1 text-xs font-medium text-stuhub-on-accent transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:bg-stuhub-accent-hover active:scale-[0.98]"
                     >
@@ -747,16 +739,18 @@ export function NotebookPage() {
         </>
       )}
 
-      {tab === 'quiz' && chapter && <div className="mt-8"><ChapterQuizPanel chapterId={numericChapterId} /></div>}
+      {activeView === 'quiz' && chapter && <div className="mt-8"><ChapterQuizPanel chapterId={numericChapterId} /></div>}
 
-      {tab === 'guide' && <GuidePanel scope="chapter" scopeId={numericChapterId} />}
+      {activeView === 'guide' && <GuidePanel scope="chapter" scopeId={numericChapterId} />}
 
-      {tab === 'recall' && (
+      {activeView === 'recall' && (
         <div className="mt-8">
           <SpokenRecallRecorder chapterId={numericChapterId} />
         </div>
       )}
+      </div>
 
+      {/* Sunum onizleme — gorunum degil, ustte acilan modal; gorunum kokunun disinda. */}
       {pdfPreview && (
         <FilePreviewModal
           path={pdfPreview}

@@ -46,7 +46,7 @@ StuHub **tek kod tabanı, iki mod** olarak çalışır. Modu `.env`'deki `DATABA
 - **Materyale Sor** — atıflı RAG sohbet (Doğrudan / Sokratik / Sınav Modu); yanıtlar kaynak çipli
 - **Çalışma rehberi + kavram haritası** — chapter/ders özeti, anahtar terimler, sınav odakları, DAG kavram haritası
 - **Ödev değerlendirici** — 0–100 rubrikli puanlama; ölçüt kırılımı, güçlü/zayıf yönler, alıntılı yorumlar
-- **Export & arşiv** — not PDF/MD, Anki `.apkg`, CSV; dönem arşivi (zip) dışa/içe aktarma (çok cihaz için yerel taşıma)
+- **Export** — not PDF/MD indirme (kartlar için dışa aktarma yoktur; dönem arşivi kaldırıldı)
 - **Streak + günlük hedef** — yerel öğrenme alışkanlığı halkası (hesap/leaderboard yok)
 - **PWA + LAN erişimi** — üretim modunda kurulabilir uygulama; aynı ağdan erişim
 - **Maliyet gözetimi** — her LLM çağrısı `generation_logs`'ta; Türkçe hata mesajları, üstel bekleme + devre kesici

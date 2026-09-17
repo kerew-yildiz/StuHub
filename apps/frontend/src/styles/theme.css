@@ -67,6 +67,49 @@
   --glass-gleam: radial-gradient(closest-side at 18% 12%, rgba(255,255,255,.08), transparent);
   --shadow-card-hover: 0 14px 36px rgba(0,0,0,.45);
   --shadow-card: 0 8px 24px rgba(0,0,0,.35);
+  /* Custom cursor (glass halka) — cam yansimasi opakligi. B (performans paketi):
+   * mix-blend-mode KALDIRILDI — ton gradient alfasina gomulu; blend grubu olmadigi
+   * icin panel backdrop'u her karede yeniden harmanlanmiyor. */
+  --glass-reflect-opacity: .12;
+  /* Cam yansimasi T1 (ters-paralaks) / T2 (kenar isigi) / T3 (hiz smear'i) —
+   * CursorRing --reflect-* degerlerini panel degisiminde BIR KEZ okur; V1/V2/V3
+   * varyantlari yalniz bu blok degistirilerek denenir. */
+  --reflect-parallax: -0.3;
+  --reflect-lerp: 0.15;
+  --reflect-light-x: -22px;
+  --reflect-light-y: -22px;
+  --reflect-edge-alpha: .9;
+  --reflect-edge-width: 1.5px;
+  --reflect-edge-range: 120;
+  --reflect-ambient-r: 110px;
+  --reflect-ambient-a: .28;
+  --reflect-specular-r: 26px;
+  --reflect-specular-a: .5;
+  --reflect-stretch-max: 0.12;
+  /* CursorRing'in kare-basi yazdigi durum degiskenleri (varsayilan = notr). */
+  --cursor-x: -9999;
+  --cursor-y: -9999;
+  --edge-t: 0;
+  --edge-b: 0;
+  --edge-l: 0;
+  --edge-r: 0;
+  --smear: 0;
+  --smear-sx: 1;
+  --smear-sy: 1;
+  /* Halka stroke kalinligi — TUM durumlarda sabit (hover/drag boyutu degistirir,
+   * kalinlik degismez); halka %35 kucultuldu, oran korunur. Son ayar: +%30
+   * (1.3px -> 1.7px). */
+  --cursor-ring-stroke: 1.7px;
+  /* Katman renkleri (kullanici istegi): metin durumunda halka daha SILIK,
+   * icindeki I daha BELIRGIN — ayri tokenler. */
+  --cursor-ring-renk: rgb(var(--glass-reflect-renk) / .85);
+  --cursor-ring-renk-hover: rgb(var(--glass-reflect-renk) / 1);
+  --cursor-ring-renk-metin: rgb(var(--glass-reflect-renk) / .58);
+  --cursor-beam-renk: rgb(var(--glass-reflect-renk) / .9);
+  /* I (beam) olcusu: halka 18px + 1.7px stroke -> ic cap 14.6px; beam 8px
+   * (~%55) -> kenarlara 3.3px guvenli bosluk (dokunmaz). */
+  --cursor-beam-yukseklik: 8px;
+  --cursor-beam-genislik: 2px;
   --stuhub-accent: #fff;
   --stuhub-accent-hover: #e7e7ea;
   --stuhub-on-accent: #000;
@@ -80,6 +123,59 @@
   --stuhub-ai: #c6bdd0;
   --stuhub-callout-bg: rgba(213,201,168,.08);
   --stuhub-callout-border: rgba(213,201,168,.18);
+  /* ── Tema katmanı: kutup çevrilebilir yüzeyler (acik-tema, 2026-09-17) ──
+   * Bu bloktaki DEĞERLER bugünkü karanlık görünümün birebir kopyasıdır
+   * (kural öncesi kuralların içindeki sabit renklerden taşındı → regresyon yok).
+   * Açık tema karşılıkları `:root[data-theme='light']` bloğunda, aynı alfa ile
+   * ters kutuptadır. */
+  --stuhub-chrome-bg: rgba(0,0,0,.45);        /* header + sidebar (blur'lu bant) */
+  --stuhub-popover-bg: rgba(0,0,0,.88);       /* popover-panel (profil/menü) */
+  --stuhub-panel-bg: rgba(0,0,0,.92);         /* toast + tur popover + takvim hücresi */
+  --stuhub-sidebar-scrim: rgba(0,0,0,.26);    /* mobil sidebar arkası */
+  --stuhub-overlay-soft: rgba(0,0,0,.4);      /* modal/önizleme perdesi */
+  --stuhub-overlay: rgba(0,0,0,.5);           /* diyalog perdesi */
+  --stuhub-caption-bg: rgba(0,0,0,.6);        /* arkaplan kartı etiket şeridi */
+  --stuhub-track: rgba(255,255,255,.08);      /* ilerleme rayı */
+  --stuhub-fill: rgba(255,255,255,.62);       /* kart ilerleme dolgusu */
+  --stuhub-fill-strong: rgba(255,255,255,.65);/* konu satırı ilerleme dolgusu */
+  --stuhub-bar-fill: rgba(255,255,255,.28);   /* haftalık çubuk */
+  --stuhub-bar-border: rgba(255,255,255,.06);
+  --stuhub-bar-fill-hover: rgba(255,255,255,.5);
+  --stuhub-bar-fill-today: rgba(255,255,255,.62);
+  --stuhub-border-mid: rgba(255,255,255,.13); /* plan kartı vurgu kenarı */
+  --stuhub-skeleton-1: rgba(255,255,255,.045);/* iskelet shimmer uçları */
+  --stuhub-skeleton-2: rgba(255,255,255,.075);/* iskelet shimmer tepesi */
+  --stuhub-skeleton-3: rgba(255,255,255,.08); /* app-loading shimmer */
+  --stuhub-scrollbar: rgba(255,255,255,.16);
+  --stuhub-scrollbar-thumb: rgba(255,255,255,.14);
+  --stuhub-scrollbar-thumb-hover: rgba(255,255,255,.26);
+  --stuhub-danger-bg: rgba(220,60,60,.12);    /* yıkıcı ikon hover zemini (renkli) */
+  --stuhub-error-bg: rgba(210,181,181,.08);   /* yıkıcı satır hover + uyarı zemini */
+  --stuhub-error-border: rgba(210,181,181,.4);/* hatalı toast kenarı */
+  --glass-sweep: rgba(255,255,255,.08);       /* hover ışık süpürmesi */
+  /* İmleç yansıması: rgb() kanal üçlüsü — alfa kuralın içinde calc ile kalır. */
+  --glass-reflect-renk: 255 255 255;
+  --cursor-dot-bg: #fff;
+  --cursor-glow: 0 0 5px rgba(255,255,255,.22), inset 0 0 3px rgba(255,255,255,.08);
+  --cursor-glow-hover: 0 0 12px rgba(255,255,255,.5), inset 0 0 4px rgba(255,255,255,.16);
+  --cursor-glow-sakin: 0 0 4px rgba(255,255,255,.16);
+  --tour-spot-border: rgba(255,255,255,.55);
+  --tour-spot-ring: rgba(255,255,255,.07);
+  --tour-dim: rgba(0,0,0,.42);
+  /* Mermaid (kavram haritası) — motor CSS degiskeni okuyamaz (khroma `var()`
+   * ayristirmaz), bu yuzden diyagram renkleri de token'dan cozulur. */
+  --stuhub-diagram-node: #2b2b2e;
+  --stuhub-diagram-border: rgba(255,255,255,.24);
+  --stuhub-diagram-line: #ffffff;
+  --shadow-tab: 0 1px 6px rgba(0,0,0,.35);
+  --shadow-plan-pro: 0 12px 38px rgba(0,0,0,.5);
+  /* Arkaplan katmanı (varsayılan: Çalışma Masası). Kişiselleştirme seçimi
+   * personalization.css'te yalnız --bg-image'ı değiştirir. */
+  --bg-image: url("/bg/calisma-masasi.png");
+  --bg-vignette: radial-gradient(ellipse at 50% 40%, rgba(0,0,0,0) 30%, rgba(0,0,0,.75) 100%);
+  --bg-curtain: linear-gradient(rgba(0,0,0,.78), rgba(0,0,0,.78));
+  --bg-ambient-1: rgba(255,255,255,.035);     /* body::before dekoratif ışık */
+  --bg-ambient-2: rgba(190,200,210,.028);
   --radius-chip: 10px;
   --radius-control: 14px;
   --radius-panel: 20px;
@@ -88,8 +184,14 @@
   --ease-out-expo: cubic-bezier(.16,1,.3,1);
   /* Motion system (Visual Excellence P1): tam ölçek — micro/state/entrance/scene
    * + spring/emphasis eğrileri + kademeli giriş birimi. Tüm animasyonlar bu
-   * token'lardan türemeli; sayfa bazlı magic number yasak. */
-  --duration-micro: 120ms;
+   * token'lardan türemeli; sayfa bazlı magic number yasak.
+   * HOVER SÖZLEŞMESİ (kullanıcı onaylı düzeltme, ölçüm: /tmp/agent-reports/hover-uyum.md):
+   * bir hover'daki TÜM görsel katmanlar (background-color, border-color, color,
+   * transform, filter, box-shadow ve ::before ışık süpürmesi) AYNI süre + AYNI
+   * eğriyle koşar: --duration-micro + --ease-out-expo. Katman başına ayrı süre
+   * (box-shadow 200 ms, süpürme 600 ms) tek hover'ı ~0,6 sn'lik dağınık bir olay
+   * gibi gösteriyordu. 160 ms, ölçüm raporundaki 140-180 ms bandının içindedir. */
+  --duration-micro: 160ms;
   --duration-state: 200ms;
   --duration-entrance: 320ms;
   --duration-scene: 480ms;
@@ -99,7 +201,159 @@
   --distance-entrance: 8px;
   --sidebar-collapsed: 72px;
   --sidebar-expanded: 240px;
+  /* Header yüksekliği (12px padding + 48px marka = 72px). Sidebar'ın üst boşluğu ve
+   * hover tetik sınırı bu değerden türetilir → hover bölgesi header'ın ALT çizgisinde
+   * başlar (header hizasında tetiklenmez). */
+  --header-h: 72px;
+  /* Kabuk (header) yatay padding'i: geri butonu hizası bu değerin negatif
+   * marjıyla telafi edilir (bkz. desktop .app-header__left kuralı). */
+  --shell-pad-x: clamp(12px, 1.5vw, 28px);
+  /* İçerik hattının (app-content) yatay padding'i — TEK kaynak. Sol/sağ aynı
+   * değeri kullanır; grid'ler kalan alanı 1fr ile paylaşır (bkz. .course-grid).
+   * Workspace sağ üst kontrolleri de aynı hatta hizalanır. */
+  --content-pad-x: clamp(16px, 2vw, 34px);
 }
+
+/* ── AÇIK TEMA (kullanıcı isteği: "yalnız renkleri tersine çevir") ────────
+ * Tasarım dili DEĞİŞMEZ: cam, blur, rounded, spacing, tipografi ve geçiş
+ * süreleri birebir aynıdır; yalnız renk kutupları döner. Mekanik kural:
+ *   zemin #000 → #fff · birincil metin #fafafa → #0a0a0a
+ *   rgba(255,255,255,a) → rgba(0,0,0, aynı alfa) · rgba(0,0,0,a) → rgba(255,255,255, aynı alfa)
+ *   accent (beyaz buton + siyah yazı) → (siyah buton + beyaz yazı)
+ * Metin türevleri karanlık temanın kontrast oranlarını korur (ölçüm):
+ *   ikincil #a1a1aa/8.19:1 → #4e4e57/8.23:1 · muted #8b8b93/6.21:1 → #61616a/6.13:1.
+ * Anlamsal renkler (success/error/…) pastel-açık → koyu tona döner (beyaz zeminde
+ * okunur; hepsi ≥ 4.5:1, bkz. kontrast ölçüm JSON'u).
+ * Gölgeler bilinçli olarak DAHA YUMUŞAK: siyah gölge beyaz zeminde ağır durur
+ * (brief md.3). Alfa düşürüldü, geometri/bulanıklık aynı. */
+:root[data-theme='light'] {
+  color-scheme: light;
+  /* ── TEK PARLAKLIK DÜĞMESİ (kullanıcı geri bildirimi: "açık tema aşırı
+   * parlak, global dim") ────────────────────────────────────────────────
+   * Açık temanın TÜM zemin parlaklığı bu tek değerden türer: sayfa zemini,
+   * arkaplan perdesi ve vinyet aynı tondan üretilir → görsel ile UI zemini
+   * arasında parlaklık sıçraması olmaz.
+   * Parlaklığı ARTIRMAK için büyüt (255 255 255 = saf beyaz), AZALTMAK için
+   * küçült. Kanal üçlüsü: R G B. Ölçülen ortalama ekran parlaklığı için
+   * rapor: /tmp/agent-reports/acik-tema.md.
+   * NOT: ilk boya (index.html) ve tarayıcı çubuğu rengi (meta theme-color)
+   * CSS gelmeden önce boyandığı için bu değeri ayrıca taşır — üç yeri
+   * birlikte değiştir: theme.css (bu satır), index.html, src/lib/theme.ts. */
+  --stuhub-light-ton: 235 235 235;
+  --stuhub-bg: rgb(var(--stuhub-light-ton));
+  --stuhub-bg-elevated: #f2f2f4;
+  --stuhub-text: #0a0a0a;
+  /* Dim zeminde kontrast oranları korunur: ikincil #45454e (7.96:1) ve muted
+   * #57575f (6.00:1) — beyaz zemindeki 8.23/6.13 oranlarının dim karşılığı. */
+  --stuhub-text-secondary: #45454e;
+  --stuhub-text-muted: #57575f;
+  --stuhub-border: rgba(0,0,0,.08);
+  --stuhub-border-strong: rgba(0,0,0,.18);
+  --stuhub-border-mid: rgba(0,0,0,.13);
+  --stuhub-glass-1: rgba(0,0,0,.075);
+  --stuhub-glass-1-hover: rgba(0,0,0,.12);
+  --stuhub-glass-2: rgba(0,0,0,.045);
+  --stuhub-glass-2-hover: rgba(0,0,0,.08);
+  --glass-surface-1: rgba(0,0,0,.03);
+  --glass-surface-2: rgba(0,0,0,.02);
+  --glass-surface-1-hover: rgba(0,0,0,.05);
+  --glass-sheen: linear-gradient(135deg, rgba(0,0,0,.04), transparent 40%);
+  --glass-inner-light: inset 0 1px 0 rgba(0,0,0,.08);
+  --glass-border: rgba(0,0,0,.06);
+  --glass-border-top: rgba(0,0,0,.12);
+  --glass-edge: inset 0 1px 0 rgba(0,0,0,.18), inset 1px 0 0 rgba(0,0,0,.06), inset -1px 0 0 rgba(0,0,0,.06), inset 0 -1px 0 rgba(255,255,255,.25);
+  --glass-gleam: radial-gradient(closest-side at 18% 12%, rgba(0,0,0,.08), transparent);
+  --glass-sweep: rgba(0,0,0,.08);
+  --glass-reflect-renk: 0 0 0;
+  --shadow-glass: 0 8px 32px rgba(0,0,0,.18);
+  --shadow-card: 0 8px 24px rgba(0,0,0,.12);
+  --shadow-card-hover: 0 14px 36px rgba(0,0,0,.18);
+  --shadow-tab: 0 1px 6px rgba(0,0,0,.12);
+  --shadow-plan-pro: 0 12px 38px rgba(0,0,0,.18);
+  --stuhub-chrome-bg: rgba(var(--stuhub-light-ton) / .55);
+  --stuhub-popover-bg: rgba(var(--stuhub-light-ton) / .94);
+  --stuhub-panel-bg: rgba(var(--stuhub-light-ton) / .95);
+  --stuhub-sidebar-scrim: rgb(var(--stuhub-light-ton) / .45);
+  /* Modal perdeleri: karanlik temadaki siyah perdenin AYNASI (ayni alfa, dim
+   * tonundan). Koyu perde bilincli olarak DENENDI ve birakildi: modalin cam
+   * paneli yari saydam oldugu icin koyu perde uzerinde KOYU kaliyor, panel
+   * metni (koyu) okunmaz hale geliyordu (olcum: komut paleti kontrasti 1.4:1).
+   * Acik perde hem kurala uyar hem panelin okunurlugunu korur. */
+  --stuhub-overlay-soft: rgb(var(--stuhub-light-ton) / .4);
+  --stuhub-overlay: rgb(var(--stuhub-light-ton) / .5);
+  /* Arkaplan kartı etiket şeridi: zemin açık olduğu için şerit AÇIK kalır
+   * (koyu metin şeritte okunur) — perdeyle aynı token olamaz. */
+  --stuhub-caption-bg: rgb(var(--stuhub-light-ton) / .88);
+  --stuhub-track: rgba(0,0,0,.08);
+  --stuhub-fill: rgba(0,0,0,.62);
+  --stuhub-fill-strong: rgba(0,0,0,.65);
+  --stuhub-bar-fill: rgba(0,0,0,.28);
+  --stuhub-bar-border: rgba(0,0,0,.06);
+  --stuhub-bar-fill-hover: rgba(0,0,0,.5);
+  --stuhub-bar-fill-today: rgba(0,0,0,.62);
+  --stuhub-skeleton-1: rgba(0,0,0,.045);
+  --stuhub-skeleton-2: rgba(0,0,0,.075);
+  --stuhub-skeleton-3: rgba(0,0,0,.08);
+  --stuhub-scrollbar: rgba(0,0,0,.18);
+  --stuhub-scrollbar-thumb: rgba(0,0,0,.16);
+  --stuhub-scrollbar-thumb-hover: rgba(0,0,0,.3);
+  --stuhub-accent: #0a0a0a;
+  --stuhub-accent-hover: #2e2e2e;
+  --stuhub-on-accent: #fff;
+  --stuhub-accent-glass: rgba(0,0,0,.10);
+  --stuhub-accent-glass-border: rgba(0,0,0,.20);
+  --stuhub-success: #2f6b41;
+  /* #a33a3a → #963232: hata rengi hem duz zeminde hem `bg-stuhub-error/10`
+   * kartinda METIN olarak kullaniliyor; eski deger tintli zeminde 4.27:1
+   * (esik alti) veriyordu (olcum: ders-4-materyale-sor "Gecmisi Temizle").
+   * Yeni deger: beyaz 7.50 / tintli zemin 5.18 / dim zemin 6.29. */
+  --stuhub-error: #963232;
+  --stuhub-on-error: #fff;
+  --stuhub-warning: #7a5f1e;
+  --stuhub-info: #2f5d70;
+  --stuhub-ai: #5b4a78;
+  --stuhub-callout-bg: rgba(122,95,30,.08);
+  --stuhub-callout-border: rgba(122,95,30,.18);
+  --stuhub-danger-bg: rgba(200,40,40,.10);
+  --stuhub-error-bg: rgba(150,50,50,.08);
+  --stuhub-error-border: rgba(150,50,50,.4);
+  /* İmleç halkası/beam tonları --glass-reflect-renk'ten türer (yukarıda 0 0 0
+   * yapıldı) — alfa değerleri iki temada da aynı, yalnız hue kutbu döner. */
+  --cursor-dot-bg: #0a0a0a;
+  --cursor-glow: 0 0 5px rgba(0,0,0,.22), inset 0 0 3px rgba(0,0,0,.08);
+  --cursor-glow-hover: 0 0 12px rgba(0,0,0,.5), inset 0 0 4px rgba(0,0,0,.16);
+  --cursor-glow-sakin: 0 0 4px rgba(0,0,0,.16);
+  --tour-spot-border: rgba(0,0,0,.55);
+  --tour-spot-ring: rgba(0,0,0,.07);
+  --tour-dim: rgba(0,0,0,.32);
+  --stuhub-diagram-node: #d4d4d1;
+  --stuhub-diagram-border: rgba(0,0,0,.24);
+  --stuhub-diagram-line: #0a0a0a;
+  /* Arkaplan katmanı: görselin açık varyantı (ad kuralı /bg/<deger>-light.jpg)
+   * + perde ve vinyet AYNI dim tonundan (--stuhub-light-ton) → görselin
+   * parlaklığı ile UI zemini aynı seviyede kalır (parlaklık sıçraması yok).
+   * Ölçüm: beyaz perde altında en kötü pikselde metin kontrastı 10.48:1
+   * (katalog eşlemesi: master_worker_system/acik-tema-arkaplan/katalog-esleme.json) */
+  --bg-image: url("/bg/calisma-masasi-light.jpg");
+  --bg-vignette: radial-gradient(ellipse at 50% 40%, rgb(var(--stuhub-light-ton) / 0) 30%, rgb(var(--stuhub-light-ton) / .75) 100%);
+  --bg-curtain: linear-gradient(rgb(var(--stuhub-light-ton) / .78), rgb(var(--stuhub-light-ton) / .78));
+  --bg-ambient-1: rgba(0,0,0,.035);
+  --bg-ambient-2: rgba(65,55,45,.028);
+}
+
+/* Açık temada marka logosu (beyaz chevron, saydam zemin) beyaz üstünde
+ * görünmez kalırdı — kutup çevirme filtresi (yeni asset yok). */
+:root[data-theme='light'] .brand-mark,
+:root[data-theme='light'] .brand-mark img,
+:root[data-theme='light'] .app-loading img {
+  filter: invert(1);
+}
+
+/* Sidebar itme (push) animasyonunun sürücüsü: sidebar genişliği + içerik sol
+ * kolonu + header sol grubu telafisi tek bu değerden türer. Kayıt (@property)
+ * olmadan custom property animasyona girmez → değer tek karede atlar.
+ * initial-value: --sidebar-collapsed (72px) yedeği. Bkz. .stuhub-app. */
+@property --sidebar-w { syntax: "<length>"; inherits: true; initial-value: 72px; }
 
 @theme {
   --color-stuhub-bg: var(--stuhub-bg);
@@ -126,29 +380,49 @@
   --color-stuhub-ai: var(--stuhub-ai);
   --color-stuhub-callout-bg: var(--stuhub-callout-bg);
   --color-stuhub-callout-border: var(--stuhub-callout-border);
+  --color-stuhub-overlay-soft: var(--stuhub-overlay-soft);
+  --color-stuhub-overlay: var(--stuhub-overlay);
+  --color-stuhub-caption-bg: var(--stuhub-caption-bg);
   --font-sans: "Montserrat", system-ui, sans-serif;
   --text-xs: 12px; --text-sm: 14px; --text-base: 16px; --text-lg: 18px;
   --text-xl: 20px; --text-2xl: 24px; --text-3xl: 30px; --text-4xl: 36px;
   --radius-chip: 10px; --radius-control: 14px; --radius-panel: 20px; --radius-pill: 9999px;
   --radius-sm: var(--radius-chip); --radius-md: var(--radius-control); --radius-lg: var(--radius-panel);
+  /* Etkileşim geçişleri TEK merkezden: Tailwind'in varsayılan geçiş süresi/egrisi
+   * proje token'larına bağlanır. Böylece durationsız yazılan `transition-colors`
+   * / `transition-opacity` / `transition-all` utilities (component'lerdeki ~50
+   * kullanım) de hover sözleşmesini (160 ms + ease-out-expo) izler; sayfa başına
+   * magic 150 ms / Tailwind `ease` eğrisi kalmaz. */
+  --default-transition-duration: var(--duration-micro);
+  --default-transition-timing-function: var(--ease-out-expo);
 }
 
 * { box-sizing: border-box; }
-html { color-scheme: dark; background: #000; font-family: "Montserrat", system-ui, sans-serif; }
+html { color-scheme: dark; background: var(--stuhub-bg); font-family: "Montserrat", system-ui, sans-serif; }
 body { min-height: 100dvh; margin: 0; background: var(--stuhub-bg); color: var(--stuhub-text); }
-/* Gorsel arkaplan: calisma masasi (siyah zemin, beyaz detay ~%40 gorunurluk).
+/* Gorsel arkaplan: calisma masasi — katman degerleri token (karanlik: siyah
+   perde, acik: ayni alfalarla beyaz perde + `-light` varyanti).
    Kaynak: apps/frontend/public/bg/calisma-masasi.png */
 body {
-  background:
-    radial-gradient(ellipse at 50% 40%, rgba(0, 0, 0, 0) 30%, rgba(0, 0, 0, 0.75) 100%),
-    linear-gradient(rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.78)),
-    url("/bg/calisma-masasi.png") center / cover no-repeat fixed,
-    var(--stuhub-bg);
+  background: var(--bg-vignette), var(--bg-curtain), var(--bg-image) center / cover no-repeat fixed, var(--stuhub-bg);
 }
 button, a, input, textarea, select { font: inherit; }
-button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
-  outline: 2px solid rgba(255,255,255,.9);
-  outline-offset: 2px;
+/* ── Global odak politikası (kullanıcı isteği 2026-09-17) ────────────────
+ * Outline/glow YASAK: fare tıklamasında ve klavye KISAYOLUYLA gelen odakta
+ * (komut paleti Ctrl+K, programatik focus) hiçbir çerçeve/halka çizilmez.
+ * Odak göstergesi = kontrol kenarının bir kademe belirginleşmesi
+ * (--stuhub-accent-glass-border) — cam diline uygun, sessiz bir ton değişimi.
+ * - input/select/textarea: `:focus` → fare tıklamasında da kenar tonu değişir
+ *   (metin girilen yerde odak her zaman okunur kalır).
+ * - button/a/[tabindex]: `:focus-visible` → yalnız Tab ile gezinirken görünür;
+ *   fare tıklaması ve kısayol kaynaklı odakta hiçbir iz bırakmaz.
+ * `:root` öneki bilinçli: bileşenlerdeki `focus:border-stuhub-accent` Tailwind
+ * utility'sini (0-2-0) !important kullanmadan tek merkezden ezer — beyaz accent
+ * kenarı yerine bu politika geçerlidir. */
+:focus, :focus-visible { outline: none; }
+:root input:focus, :root select:focus, :root textarea:focus,
+:root button:focus-visible, :root a:focus-visible, :root [tabindex]:focus-visible {
+  border-color: var(--stuhub-accent-glass-border);
 }
 /* Lucide icons (§52): 1.5px stroke everywhere; keep baseline alignment stable */
 .lucide { stroke-width: 1.5px; display: inline-block; vertical-align: -0.125em; flex-shrink: 0; }
@@ -160,8 +434,8 @@ body::before {
   z-index: -2;
   pointer-events: none;
   background:
-    radial-gradient(680px circle at 12% 8%, rgba(255,255,255,.035), transparent 68%),
-    radial-gradient(760px circle at 86% 88%, rgba(190,200,210,.028), transparent 72%),
+    radial-gradient(680px circle at 12% 8%, var(--bg-ambient-1), transparent 68%),
+    radial-gradient(760px circle at 86% 88%, var(--bg-ambient-2), transparent 72%),
     var(--stuhub-bg);
 }
 
@@ -176,6 +450,8 @@ body::before {
     border-top-color: var(--glass-border-top);
     border-radius: var(--radius-panel);
     box-shadow: var(--glass-inner-light), var(--glass-edge), var(--shadow-glass);
+    /* ::after imlec yansimasi bu kutunun içine kırpılır (inset:0). */
+    position: relative;
   }
   .glass-panel-subtle {
     background: var(--glass-gleam), var(--glass-sheen), var(--glass-surface-2);
@@ -187,7 +463,9 @@ body::before {
     box-shadow: var(--glass-inner-light), var(--glass-edge);
   }
   .glass-interactive {
-    transition: background-color var(--duration-micro) var(--ease-out-expo), border-color var(--duration-micro) var(--ease-out-expo), transform var(--duration-micro) var(--ease-out-expo), filter var(--duration-micro) var(--ease-out-expo), box-shadow var(--duration-state) var(--ease-out-expo);
+    /* Tek hover = tek ritim: box-shadow de diğer katmanlarla aynı sürede (eskiden
+       --duration-state 200 ms idi; gölge karttan 80 ms sonra oturuyordu). */
+    transition: background-color var(--duration-micro) var(--ease-out-expo), border-color var(--duration-micro) var(--ease-out-expo), transform var(--duration-micro) var(--ease-out-expo), filter var(--duration-micro) var(--ease-out-expo), box-shadow var(--duration-micro) var(--ease-out-expo);
     cursor: pointer;
   }
   .glass-interactive:hover {
@@ -199,27 +477,36 @@ body::before {
     transform: translateY(-2px);
     box-shadow: var(--glass-inner-light), var(--glass-edge), var(--shadow-card-hover);
   }
-  /* Klavye odağı: accent dış halka (global outline'ın hemen altında glow) */
+  /* Klavye odağı (Tab): halka/glow YOK — kenar tonu (yukarıdaki global kural)
+   * + zemin bir kademe açılır. Hover'ın kalkma/gölge etkileri uygulanmaz:
+   * odak bir "durum" değil, konum göstergesidir. */
   .glass-interactive:focus-visible {
-    box-shadow: 0 0 0 2px var(--stuhub-accent-glass-border), var(--glass-inner-light), var(--glass-edge), var(--shadow-card);
+    background: var(--glass-gleam), var(--glass-sheen), var(--glass-surface-1-hover);
   }
+  /* Kenarsız dolu buton (btn-primary): odak göstergesi zemin tonudur —
+   * beyaz zeminde ince bir değişim, çerçeve/halka çizilmez. */
+  .btn-primary:focus-visible { background: var(--stuhub-accent-hover); }
+  .icon-btn:focus-visible { background: var(--stuhub-glass-2-hover); color: var(--stuhub-text); }
 
   /* Light sweep (glass-hissi v2 — imza efekt): hover girişinde kart üzerinden
-   * soldan sağa BİR KEZ geçen dikey ışık şeridi. ::after tam kart genişliğinde
+   * soldan sağa BİR KEZ geçen dikey ışık şeridi. Şerit tam kart genişliğinde
    * kalır (translateX ±120% tam geçiş verir); şerit gradientin %38–62 bandıdır
    * (~%24 genişlik, tepe alfa .08) → "0 → 8 → 0" beyaz. Yalnızca transform +
-   * opacity; repaint yok, taşma kartın overflow'u tarafından kırpılır. */
+   * opacity; repaint yok, taşma kartın overflow'u tarafından kırpılır.
+   * ::before (eskiden ::after): ::after artık imlec yansımasına ayrıldı —
+   * aynı pseudo'da sweep animasyonu yansımayı da sürüklerdi. Boya sırası
+   * değişimi: şerit artık metnin ALTINDA (aynı alfa, gözle fark yok). */
   .glass-interactive { position: relative; overflow: hidden; }
-  .glass-interactive::after {
+  .glass-interactive::before {
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(90deg, transparent 38%, rgba(255,255,255,.08) 50%, transparent 62%);
+    background: linear-gradient(90deg, transparent 38%, var(--glass-sweep) 50%, transparent 62%);
     transform: translateX(-120%);
     opacity: 0;
     pointer-events: none;
   }
-  .glass-interactive:hover::after { animation: glass-sweep 600ms var(--ease-out-expo) 1; }
+  .glass-interactive:hover::before { animation: glass-sweep var(--duration-micro) var(--ease-out-expo) 1; }
   @keyframes glass-sweep {
     from { transform: translateX(-120%); opacity: 0; }
     20%, 80% { opacity: 1; }
@@ -241,7 +528,12 @@ body::before {
     display: inline-flex; align-items: center; justify-content: center;
     width: 38px; height: 38px; border-radius: var(--radius-control);
     color: var(--stuhub-text-secondary); background: var(--stuhub-glass-2);
-    border: 1px solid var(--stuhub-border); transition: all var(--duration-micro) var(--ease-out-expo);
+    border: 1px solid var(--stuhub-border);
+    /* `transition: background …` KISA YAZIMI: `background` bir shorthand'dır ve
+       tarayıcı onu background-color'a AÇMAZ → arka plan hover'da anlık sıçrıyordu
+       (ölçüm: 6-61 ms) while ikon rengi 120 ms'de yumuşuyordu. Uzun yazımlar +
+       :active scale'i için transform eklendi; hepsi tek süre/egri. */
+    transition: background-color var(--duration-micro) var(--ease-out-expo), border-color var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo), transform var(--duration-micro) var(--ease-out-expo);
   }
   .icon-btn:hover { color: var(--stuhub-text); background: var(--stuhub-glass-2-hover); border-color: var(--stuhub-border-strong); }
   .icon-btn:active { transform: scale(.98); }
@@ -249,10 +541,10 @@ body::before {
   /* Katman sırası: sidebar (60) < header (70) < popover (80) — desktop'ta header üstte.
      Mobilde sidebar 80'e çıkar (aşağıdaki media query); backdrop 55 her ikisinin altında. */
   .app-header {
-    position: sticky; top: 0; z-index: 70; min-height: 70px;
+    position: sticky; top: 0; z-index: 70; min-height: var(--header-h);
     display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
-    padding: 12px clamp(12px, 1.5vw, 28px);
-    background: rgba(0,0,0,.45); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    padding: 12px var(--shell-pad-x);
+    background: var(--stuhub-chrome-bg); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
   }
   .app-header__left { justify-self: start; display: flex; align-items: center; }
   .app-header__right { justify-self: end; display:flex; align-items:center; gap: 8px; }
@@ -262,29 +554,41 @@ body::before {
     display:flex; align-items:center; gap:10px; width:100%; min-width:0;
     margin-inline:auto; justify-self:center;
     padding: 9px 14px; border-radius: var(--radius-pill); border: 1px solid var(--stuhub-border);
-    background: var(--stuhub-glass-2); color: var(--stuhub-text-secondary); transition:all var(--duration-micro) var(--ease-out-expo);
+    background: var(--stuhub-glass-2); color: var(--stuhub-text-secondary);
+    transition: background-color var(--duration-micro) var(--ease-out-expo), border-color var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo);
   }
   .search-control:hover { background: var(--stuhub-glass-2-hover); color: var(--stuhub-text); border-color: var(--stuhub-border-strong); }
   .search-control__hint { font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .search-control kbd { margin-left:auto; flex-shrink:0; font-size:11px; color:var(--stuhub-text-muted); border:1px solid var(--stuhub-border); background:var(--stuhub-glass-1, rgba(255,255,255,.03)); padding:2px 6px; border-radius:var(--radius-chip); }
-  .profile-trigger { display:flex; align-items:center; gap:7px; height:38px; padding: 3px 7px 3px 3px; border-radius: var(--radius-pill); border:1px solid var(--stuhub-border); background:var(--stuhub-glass-2); color:var(--stuhub-text-secondary); }
+  .search-control kbd { margin-left:auto; flex-shrink:0; font-size:11px; color:var(--stuhub-text-muted); border:1px solid var(--stuhub-border); background:var(--stuhub-glass-1); padding:2px 6px; border-radius:var(--radius-chip); }
+  .profile-trigger { display:flex; align-items:center; gap:7px; height:38px; padding: 3px 7px 3px 3px; border-radius: var(--radius-pill); border:1px solid var(--stuhub-border); background:var(--stuhub-glass-2); color:var(--stuhub-text-secondary); transition: background-color var(--duration-micro) var(--ease-out-expo), border-color var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo); }
   .profile-trigger:hover { background:var(--stuhub-glass-2-hover); border-color:var(--stuhub-border-strong); color:var(--stuhub-text); }
   .avatar { display:flex; align-items:center; justify-content:center; border-radius:var(--radius-pill); background:var(--stuhub-accent-glass); border:1px solid var(--stuhub-accent-glass-border); color:var(--stuhub-text); font-weight:700; }
   .avatar--small { width:30px; height:30px; font-size:11px; }
   .avatar--large { width:50px; height:50px; font-size:15px; }
-  .popover-panel { position:absolute; z-index:80; background:rgba(0,0,0,.88); backdrop-filter:blur(6px); border:1px solid var(--stuhub-border); border-radius:var(--radius-panel); box-shadow:var(--shadow-glass); padding:14px; }
+  .popover-panel { position:absolute; z-index:80; background:var(--stuhub-popover-bg); backdrop-filter:blur(6px); border:1px solid var(--stuhub-border); border-radius:var(--radius-panel); box-shadow:var(--shadow-glass); padding:14px; }
   .popover-panel__heading { font-size:12px; text-transform:uppercase; letter-spacing:.12em; color:var(--stuhub-text-muted); padding:4px 5px 10px; }
   .empty-inline { display:flex; align-items:center; gap:10px; color:var(--stuhub-text-secondary); font-size:13px; padding:14px 6px; }
   .profile-card__identity { display:flex; align-items:center; gap:12px; padding:4px; }
   .profile-tier { margin-top:14px; padding:9px 10px; border:1px solid var(--stuhub-border); border-radius:var(--radius-chip); background:var(--stuhub-glass-2); font-size:11px; letter-spacing:.12em; font-weight:600; }
   .profile-card__links { margin-top:10px; display:grid; gap:4px; }
-  .list-row { display:flex; align-items:center; width:100%; min-height:38px; padding:7px 9px; border-radius:var(--radius-control); color:var(--stuhub-text-secondary); font-size:13px; }
+  .list-row { display:flex; align-items:center; width:100%; min-height:38px; padding:7px 9px; border-radius:var(--radius-control); color:var(--stuhub-text-secondary); font-size:13px; transition: background-color var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo); }
   .list-row:hover { background:var(--stuhub-glass-2-hover); color:var(--stuhub-text); }
   .list-row--emphasis { color:var(--stuhub-text); }
-  .list-row--destructive:hover { color:var(--stuhub-error); background:rgba(210,181,181,.08); }
+  .list-row--destructive:hover { color:var(--stuhub-error); background:var(--stuhub-error-bg); }
 
-  .app-sidebar { position:fixed; inset:0 auto 0 0; z-index:60; display:flex; flex-direction:column; width:var(--sidebar-collapsed); background:rgba(0,0,0,.45); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); transition:width var(--duration-state) var(--ease-out-expo); }
-  .app-sidebar--open { width:var(--sidebar-expanded); }
+  /* ── İTME (push) SÖZLEŞMESİ — kullanıcı kararı 2026-09-17 ────────────────
+   * Sidebar hover ile açılırken içeriği İTER (üzerine binmez). Sidebar genişliği
+   * (--sidebar-w), içeriğin sol kolonu (.app-main padding-left) ve header sol
+   * grubunun telafi marjı AYNI değişkenden türer → üçü TEK animasyon koşar:
+   * ayrı ayrı animasyon başlatılsaydı kare kare "kopma" riski olurdu.
+   * @property kaydı zorunlu: kayıtsız custom property animasyona girmez
+   * (@property olmadan değer tek karede atlar). Süre/egri: --duration-state +
+   * --ease-out-expo (hover/state sözleşmesiyle aynı). initial-value, token'ın
+   * yedeği (--sidebar-collapsed = 72px). */
+  .stuhub-app { --sidebar-w: var(--sidebar-collapsed); transition: --sidebar-w var(--duration-state) var(--ease-out-expo); }
+  .stuhub-app--sidebar-open { --sidebar-w: var(--sidebar-expanded); }
+
+  .app-sidebar { position:fixed; inset:0 auto 0 0; z-index:60; display:flex; flex-direction:column; width:var(--sidebar-w); background:var(--stuhub-chrome-bg); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
   .app-sidebar__brand { min-height:70px; display:flex; align-items:center; gap:10px; padding:10px; }
   /* Mobil brand satırı yalnızca kapatma düğmesi taşır */
   .app-sidebar__brand { justify-content:flex-end; }
@@ -304,12 +608,12 @@ body::before {
   .app-sidebar__nav { flex:1; overflow-y:auto; padding: clamp(10px,1vw,16px); display:flex; flex-direction:column; gap:6px; }
   .app-sidebar__footer { padding:clamp(10px,1vw,16px); display:grid; gap:6px; }
   /* Yönerge §26: workspace sağ üst kontrolleri */
-  .workspace-chrome { position:absolute; top:clamp(14px,1.4vw,22px); right:clamp(16px,2vw,34px); display:flex; gap:8px; z-index:30; }
+  .workspace-chrome { position:absolute; top:clamp(14px,1.4vw,22px); right:var(--content-pad-x); display:flex; gap:8px; z-index:30; }
   /* Yönerge §7: sidebar içindeki profil kontrolü — glass account card tetikleyicisi */
-  .profile-trigger { display:flex; align-items:center; gap:7px; width:100%; min-height:40px; padding:4px 8px 4px 4px; border-radius: var(--radius-control); border:1px solid transparent; background:transparent; color:var(--stuhub-text-secondary); transition:all var(--duration-micro) var(--ease-out-expo); }
+  .profile-trigger { display:flex; align-items:center; gap:7px; width:100%; min-height:40px; padding:4px 8px 4px 4px; border-radius: var(--radius-control); border:1px solid transparent; background:transparent; color:var(--stuhub-text-secondary); transition: background-color var(--duration-micro) var(--ease-out-expo), border-color var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo); }
   .profile-trigger:hover { background:var(--stuhub-glass-2-hover); border-color:var(--stuhub-border); color:var(--stuhub-text); }
   .sidebar-item-wrap { position:relative; }
-  .nav-item { display:flex; align-items:center; gap:10px; min-height:40px; padding:8px 10px; border-radius:var(--radius-control); color:var(--stuhub-text-secondary); border:1px solid transparent; transition:all var(--duration-micro) var(--ease-out-expo); }
+  .nav-item { display:flex; align-items:center; gap:10px; min-height:40px; padding:8px 10px; border-radius:var(--radius-control); color:var(--stuhub-text-secondary); border:1px solid transparent; transition: background-color var(--duration-micro) var(--ease-out-expo), border-color var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo); }
   .nav-item:hover { background:var(--stuhub-glass-2-hover); color:var(--stuhub-text); border-color:var(--stuhub-border); }
   .nav-item--active { background:var(--stuhub-accent-glass); border-color:var(--stuhub-accent-glass-border); color:var(--stuhub-text); }
   .nav-item--collapsed { justify-content:center; padding-inline:0; width:100%; }
@@ -318,17 +622,20 @@ body::before {
   .app-sidebar--collapsed .profile-trigger .nav-item__label { display:none; }
   .app-sidebar--collapsed .profile-trigger { justify-content:center; padding-inline:0; }
   .nav-item__label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .sidebar-backdrop { position:fixed; inset:0; z-index:55; background:rgba(0,0,0,.26); backdrop-filter:blur(2px); }
+  .sidebar-backdrop { position:fixed; inset:0; z-index:55; background:var(--stuhub-sidebar-scrim); backdrop-filter:blur(2px); }
   .mobile-close { margin-left:auto; }
 
-  .app-main { min-height:100dvh; transition:padding-left var(--duration-state) var(--ease-out-expo); padding-left:var(--sidebar-collapsed); }
-  .app-main--sidebar-open { padding-left:var(--sidebar-expanded); }
+  /* İTME (push): içerik sidebar'ın yanında durur, ALTINDA kalmaz. Sol kolon
+   * (padding-left) sidebar genişliğiyle AYNI değişkenden beslenir → ikisi tek
+   * animasyon koşar (kare kare senkron; ayrı transition'lar "kopma" yapar).
+   * CLS artışı kullanıcı kararıyla kabul (overlay kararı geri alındı). */
+  .app-main { min-height:100dvh; padding-left:var(--sidebar-w); }
   /* Yönerge §26: workspace fullscreen — shell gizlenir, workspace maksimum alan.
      Browser fullscreen'den FARKLIDIR: sidebar+header gizlenir, browser chrome kalır. */
   .app-main--workspace-fullscreen { padding-left:0; }
   .app-main--workspace-fullscreen .app-header { display:none; }
   .app-main--workspace-fullscreen .app-sidebar { display:none; }
-  .app-content { min-height:calc(100dvh - 70px); padding:clamp(18px,2vw,28px) clamp(16px,2vw,34px) clamp(32px,3vw,48px); }
+  .app-content { min-height:calc(100dvh - 70px); padding:clamp(18px,2vw,28px) var(--content-pad-x) clamp(32px,3vw,48px); }
   .content-skeleton { display:grid; gap:18px; }
   /* Route choreography (P4): rota değişince App tetikler — içerik 8px yükselerek
    * girer. Remount YOK; React state korunur, yalnızca animasyon replay.
@@ -337,10 +644,16 @@ body::before {
    * girişi yalnızca translate — en kötü durum: içerik 8px kaymış ama GÖRÜNÜR. */
   .app-content.route-entering { animation: route-rise var(--duration-entrance) var(--ease-out-expo) backwards; }
   @keyframes route-rise { from { transform: translateY(var(--distance-entrance)); } to { transform: translateY(0); } }
-  .skeleton-block { border-radius:var(--radius-panel); background:linear-gradient(90deg, var(--stuhub-glass-2), rgba(255,255,255,.075), var(--stuhub-glass-2)); background-size:220% 100%; animation:skeleton-shimmer 2.8s ease-in-out infinite; }
+  .skeleton-block { border-radius:var(--radius-panel); background:linear-gradient(90deg, var(--stuhub-glass-2), var(--stuhub-skeleton-2), var(--stuhub-glass-2)); background-size:220% 100%; animation:skeleton-shimmer 2.8s ease-in-out infinite; }
   .skeleton-block--title { width:min(320px,55vw); height:34px; }
-  .skeleton-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr)); gap:14px; }
-  .skeleton-block--card { min-height:150px; }
+  /* Layout-shift: iskelet kartlar GERÇEK kart geometrisini taşır — .course-card/
+   * .chapter-card 3/2 oran + min 180px; kolonlar da gerçek grid ile aynı
+   * (clamp(220px,22vw,320px) ray tabanı, kalan alan 1fr). Böylece Suspense
+   * fallback'i sayfaya dönüşürken satır yüksekliği değişmez (önceki: 150px
+   * iskelet → 280px kart; alttakiler kayıyordu).
+   * Ray şablonu .course-grid/.chapter-grid ile BİREBİR aynı olmalı. */
+  .skeleton-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(clamp(220px,22vw,320px),1fr)); gap:14px; align-items:stretch; }
+  .skeleton-block--card { aspect-ratio:3/2; min-height:180px; }
   @keyframes skeleton-shimmer { 0%,100%{background-position:200% 0} 50%{background-position:-20% 0} }
 
   /* Yönerge §99: ultrawide'da giant centered whitespace / dev kartlar YOK —
@@ -355,9 +668,13 @@ body::before {
   .page-subtitle { margin-top:7px; color:var(--stuhub-text-secondary); font-size:13px; line-height:1.6; overflow-wrap:anywhere; min-width:0; }
   .section-title { font-size:18px; line-height:1.35; font-weight:600; letter-spacing:-.02em; }
   /* Kart hücresi = kart genişliği (sayfa tarafındaki max-w-[420px] ile eşit):
-     kolon üst sınırı 420px → hücre karttan geniş kalıp araya dev boşluk girmiyor. */
+     kolon rayı artık ÜST SINIRSIZ → kalan alanı raylar paylaşır (1fr). Önceden
+     `minmax(240px,420px)` idi: 420px'lik tavan yüzünden artan alan sağda birikiyor,
+     içerik sola yapışıp sağda ölü boşluk kalıyordu (ölçüldü: 1600'de 176px,
+     1200'de 226px asimetri). Ray tabanı .glass-grid ile aynı: clamp(220px,22vw,320px)
+     → kart boyu ~320-356px'te sabit kalır, kolon sayısı viewport'la uyum sağlar. */
   .glass-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(clamp(220px,22vw,320px),1fr)); gap:14px; align-items:stretch; }
-  .course-grid, .chapter-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,420px)); gap:14px; align-items:stretch; }
+  .course-grid, .chapter-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(clamp(220px,22vw,320px),1fr)); gap:14px; align-items:stretch; }
   /* P5 render-perf: ekran dışı kart çocukları atlanır (içerik tabanlı boyut
    * korunduğu için scrollbar zıplamaz).contain: paint — hover sheen taşmasını izole eder. */
   .course-grid > *, .chapter-grid > *, .term-grid > *, .list-stack > * {
@@ -372,30 +689,50 @@ body::before {
   .card-meta span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .card-meta--faded { color:var(--stuhub-text-muted); }
   .card-progress { display:flex; align-items:center; gap:10px; }
-  .card-progress__track { flex:1; height:3px; border-radius:var(--radius-pill); background:rgba(255,255,255,.08); overflow:hidden; }
-  .card-progress__fill { display:block; height:100%; border-radius:var(--radius-pill); background:rgba(255,255,255,.62); }
+  .card-progress__track { flex:1; height:3px; border-radius:var(--radius-pill); background:var(--stuhub-track); overflow:hidden; }
+  .card-progress__fill { display:block; height:100%; border-radius:var(--radius-pill); background:var(--stuhub-fill); }
   .card-progress__value { font-size:11.5px; color:var(--stuhub-text-secondary); font-variant-numeric:tabular-nums; }
   .chapter-card__head { display:flex; align-items:center; gap:8px; min-width:0; }
   .chapter-card__title { font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .chapter-card__check { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:var(--radius-pill); background:var(--stuhub-accent-glass); color:var(--stuhub-accent); flex-shrink:0; }
   .chapter-card__actions { display:inline-flex; gap:2px; margin-left:auto; }
   .chapter-card__go { color:var(--stuhub-text-muted); align-self:flex-end; opacity:.6; }
-  .icon-btn { display:inline-flex; align-items:center; justify-content:center; border-radius:var(--radius-control); padding:6px; color:var(--stuhub-text-secondary); transition:background var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo); }
+  .icon-btn { display:inline-flex; align-items:center; justify-content:center; border-radius:var(--radius-control); padding:6px; color:var(--stuhub-text-secondary); }
   .icon-btn:hover { background:var(--stuhub-glass-2-hover); }
-  .icon-btn--danger:hover { background:rgba(220,60,60,.12); color:var(--stuhub-error); }
+  .icon-btn--danger:hover { background:var(--stuhub-danger-bg); color:var(--stuhub-error); }
   .secondary-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:clamp(12px,1.25vw,18px); }
   .list-stack { display:grid; gap:10px; }
   .list-card { display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:62px; padding:12px 15px; box-shadow: var(--glass-inner-light), var(--glass-edge), var(--shadow-card); border-color: var(--glass-border); border-top-color: var(--glass-border-top); }
   .topic-list { display:grid; gap:4px; }
   .topic-row { display:grid; grid-template-columns:1fr auto; gap:12px; align-items:center; padding:10px 12px; border-bottom:1px solid var(--stuhub-border); }
-  .thin-progress { height:2px; border-radius:var(--radius-pill); background:rgba(255,255,255,.08); overflow:hidden; }
-  .thin-progress > span { display:block; height:100%; background:rgba(255,255,255,.65); }
+  .thin-progress { height:2px; border-radius:var(--radius-pill); background:var(--stuhub-track); overflow:hidden; }
+  .thin-progress > span { display:block; height:100%; background:var(--stuhub-fill-strong); }
 }
 
-/* Desktop: sidebar içeriği header'ın 70px'lik şeridinin ALTINDAN başlar (kesişme yok).
+/* Desktop: sidebar içeriği header'ın ALTINDAN başlar (kesişme yok) — üst boşluk
+   --header-h (header'ın gerçek yüksekliği) ile aynıdır.
    Mobilde bu padding YOK — sidebar header'ı kaplar, kendi brand satırını kullanır. */
 @media (min-width: 768px) {
-  .app-sidebar { padding-top:70px; }
+  .app-sidebar { padding-top:var(--header-h); }
+  /* Hover bölgesi YALNIZCA header'ın altında: aside'ın üstteki --header-h kadarlık
+   * padding bandı (header hizası) hit-area'dan çıkarılır, sidebar içerik kutuları
+   * hit-area'yı geri açar. Böylece header hizasında (geri butonu dahil) hover sidebar'ı
+   * AÇMAZ; hover bölgesi header'ın alt çizgisinden (72px) başlar. */
+  .app-sidebar { pointer-events:none; }
+  .app-sidebar > * { pointer-events:auto; }
+  /* Geri butonu (header sol grubu) sidebar ikon sütunuyla aynı x hizasında: header'ın
+   * yatay padding'i negatif marjla telafi edilir → grup x=0'dan başlar, 72px'lik raylı
+   * kolonda ortalanır (ikon merkezi = sidebar ikon merkezi = 36px). Buton header'da
+   * KALIR (DOM taşınmaz); header z-index 70 > sidebar 60 → görünür ve tıklanabilir.
+   * İTME sırasında fark: telafi marjı sidebar'ın animasyonlu genişliğinden
+   * (--sidebar-w) türer → padding ile marj aynı değeri taşıdığı için grup x=0'da
+   * SABİT kalır: buton hem kapalı hem açık sidebar'da, geçişin her karesinde
+   * ikon sütunuyla hizalı (zıplama yok). Genişlik raylı kolondur, açılmaz. */
+  .app-header__left {
+    width: var(--sidebar-collapsed);
+    margin-left: calc(-1 * (var(--sidebar-w) + var(--shell-pad-x)));
+    justify-content: center;
+  }
 }
 
 @media (max-width: 767px) {
@@ -403,7 +740,7 @@ body::before {
   .app-sidebar { z-index:80; width:min(86vw, 320px); transform:translateX(-100%); transition:transform var(--duration-state) var(--ease-out-expo); }
   .app-sidebar--open { transform:translateX(0); width:min(86vw,320px); }
   .app-sidebar--collapsed { transform:translateX(-100%); }
-  .app-main, .app-main--sidebar-open, .app-main--sidebar-collapsed { padding-left:0; }
+  .app-main { padding-left:0; }
   .app-header { grid-template-columns:auto 1fr auto; gap:10px; }
   .search-control { min-width:0; width:100%; }
   .search-control__hint, .search-control kbd { display:none; }
@@ -414,16 +751,23 @@ body::before {
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior:auto !important; }
-  .glass-interactive, .glass-interactive:hover, .glass-interactive:active, .app-sidebar, .app-main { transition-duration:1ms !important; }
+  /* Kapsam bilinçli olarak evrensel: hover/geçiş artık TEK token setinden
+     (--duration-micro) beslendiği için bileşen listesi tutmak yerine tüm
+     geçişler kapatılır — yeni bir hover yüzeyi eklendiğinde bu blok onu da kapsar.
+     1 ms: geçiş "anlık" olur ama animasyon motoru yeniden başlatma tuzağına
+     düşmez (transition:none bazı tarayıcılarda :hover durumunu keskinleştirir). */
+  *, *::before, *::after { transition-duration:1ms !important; }
   /* .app-sidebar bilinçli olarak transform:none listesinin DIŞINDA:
    * mobil off-canvas gizleme translateX(-100%) ile yapılıyor; transform:none
    * onu iptal edip sidebar'ı reduced-motion'da kalıcı görünür yapıyordu.
    * Animasyonsuzluk yukarıdaki transition-duration:1ms ile sağlanıyor. */
   .glass-interactive, .glass-interactive:hover, .glass-interactive:active, .app-main { transform:none !important; }
-  /* glass-hissi v2: light sweep de kapalı — ::after taban durumunda kalır
+  /* glass-hissi v2: light sweep de kapalı — ::before taban durumunda kalır
    * (opacity:0, kart dışında); shadow bloom'u yukarıdaki 1ms geçiş süresi öldürür. */
-  .glass-interactive::after, .glass-interactive:hover::after { animation: none !important; }
+  .glass-interactive::before, .glass-interactive:hover::before { animation: none !important; }
   .skeleton-block { animation:none; }
+  /* P4: rota/sekme girişi (route-rise) de kapalı — eskiden listede yoktu. */
+  .app-content.route-entering { animation: none !important; }
   /* P1: giriş koreografisi dahil tüm animasyonlu yüzeyler kapalı */
   .anim-rise, .anim-fade { animation: none !important; opacity: 1 !important; transform: none !important; }
 }
@@ -454,7 +798,7 @@ body::before {
   gap: 10px;
   padding: 11px 12px;
   border-radius: var(--radius-control);
-  background: rgba(0,0,0,.92);
+  background: var(--stuhub-panel-bg);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   border: 1px solid var(--stuhub-border-strong);
@@ -465,13 +809,14 @@ body::before {
 }
 .toast--success svg { color: var(--stuhub-success); }
 .toast--error svg { color: var(--stuhub-error); }
-.toast--error { border-color: rgba(210,181,181,.4); }
+.toast--error { border-color: var(--stuhub-error-border); }
 .toast--info svg { color: var(--stuhub-info); }
 .toast__msg { flex: 1; min-width: 0; }
 .toast__close {
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 22px; border-radius: var(--radius-chip);
   color: var(--stuhub-text-muted); flex-shrink: 0;
+  transition: background-color var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo);
 }
 .toast__close:hover { color: var(--stuhub-text); background: var(--stuhub-glass-2-hover); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -518,7 +863,7 @@ body::before {
    * Yer tutucu yükseklik korunur; loading skeleton taşmayı önler. */
   .app-loading img[data-hidden] { display: none; }
 .app-loading__skeleton { width:min(280px,65vw); height:5px; border-radius:9999px; background:var(--stuhub-glass-2); position:relative; overflow:hidden; }
-.app-loading__skeleton::after { content:""; position:absolute; inset:0; transform:translateX(-100%); background:linear-gradient(90deg, transparent, rgba(255,255,255,.08), transparent); animation:skeleton-shimmer 2.8s ease-in-out infinite; }
+.app-loading__skeleton::after { content:""; position:absolute; inset:0; transform:translateX(-100%); background:linear-gradient(90deg, transparent, var(--stuhub-skeleton-3), transparent); animation:skeleton-shimmer 2.8s ease-in-out infinite; }
 
 @layer components {
   .welcome-panel { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; padding:clamp(18px,2vw,28px); margin-bottom:clamp(14px,1.5vw,22px); }
@@ -532,7 +877,7 @@ body::before {
   .feature-card__top { display:flex; align-items:center; gap:9px; font-size:14px; font-weight:600; }
   .weekly-bars { margin-top:24px; display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:10px; align-items:end; height:100px; }
   .weekly-bar { height:100%; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:8px; font-size:10px; color:var(--stuhub-text-muted); }
-  .weekly-bar__fill { width:100%; min-height:8px; border-radius:var(--radius-chip) var(--radius-chip) 4px 4px; background:rgba(255,255,255,.28); border:1px solid rgba(255,255,255,.06); transform-origin:bottom; animation:bar-grow var(--duration-scene) var(--ease-out-expo) both; }
+  .weekly-bar__fill { width:100%; min-height:8px; border-radius:var(--radius-chip) var(--radius-chip) 4px 4px; background:var(--stuhub-bar-fill); border:1px solid var(--stuhub-bar-border); transform-origin:bottom; animation:bar-grow var(--duration-scene) var(--ease-out-expo) both; }
   /* Gün sırasına göre kademeli büyüme — veri hikayesi soldan sağa okunur */
   .weekly-bar:nth-child(2) .weekly-bar__fill { animation-delay: calc(1 * var(--stagger-unit)); }
   .weekly-bar:nth-child(3) .weekly-bar__fill { animation-delay: calc(2 * var(--stagger-unit)); }
@@ -543,13 +888,13 @@ body::before {
   @keyframes bar-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
   @media (prefers-reduced-motion: reduce) { .weekly-bar__fill { animation: none; } }
   /* Yönerge §32: monochrome luminosity hiyerarşisi — hover'da gün parlar */
-  .weekly-bar:hover .weekly-bar__fill { background:rgba(255,255,255,.5); }
-  .weekly-bar--today .weekly-bar__fill { background:rgba(255,255,255,.62); }
+  .weekly-bar:hover .weekly-bar__fill { background:var(--stuhub-bar-fill-hover); }
+  .weekly-bar--today .weekly-bar__fill { background:var(--stuhub-bar-fill-today); }
   .pricing-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:clamp(14px,1.6vw,22px); align-items:stretch; }
   .plan-card { min-height:360px; padding:22px; display:flex; flex-direction:column; justify-content:space-between; }
   .plan-card h2 { margin-top:8px; font-size:28px; letter-spacing:-.03em; font-weight:600; }
-  .plan-card--plus { border-color:rgba(255,255,255,.13); transform:translateY(-2px); }
-  .plan-card--pro { border-color:rgba(255,255,255,.18); box-shadow:0 12px 38px rgba(0,0,0,.5); transform:translateY(-4px); }
+  .plan-card--plus { border-color:var(--stuhub-border-mid); transform:translateY(-2px); }
+  .plan-card--pro { border-color:var(--stuhub-border-strong); box-shadow:var(--shadow-plan-pro); transform:translateY(-4px); }
   .plan-features { margin-top:22px; display:grid; gap:10px; }
   .plan-features p { display:flex; gap:9px; align-items:flex-start; font-size:13px; color:var(--stuhub-text-secondary); }
   @media (prefers-reduced-motion: reduce) { .plan-card--plus,.plan-card--pro { transform:none; } }
@@ -563,22 +908,38 @@ body::before {
 @layer components {
   .settings-layout { display:grid; grid-template-columns:minmax(190px,220px) minmax(0,1fr); gap:clamp(16px,2vw,28px); align-items:start; }
   .settings-nav { position:sticky; top:90px; padding:8px; display:grid; gap:3px; }
-  .settings-nav__item { min-height:40px; padding:8px 10px; border-radius:var(--radius-control); text-align:left; color:var(--stuhub-text-secondary); font-size:13px; }
+  .settings-nav__item { min-height:40px; padding:8px 10px; border-radius:var(--radius-control); text-align:left; color:var(--stuhub-text-secondary); font-size:13px; transition: background-color var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo); }
   .settings-nav__item:hover { background:var(--stuhub-glass-2-hover); color:var(--stuhub-text); }
   .settings-nav__item--active { background:var(--stuhub-accent-glass); color:var(--stuhub-text); }
   .settings-content { display:grid; gap:18px; }
 }
 @media (max-width: 800px) { .settings-layout { grid-template-columns:1fr; } .settings-nav { position:static; display:flex; overflow:auto; } .settings-nav__item { white-space:nowrap; } }
 
-/* ── Rehberli tur (yönerge §23) — subtle glass, low dim, current target görünür ── */
+/* ── Rehberli tur — spotlight (dim'de delik) + cam popover ────────────────
+ * v2 (kullanıcı isteği 2026-09-17): tur ağacı BODY'ye portal edilir. Önceki
+ * hâlde header'ın backdrop-filter'ı fixed çocukları kendi kutusuna hapsediyordu
+ * → dim yalnız header şeridini kaplıyor, popover anchor'a göre kayıyordu.
+ * Spotlight tek elemanın dev box-shadow'udur: hedefin kutusu BOŞ kalır, çevresi
+ * kararır — hedef tam parlaklıkta okunur. Halka hedefin kendi ::after'ında
+ * değil bu katmanda çizilir: hedef hangi stacking context'te olursa olsun
+ * dim'in ÜSTÜNDE kalır (header z-index 70 < tur 110). */
 @layer components {
-  .tour-overlay { position:fixed; inset:0; z-index:110; background:rgba(0,0,0,.4); backdrop-filter:blur(1.5px); }
-  .tour-popover { position:fixed; z-index:111; background:rgba(0,0,0,.92); backdrop-filter:blur(16px); border:1px solid var(--stuhub-border); border-radius:var(--radius-panel); box-shadow:var(--shadow-glass); padding:18px; }
+  .tour-overlay { position:fixed; inset:0; z-index:110; }
+  .tour-spot {
+    position:fixed; left:0; top:0; z-index:110; pointer-events:none;
+    border-radius: calc(var(--radius-control) + 4px);
+    border: 1.5px solid var(--tour-spot-border);
+    box-shadow: 0 0 0 4px var(--tour-spot-ring), 0 0 0 100vmax var(--tour-dim);
+  }
+  /* Anchor'sız adım (rota adımı): spotlight yok, dim tüm viewport'u kaplar. */
+  .tour-spot--full { width:100%; height:100%; border-color:transparent; box-shadow:none; background:var(--tour-dim); }
+  .tour-popover { position:fixed; z-index:111; background:var(--stuhub-panel-bg); backdrop-filter:blur(16px); border:1px solid var(--stuhub-border); border-radius:var(--radius-panel); box-shadow:var(--shadow-glass); padding:18px; }
+  /* Kapat: metin butonu (İleri/Geri ile aynı ölçü, sessiz ton) — tur her an
+   * tek tuşla kapanabilir, Escape ve dim tıklaması da kapatır. */
+  .tour-popover__kapat { display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:0 12px; border-radius:var(--radius-control); border:1px solid transparent; color:var(--stuhub-text-muted); font-size:14px; transition: background-color var(--duration-micro) var(--ease-out-expo), border-color var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo); }
+  .tour-popover__kapat:hover { color:var(--stuhub-text); background:var(--stuhub-glass-2-hover); border-color:var(--stuhub-border); }
   [data-tour-id] { position:relative; }
-  [data-tour-id]::after { content:""; position:absolute; inset:-4px; border-radius:calc(var(--radius-control) + 4px); border:1.5px solid rgba(255,255,255,.55); box-shadow:0 0 0 4px rgba(255,255,255,.08); pointer-events:none; z-index:112; transition:opacity var(--duration-micro) var(--ease-out-expo); opacity:0; }
-  [data-tour-id].tour-target::after { opacity:1; }
 }
-@media (prefers-reduced-motion: reduce) { .tour-overlay { backdrop-filter:none; } }
 
 /* Sıkıntı #7: scroll alanı işlevsel kalsın, scrollbar görsel olarak gizli */
 @layer components {
@@ -591,7 +952,7 @@ body::before {
     border-radius: var(--radius-pill);
     background: var(--stuhub-accent-glass);
     border: 1px solid var(--stuhub-accent-glass-border);
-    box-shadow: 0 1px 6px rgba(0,0,0,.35);
+    box-shadow: var(--shadow-tab);
     transition: transform var(--duration-state) var(--ease-out-expo),
                 width var(--duration-state) var(--ease-out-expo),
                 height var(--duration-state) var(--ease-out-expo);
@@ -603,15 +964,164 @@ body::before {
    * flashcard, çalışma alanları) scrollbar ASLA görünmez — kaydırma dokunmatik/
    * tekerlekle akar. Ana sayfa listelerinde temalı ince scrollbar kalır.
    * Global varsayılan ince + koyu; interaktif yüzeyler .scroll-none alır. */
-  * { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.16) transparent; }
+  * { scrollbar-width: thin; scrollbar-color: var(--stuhub-scrollbar) transparent; }
   *::-webkit-scrollbar { width: 10px; height: 10px; }
   *::-webkit-scrollbar-track { background: transparent; }
-  *::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); border-radius: var(--radius-pill); border: 3px solid transparent; background-clip: content-box; }
-  *::-webkit-scrollbar-thumb:hover { background-color: rgba(255,255,255,.26); }
+  *::-webkit-scrollbar-thumb { background: var(--stuhub-scrollbar-thumb); border-radius: var(--radius-pill); border: 3px solid transparent; background-clip: content-box; }
+  *::-webkit-scrollbar-thumb:hover { background-color: var(--stuhub-scrollbar-thumb-hover); }
   *::-webkit-scrollbar-corner { background: transparent; }
   .scroll-none, .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
   .scroll-none::-webkit-scrollbar, .no-scrollbar::-webkit-scrollbar { display: none; }
-  /* Sıkıntı #3: dönem kartları geniş hücreler — auto-fit dar sütunlarda sıramasın.
-     Üst sınır 420px: hücre = kart (sayfa max-w-[420px]), araya dev boşluk girmiyor. */
-  .term-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,420px)); gap:14px; align-items:start; }
+  /* Sıkıntı #3: dönem kartları geniş hücreler — dar sütunlarda sıramasın.
+     Ray tabanı clamp ile sabit kart boyu; üst sınır YOK (kalan alan 1fr ile
+     raylara dağılır) → sağda ölü boşluk oluşmaz. */
+  .term-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(clamp(220px,22vw,320px),1fr)); gap:14px; align-items:start; }
+}
+
+/* ── Custom cursor: glass halka + cam yansimasi (kullanici onayli ozellik) ──
+ * CursorRing.tsx mount edilmedigi surece (pointer:coarse / unmount) hicbir kural
+ * etkili olmaz: cursor:none ve yansima `cursor-ring-on` sinifina bagli — o sinifi
+ * yalniz bilesen ekler/cekler. Tum konum guncellemeleri tek rAF'ta: halka
+ * translate3d, yansima --cursor-x/--cursor-y (panel-yerel px). */
+
+@media (pointer: fine) {
+  /* Native imlec HICBIR YERDE kullanilmaz (kullanici istegi): tum yuzeylerde
+   * halka; metin YAZILAN alanlarda (input/textarea/contenteditable) halka + I
+   * (beam). Duz metin uzerinde native imlec/I YOK. */
+  html.cursor-ring-on, html.cursor-ring-on * { cursor: none; }
+}
+
+.cursor-ring {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2147483000; /* toast (120) / tur (111) / modallarin ustunde */
+  pointer-events: none;
+  opacity: 0;
+  will-change: transform, opacity;
+  transition: opacity var(--duration-state) var(--ease-out);
+}
+.cursor-ring--visible { opacity: 1; }
+
+/* Halka: 15px ici bos beyaz daire (1.3px stroke, %85) — kullanici geri bildirimi:
+ * genel olcek %35 kucuk, stroke ve ic dot orani korunur. Genislik/yukseklik gecisi
+ * stroke'u sabit tutar (transform-scale stroke'u da buyuturdu). */
+.cursor-ring__ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 15px;
+  height: 15px;
+  border: var(--cursor-ring-stroke) solid var(--cursor-ring-renk);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--cursor-glow);
+  transform: translate(-50%,-50%);
+  transition: width var(--duration-micro) var(--ease-out-expo), height var(--duration-micro) var(--ease-out-expo), border-color var(--duration-micro) var(--ease-out-expo), box-shadow var(--duration-micro) var(--ease-out-expo);
+}
+.cursor-ring--hover .cursor-ring__ring {
+  border-color: var(--cursor-ring-renk-hover);
+  box-shadow: var(--cursor-glow-hover);
+  width: 18px;
+  height: 18px;
+}
+/* Drag: halka sikisir (stroke yine sabit) — kaynak sirasi press'ten sonra. */
+.cursor-ring--drag .cursor-ring__ring { width: 13px; height: 13px; }
+
+/* Yazma alani durumu — YALNIZ input (metin tipleri) / textarea / contenteditable:
+ * halka hover cap'ine genisler ama SILIKLESIR; icinde I (beam) belirir.
+ * Duz metin (p/h1-h6/li/span/td/blockquote/kart icerigi/not govdesi) bu duruma
+ * GIRMEZ (geometrik metin tespiti kaldirildi, 2026-09-17).
+ * Oncelik: etkilesimli (a/button/select) > yazma alani; native I-beam yok. */
+.cursor-ring--metin .cursor-ring__ring {
+  width: 18px;
+  height: 18px;
+  border-color: var(--cursor-ring-renk-metin);
+}
+.cursor-ring__beam {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--cursor-beam-genislik);
+  height: var(--cursor-beam-yukseklik);
+  border-radius: 1px;
+  background: var(--cursor-beam-renk);
+  opacity: 0;
+  transform: translate(-50%,-50%) scaleY(.6);
+  transition: opacity var(--duration-micro) var(--ease-out-expo), transform var(--duration-micro) var(--ease-out-expo);
+}
+.cursor-ring--metin .cursor-ring__beam { opacity: 1; transform: translate(-50%,-50%) scaleY(1); }
+/* Baski aninda ic-dot tek basina kalir (beam gizlenir). */
+.cursor-ring--press .cursor-ring__beam { opacity: 0; }
+
+/* Ic dot: 4px (halka/ic-dot orani korunur); mousedown spring 6px; release
+ * 200ms'de kuculup soner. Tek eleman — seri tiklamada AYNI dot yeniden oynar. */
+.cursor-ring__dot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--cursor-dot-bg);
+  opacity: 0;
+  transform: translate(-50%,-50%) scale(1);
+  transition: transform var(--duration-state) var(--ease-out), opacity var(--duration-state) var(--ease-out);
+}
+.cursor-ring--press .cursor-ring__dot {
+  opacity: 1;
+  transform: translate(-50%,-50%) scale(1.5);
+  transition: transform var(--duration-micro) var(--ease-spring), opacity var(--duration-micro) linear;
+}
+
+/* Cam yansimasi — T1 ters-paralaks blob + T2 kenar isigi + T3 hiz smear'i.
+ * PERFORMANS PAKETI (kullanici: uygulama kasmasin):
+ *  A) Yalnizca AKTIF panel: `.glass-panel[data-reflect="1"]` (CursorRing hover'da
+ *     isaretler; ekranda en fazla 1 yansima katmani).
+ *  B) mix-blend-mode YOK — ton gradient alfasinda; blend grubu/backdrop yeniden
+ *     harmanlama yok.
+ *  D) filter: blur YOK — smear, gradient YARICAPI + ALFASI ile yapilir (genisler +
+ *     sonuklesir); uzama transform ile kalir.
+ *  5) Kenar isigi 4 gradient katmani yerine TEK `box-shadow` (4 inset golge).
+ * Butce: element opakligi %12 → birlesik piksel artisi <= %12.
+ * :not([data-tour-id]) — rehberli tur ayni ::after'i vurgu halkasi icin kullaniyor. */
+.glass-panel:not([data-tour-id])[data-reflect="1"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(circle calc(var(--reflect-ambient-r) * (1 + var(--smear) * 0.6)) at calc(var(--cursor-x) * 1px + var(--reflect-light-x)) calc(var(--cursor-y) * 1px + var(--reflect-light-y)), rgb(var(--glass-reflect-renk) / calc(var(--reflect-ambient-a) / (1 + var(--smear) * 0.8))), transparent 72%),
+    radial-gradient(circle calc(var(--reflect-specular-r) * (1 + var(--smear) * 0.5)) at calc(var(--cursor-x) * 1px + var(--reflect-light-x)) calc(var(--cursor-y) * 1px + var(--reflect-light-y)), rgb(var(--glass-reflect-renk) / calc(var(--reflect-specular-a) / (1 + var(--smear) * 0.8))), transparent 74%);
+  box-shadow:
+    inset 0 var(--reflect-edge-width) 0 0 rgb(var(--glass-reflect-renk) / calc(var(--edge-t) * var(--reflect-edge-alpha))),
+    inset 0 calc(var(--reflect-edge-width) * -1) 0 0 rgb(var(--glass-reflect-renk) / calc(var(--edge-b) * var(--reflect-edge-alpha))),
+    inset var(--reflect-edge-width) 0 0 0 rgb(var(--glass-reflect-renk) / calc(var(--edge-l) * var(--reflect-edge-alpha))),
+    inset calc(var(--reflect-edge-width) * -1) 0 0 rgb(var(--glass-reflect-renk) / calc(var(--edge-r) * var(--reflect-edge-alpha)));
+  transform: scale(var(--smear-sx), var(--smear-sy));
+  opacity: 0;
+}
+html.cursor-ring-on .glass-panel:not([data-tour-id])[data-reflect="1"]::after { opacity: var(--glass-reflect-opacity); }
+
+@media (prefers-reduced-motion: reduce) {
+  /* Lerp JS'te kapali (anlik konum) + T3 smear kapali; glow sabit dusuk. */
+  .cursor-ring, .cursor-ring__ring, .cursor-ring__dot, .cursor-ring__beam { transition: none; }
+  .cursor-ring__ring, .cursor-ring--hover .cursor-ring__ring { box-shadow: var(--cursor-glow-sakin); }
+  html.cursor-ring-on .glass-panel:not([data-tour-id])[data-reflect="1"]::after { opacity: calc(var(--glass-reflect-opacity) * .5); }
+}
+
+/* ── Metin secimi (kullanici istegi 014626) ──────────────────────────────
+ * Tarayici varsayilani (lacivert/sistem Highlight) yerine cam diline uygun
+ * yari saydam accent zemin + beyaz metin. Accent tokeni (%35 saydam) siyah
+ * zeminde #595959 civari bir zemin uretir → beyaz metinle ~7:1 kontrast
+ * (WCAG AA/AAA). --stuhub-text (#fafafa) secili metnin rengidir.
+ * ::-moz-selection ayri kural (Firefox); Chrome bilinmeyen pseudo-element
+ * iceren secici listesini TUMDEN dusurur, bu yuzden birlestirilmedi. */
+::selection {
+  background: color-mix(in srgb, var(--stuhub-accent) 35%, transparent);
+  color: var(--stuhub-text);
+}
+::-moz-selection {
+  background: color-mix(in srgb, var(--stuhub-accent) 35%, transparent);
+  color: var(--stuhub-text);
 }

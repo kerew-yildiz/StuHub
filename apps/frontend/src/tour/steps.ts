@@ -13,11 +13,25 @@ export type TourLayer = 'global' | 'term' | 'course' | 'chapter'
 export interface TourStep {
   id: string
   /** data-tour-id değeri — bulunamazsa adım atlanır. */
-  anchor: string
+  anchor?: string
   title: string
   body: string
   /** Yönlendirme yoksa o adımda görünen buton metni. */
   actionLabel: string
+  /** Rota adımı: anchor'ı başka bir sayfada olan adım için gidilecek rota.
+   * Anchor yoksa adım spotlightsız (ortada popover) gösterilir — anlatı
+   * kaybolmaz, kullanıcı rotaya taşınır. */
+  route?: string
+}
+
+/** Rota → tur katmanı eşlemesi. Katman, adım kayıt defterinin hangi bölümünün
+ * oynayacağını belirler; başlangıçta (startHelpTour) ve rota değişiminde
+ * aynı fonksiyon kullanılır — iki yerde ayrışamaz. */
+export function layerFromPath(pathname: string): TourLayer {
+  if (/^\/dersler\/\d+\/defter\/\d+/.test(pathname)) return 'chapter'
+  if (/^\/dersler\/\d+/.test(pathname)) return 'course'
+  if (/^\/donemler\/\d+/.test(pathname)) return 'term'
+  return 'global'
 }
 
 export const TOUR_STEP_TITLES: Record<TourLayer, string> = {
@@ -63,6 +77,15 @@ export const TOUR_STEPS: Record<TourLayer, TourStep[]> = {
       title: 'Hesabın',
       body: 'Profil kontrolü header\'da değil, sidebar\'ın altındadır: hesap kartı, ayarlar ve çıkış buradan.',
       actionLabel: 'İleri',
+    },
+    {
+      // Rota adımı: tur burada bitmez, kullanıcıyı gerçek bir sayfaya taşır —
+      // "?" turu her katmanda o katmanın adımlarını gösterir (dönem/ders/chapter).
+      id: 'g-rotalar',
+      route: '/donemler',
+      title: 'Sıra dönemlerinde',
+      body: 'Tur bitti. Şimdi dönemlerine geç: bir dönemi aç, ders kartına gir ve aynı "?" turunu orada başlat — adımlar bulunduğun katmana göre değişir.',
+      actionLabel: 'Turu bitir',
     },
   ],
   term: [

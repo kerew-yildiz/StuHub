@@ -107,7 +107,7 @@ function NoteSectionModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-stuhub-overlay-soft p-4"
       onClick={onClose}
     >
       <div

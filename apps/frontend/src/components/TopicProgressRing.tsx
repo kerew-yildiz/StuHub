@@ -37,7 +37,7 @@ export function TopicProgressRing({ percent, size = 22 }: { percent: number | nu
           strokeDasharray={circumference}
           strokeDashoffset={offset}
           transform={`rotate(-90 ${center} ${center})`}
-          className="transition-[stroke-dashoffset] duration-300 ease-out"
+          className="transition-[stroke-dashoffset] duration-[var(--duration-entrance)] ease-[var(--ease-out)]"
         />
       )}
     </svg>

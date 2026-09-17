@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -45,7 +45,6 @@ vi.mock('./api/settings', () => ({
   settingsApi: {
     list: vi.fn(async () => ({ onboarding_done: '1' })),
     set: vi.fn(async () => ({ ok: true })),
-    llmStatus: vi.fn(async () => []),
   },
 }))
 
@@ -68,7 +67,9 @@ describe('App', () => {
     )
 
     expect(await screen.findByRole('heading', { name: 'Ayarlar' })).toBeInTheDocument()
-    expect(screen.getByLabelText('1. Google Gemini API anahtarı')).toBeInTheDocument()
+    // BYOK kaldırıldı: sağlayıcı anahtarı girişleri son kullanıcıya gösterilmez.
+    expect(screen.queryByText(/sağlayıcı zinciri/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/API anahtarı/)).not.toBeInTheDocument()
   })
 
   it('Backend ayaktayken sağlık uyarısı görünmez', async () => {
@@ -99,5 +100,54 @@ describe('App', () => {
     // 1) Hata ekranı YOK.
     expect(await scoped.findByRole('heading', { name: 'Çalışmaya başlamak için iyi bir an.' })).toBeInTheDocument()
     expect(scoped.queryByRole('button', { name: 'Tekrar dene' })).not.toBeInTheDocument()
+  })
+
+  /** Sidebar hover davranışı: masaüstünde kabuk "itme" durumuna geçer (içerik
+   * sidebar'ın yanına kayar), MOBİLDE hover açmaz — sidebar off-canvas kalır.
+   * Kapı `window.matchMedia('(min-width: 768px)')`; testlerde polyfill eşleşmez
+   * (mobil) olduğundan masaüstü dalı kendi mock'uyla kurulur. */
+  it('Sidebar hover\'ı yalnızca masaüstünde itme durumuna geçirir', async () => {
+    const medya = (eslesir: boolean) => ({
+      matches: eslesir,
+      media: '',
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }) as unknown as MediaQueryList
+
+    const masaustu = render(
+      <MemoryRouter initialEntries={['/']}>
+        <App />
+      </MemoryRouter>,
+    )
+    await within(masaustu.container).findByRole('heading', { name: 'Çalışmaya başlamak için iyi bir an.' })
+    const kabukMasaustu = masaustu.container.querySelector('.stuhub-app')
+    const yanMasaustu = masaustu.container.querySelector('.app-sidebar')
+    expect(kabukMasaustu).not.toBeNull()
+    expect(yanMasaustu).not.toBeNull()
+    expect(kabukMasaustu?.className).not.toContain('stuhub-app--sidebar-open')
+
+    vi.stubGlobal('matchMedia', vi.fn(() => medya(true)))
+    fireEvent.mouseEnter(yanMasaustu as Element)
+    expect(kabukMasaustu?.className).toContain('stuhub-app--sidebar-open')
+    fireEvent.mouseLeave(yanMasaustu as Element)
+    expect(kabukMasaustu?.className).not.toContain('stuhub-app--sidebar-open')
+
+    // Mobil (polyfill varsayılanı: eşleşmez) → hover itme durumuna GEÇİRMEZ.
+    vi.stubGlobal('matchMedia', vi.fn(() => medya(false)))
+    const mobil = render(
+      <MemoryRouter initialEntries={['/']}>
+        <App />
+      </MemoryRouter>,
+    )
+    await within(mobil.container).findByRole('heading', { name: 'Çalışmaya başlamak için iyi bir an.' })
+    const kabukMobil = mobil.container.querySelector('.stuhub-app')
+    const yanMobil = mobil.container.querySelector('.app-sidebar')
+    fireEvent.mouseEnter(yanMobil as Element)
+    expect(kabukMobil?.className).not.toContain('stuhub-app--sidebar-open')
+    vi.unstubAllGlobals()
   })
 })

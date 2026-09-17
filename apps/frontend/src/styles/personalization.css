@@ -1,18 +1,39 @@
 /* Kisillestirme: kullanici arkaplani.
-   theme.css'teki varsayilan (calisma-masasi) katman yapisi birebir esas alindi —
-   sadece url degisir. Attribute yokken theme.css'teki varsayilan kural gecerli kalir. */
-html[data-stuhub-bg='calisma-masasi'] body {
-  background:
-    radial-gradient(ellipse at 50% 40%, rgba(0, 0, 0, 0) 30%, rgba(0, 0, 0, 0.75) 100%),
-    linear-gradient(rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.78)),
-    url("/bg/calisma-masasi.png") center / cover no-repeat fixed,
-    var(--stuhub-bg);
-}
+   Katman yapisi (vinyet + perde) artık tek kaynaktan: theme.css `--bg-*`
+   token'lari. Bu dosya YALNIZ goruntuyu secer — karanlik/acik kutup, perde
+   rengi ve alfası theme.css'ten gelir (karanlikta siyah perde, acikta beyaz
+   perdenin birebir aynasi).
 
-html[data-stuhub-bg='zirve'] body {
-  background:
-    radial-gradient(ellipse at 50% 40%, rgba(0, 0, 0, 0) 30%, rgba(0, 0, 0, 0.75) 100%),
-    linear-gradient(rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.78)),
-    url("/bg/zirve.jpg") center / cover no-repeat fixed,
-    var(--stuhub-bg);
-}
+   Ad kurali: karanlik `/bg/<deger>.(jpg|png)`, acik `/bg/<deger>-light.jpg`
+   (katalog + olcum: master_worker_system/acik-tema-arkaplan/katalog-esleme.json).
+   Yeni arkaplan eklerken: personalization.ts listesine degeri ekle + buraya
+   IKI kural yaz (karanlik + acik) — dosyalar public/bg altinda olmali. */
+html[data-stuhub-bg='calisma-masasi'] body { --bg-image: url("/bg/calisma-masasi.png"); }
+html[data-theme='light'][data-stuhub-bg='calisma-masasi'] body { --bg-image: url("/bg/calisma-masasi-light.jpg"); }
+
+html[data-stuhub-bg='zirve'] body { --bg-image: url("/bg/zirve.jpg"); }
+html[data-theme='light'][data-stuhub-bg='zirve'] body { --bg-image: url("/bg/zirve-light.jpg"); }
+
+html[data-stuhub-bg='uyanis'] body { --bg-image: url("/bg/uyanis.jpg"); }
+html[data-theme='light'][data-stuhub-bg='uyanis'] body { --bg-image: url("/bg/uyanis-light.jpg"); }
+
+html[data-stuhub-bg='merdiven'] body { --bg-image: url("/bg/merdiven.jpg"); }
+html[data-theme='light'][data-stuhub-bg='merdiven'] body { --bg-image: url("/bg/merdiven-light.jpg"); }
+
+html[data-stuhub-bg='yolculuk'] body { --bg-image: url("/bg/yolculuk.jpg"); }
+html[data-theme='light'][data-stuhub-bg='yolculuk'] body { --bg-image: url("/bg/yolculuk-light.jpg"); }
+
+html[data-stuhub-bg='ufuk'] body { --bg-image: url("/bg/ufuk.jpg"); }
+html[data-theme='light'][data-stuhub-bg='ufuk'] body { --bg-image: url("/bg/ufuk-light.jpg"); }
+
+html[data-stuhub-bg='yuk-tasima'] body { --bg-image: url("/bg/yuk-tasima.jpg"); }
+html[data-theme='light'][data-stuhub-bg='yuk-tasima'] body { --bg-image: url("/bg/yuk-tasima-light.jpg"); }
+
+html[data-stuhub-bg='sinav-sabahi'] body { --bg-image: url("/bg/sinav-sabahi.jpg"); }
+html[data-theme='light'][data-stuhub-bg='sinav-sabahi'] body { --bg-image: url("/bg/sinav-sabahi-light.jpg"); }
+
+html[data-stuhub-bg='kale'] body { --bg-image: url("/bg/kale.jpg"); }
+html[data-theme='light'][data-stuhub-bg='kale'] body { --bg-image: url("/bg/kale-light.jpg"); }
+
+html[data-stuhub-bg='yelken'] body { --bg-image: url("/bg/yelken.jpg"); }
+html[data-theme='light'][data-stuhub-bg='yelken'] body { --bg-image: url("/bg/yelken-light.jpg"); }

@@ -59,6 +59,22 @@ describe('SavedQuestionsPage', () => {
     expect(await screen.findByText(/Henüz kaydedilmiş soru yok/)).toBeInTheDocument()
   })
 
+  it('veri gelene kadar iskelet yer tutucu gösterir, veri gelince kaybolur', async () => {
+    const bekleyen = Promise.withResolvers<SavedQuestion[]>()
+    mockList.mockReturnValueOnce(bekleyen.promise)
+
+    const { container } = render(<SavedQuestionsPage />)
+
+    // Yükleme anında boş ekran değil: gerçek kart geometrisinde iskelet blokları.
+    expect(container.querySelectorAll('.skeleton-block').length).toBeGreaterThan(0)
+    expect(screen.queryByText(/Henüz kaydedilmiş soru yok/)).not.toBeInTheDocument()
+
+    bekleyen.resolve([saved()])
+
+    expect(await screen.findByText(/ikinci yasası/)).toBeInTheDocument()
+    expect(container.querySelectorAll('.skeleton-block')).toHaveLength(0)
+  })
+
   it('kayıt kaldırma optimistik çalışır, sunucuya bildirir', async () => {
     mockList.mockResolvedValueOnce([saved()])
     mockUnsave.mockResolvedValueOnce(undefined)

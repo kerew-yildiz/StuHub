@@ -37,6 +37,9 @@ BASE_DELAY = 1.0
 MAX_BACKOFF_DELAY = 4.0
 MAX_RETRIES_PER_PROVIDER = 2
 MAX_TOKENS_DEFAULT = 2048
+"""Sağlayıcı çıktı kapasitesi (`LLMProvider.max_output_tokens`) yokken kullanılan
+çıktı bütçesi. Reasoning sağlayıcılarında gizli reasoning token'ları bu bütçeden
+harcandığından sağlayıcı kapasitesi ayrıca tanımlanır (bkz. `_max_tokens_for`)."""
 TEMPERATURE = 0.1  # halüsinasyon azaltma (yol haritası Bölüm 9)
 
 _COOLDOWN_SETTING_KEY = "llm_provider_cooldowns"
@@ -209,10 +212,46 @@ def _client_for(provider: LLMProvider, keys: dict[str, str] | None = None) -> As
         if keys
         else getattr(settings, provider.api_key_setting)
     )
-    # 20s: bir sağlayıcı hiç bayt üretmeden asılırsa hızlıca vazgeçilir (2026-09-05,
-    # kullanıcı geri bildirimi: not üretimi 180sn bütçesini aşıyordu; eski 120s eşiği,
-    # 4 sağlayıcılık zincirde tek başına bütçeyi tüketebiliyordu).
-    return AsyncOpenAI(api_key=key, base_url=provider.base_url, timeout=20.0)
+    # Zaman aşımı sağlayıcı bazlı: varsayılan 20 sn "hiç bayt üretmeden asılırsa hızlıca
+    # vazgeç" kuralı için (2026-09-05, kullanıcı geri bildirimi), ama geniş reasoning
+    # bütçesiyle düşünen sağlayıcı (opencode-go) 20 sn'yi aşabiliyor — o yüzden
+    # `provider.request_timeout` (bkz. llm_providers).
+    return AsyncOpenAI(
+        api_key=key, base_url=provider.base_url, timeout=provider.request_timeout
+    )
+
+
+def _max_tokens_for(provider: LLMProvider, max_tokens: int | None) -> int:
+    """Çağrı başına çıktı bütçesi: çağıran özel değer verdiyse o, yoksa sağlayıcı kapasitesi.
+
+    Reasoning sağlayıcılarında (opencode-go `reasoning_effort=high`) gizli reasoning
+    token'ları da `max_tokens` bütçesinden harcanır; 2048 varsayılanı uzun promptta
+    tek başına reasoning'e gidince yanıt `finish_reason=length` + boş içerikle dönüyordu
+    (2026-09-17 json-hata P0). Sağlayıcının gerçek çıktı kapasitesi (ör. 8192) reasoning
+    + yanıt için yeterli payı verir.
+    """
+    if max_tokens is not None:
+        return max_tokens
+    return provider.max_output_tokens or MAX_TOKENS_DEFAULT
+
+
+_EFFORT_RANK: dict[str, int] = {"none": 0, "minimal": 0, "low": 1, "medium": 2, "high": 3}
+"""`reasoning_effort` değerlerinin sıralaması — `_apply_reasoning_effort` yalnızca DÜŞÜRME yapar."""
+
+
+def _apply_reasoning_effort(params: dict[str, Any], effort: str | None) -> None:
+    """Çağrı bazlı `reasoning_effort` geçersiz kılması — yalnızca sağlayıcının ayarını DÜŞÜRÜR.
+
+    Not üretimi gibi uzun çıktılı akışlarda gizli reasoning token'ları yanıt bütçesini
+    tüketip yanıtı boş bırakabiliyor; çağıran taraf `reasoning_effort="low"` geçerek
+    YALNIZ kendi akışını hızlandırır — diğer akışlar (quiz/overall/essay/chat) etkilenmez
+    (2026-09-17, koordinatör kararı). Sağlayıcının kendi ayarı daha düşükse (ör. gemini
+    `minimal`) dokunulmaz; `reasoning_effort` desteklemeyen sağlayıcıya parametre EKLENMEZ.
+    """
+    if not effort or "reasoning_effort" not in params:
+        return
+    if _EFFORT_RANK.get(effort, 99) < _EFFORT_RANK.get(str(params["reasoning_effort"]), 99):
+        params["reasoning_effort"] = effort
 
 
 def _friendly_error(exc: Exception | None) -> str:
@@ -318,7 +357,8 @@ def _extract_usage(chunk) -> tuple[int, int] | None:
 async def chat_stream(
     messages: list[dict],
     *,
-    max_tokens: int = MAX_TOKENS_DEFAULT,
+    max_tokens: int | None = None,
+    reasoning_effort: str | None = None,
     temperature: float = TEMPERATURE,
     kind: str = "note",
     tenant_id: str = LOCAL_TENANT_ID,
@@ -329,6 +369,9 @@ async def chat_stream(
 
     Kullanım: `async for delta in chat_stream(...): ...`
     Sağlayıcı zincirini yetenek sırasına göre dener; kota hatasında sıradakine geçer.
+    `max_tokens` verilmezse sağlayıcının çıktı kapasitesi kullanılır (bkz.
+    `_max_tokens_for`). `reasoning_effort` verilirse sağlayıcının ayarını yalnızca
+    düşürecek şekilde geçersiz kılar (bkz. `_apply_reasoning_effort`).
     """
     keys, cooldowns = await _load_config()
     providers = _available_providers_from(keys, cooldowns)
@@ -344,13 +387,14 @@ async def chat_stream(
     for provider in providers:
         client = _client_for(provider, keys)
         params = request_params(provider, tenant_id=tenant_id, context_key=context_key)
+        _apply_reasoning_effort(params, reasoning_effort)
         delay = BASE_DELAY
         for attempt in range(1, MAX_RETRIES_PER_PROVIDER + 1):
             try:
                 stream = await client.chat.completions.create(
                     model=provider.model,
                     messages=cast(Any, messages),
-                    max_tokens=max_tokens,
+                    max_tokens=_max_tokens_for(provider, max_tokens),
                     temperature=temperature,
                     stream=True,
                     stream_options={"include_usage": True},
@@ -420,7 +464,8 @@ def _extract_json(content: str) -> dict | None:
 async def chat_json(
     messages: list[dict],
     *,
-    max_tokens: int = MAX_TOKENS_DEFAULT,
+    max_tokens: int | None = None,
+    reasoning_effort: str | None = None,
     temperature: float = TEMPERATURE,
     kind: str = "json",
     tenant_id: str = LOCAL_TENANT_ID,
@@ -430,6 +475,9 @@ async def chat_json(
     """JSON çıktılı sohbet çağrısı — geçersiz JSON'da ek denemelerle kendini onarır.
 
     Sağlayıcı zincirini yetenek sırasına göre dener; kota hatasında sıradakine geçer.
+    `max_tokens` verilmezse sağlayıcının çıktı kapasitesi kullanılır (bkz.
+    `_max_tokens_for`). `reasoning_effort` verilirse sağlayıcının ayarını yalnızca
+    düşürecek şekilde geçersiz kılar (bkz. `_apply_reasoning_effort`).
     """
     keys, cooldowns = await _load_config()
     providers = _available_providers_from(keys, cooldowns)
@@ -443,6 +491,7 @@ async def chat_json(
     for provider in providers:
         client = _client_for(provider, keys)
         params = request_params(provider, tenant_id=tenant_id, context_key=context_key)
+        _apply_reasoning_effort(params, reasoning_effort)
         json_failures = 0
         provider_exhausted = False
         while json_failures < 3:
@@ -465,7 +514,7 @@ async def chat_json(
                     response = await client.chat.completions.create(
                         model=provider.model,
                         messages=cast(Any, messages_for_call),
-                        max_tokens=max_tokens,
+                        max_tokens=_max_tokens_for(provider, max_tokens),
                         temperature=temperature,
                         response_format={"type": "json_object"},
                         **params,

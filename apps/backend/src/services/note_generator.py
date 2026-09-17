@@ -13,7 +13,6 @@ import asyncio
 import json
 import logging
 import re
-import time
 
 from ..auth import LOCAL_TENANT_ID
 from ..config import settings
@@ -31,23 +30,28 @@ from . import llm_service, retrieval, web_search_service
 logger = logging.getLogger(__name__)
 
 MAX_COVERAGE_ITERATIONS = 3
-MAX_TOPICS = 12
 # Ders için yüklenmiş syllabus/müfredat materyalinin prompt'a eklenecek azami karakter
 # sayısı — dev bir PDF metni tüm topic/section promptlarını şişirmesin diye kırpılır.
 KAZANIMLAR_MAX_CHARS = 4000
 QUOTE_WINDOW_CHARS = 240
 SLIDES_CONTEXT_CHARS = 8000
 NOTE_CONTEXT_CHARS = 6000
-SLIDE_ONLY_NOTICE = "> ℹ️ Bu bölüm ders sunumundan üretildi (kitap/web kaynağı bulunamadı)."
+# Bölüm yazımı çağrılarının çıktı bütçesi. Reasoning sağlayıcısında (opencode/deepseek)
+# gizli reasoning token'ları DA bu bütçeden harcanır; sağlayıcı varsayılanı (8192) uzun
+# bölüm promptunda tamamen reasoning'e gidip yanıtı BOŞ döndürebiliyordu (2026-09-17 canlı
+# ölçüm: aynı prompt 8192'de boş/`finish_reason=length`, 16384'te tam içerik; bir canlı
+# üretimde 2/2 bölüm bu yüzden ham slayt dökümüne düşmüştü). 16384 sağlayıcı tarafından
+# kabul ediliyor (canlı doğrulandı: 9042 completion token'lı yanıt).
+SECTION_MAX_TOKENS = 16384
 
-# Toplam üretim süresi bütçesi (kullanıcı kararı, 2026-09-05): üretim hiçbir koşulda
-# bu süreyi aşmamalı. Sağlayıcı zinciri tıkanırsa (kota/ağ) kalan aşamalar LLM'siz
-# deterministik yedeğe düşer — "sonsuza dek donmuş" not üretimi yerine her zaman
-# 180sn altında biten bir not garanti edilir.
-TOTAL_BUDGET_SEC = 165.0
-# Bir LLM aşamasına başlamak için gereken asgari kalan süre; altındaysa o aşama
-# atlanıp doğrudan deterministik/atıfsız yedeğe geçilir.
-MIN_STAGE_SEC = 8.0
+# Not akışının TAMAMI düşük reasoning ile çalışır (koordinatör kararı, 2026-09-17).
+# opencode/deepseek sağlayıcısında gizli reasoning token'ları yanıt bütçesinden
+# harcanıyor; yüksek effort uzun bölüm promptlarında yanıtı boş bırakıp bölüm başına
+# süreyi ~45-55sn'ye çıkarıyordu. Geçersiz kılma ÇAĞRI BAZINDA geçirilir — diğer
+# akışlar (quiz/overall/essay/chat) sağlayıcının kendi ayarıyla (high) çalışmaya
+# devam eder; `llm_service` bu değeri yalnızca sağlayıcının mevcut ayarını
+# düşürecekse uygular (bkz. `llm_service._apply_reasoning_effort`).
+NOTE_REASONING_EFFORT = "low"
 
 
 class NoteGenerationError(Exception):
@@ -121,6 +125,43 @@ def _slide_content_for_topic(topic: dict, slides: list[dict]) -> str:
         if selected:
             return "\n\n".join(f"[Slide {s['slide_no']}] {s['content_text']}" for s in selected)
     return "\n\n".join(f"[Slide {s['slide_no']}] {s['content_text']}" for s in slides)
+
+
+def _slides_digest(slides: list[dict], max_chars: int = SLIDES_CONTEXT_CHARS) -> str:
+    """Sunum metnini konu çıkarımı bütçesine TÜM slaytları kapsayacak şekilde sığdırır.
+
+    Eskiden `"\\n\\n".join(...)[:SLIDES_CONTEXT_CHARS]` düz kırpılıyordu: 38 slaytlık
+    sunumda 30. slayttan sonrası prompt'a hiç girmiyor, o slaytların konuları nota
+    hiç alınmıyordu (2026-09-17 canlı vaka: 50 slaytlık sunumda 37-50 arası kayıptı).
+    Bütçe önce her slayda eşit dağıtılır, artan pay uzun slaytların gövdesine verilir;
+    böylece her slaydın en azından girişi (başlık + ilk satırlar) prompt'a girer.
+    Sunum bütçeye sığıyorsa çıktı eskisiyle birebir aynıdır (tam metin).
+    """
+    parts = [(f"[Slide {s['slide_no']}] ", (s.get("content_text") or "").strip()) for s in slides]
+    gaps = 2 * (len(parts) - 1)
+    if sum(len(p) + len(b) for p, b in parts) + gaps <= max_chars:
+        return "\n\n".join(p + b for p, b in parts)
+
+    budget = max(0, max_chars - gaps - sum(len(p) for p, _ in parts))
+    alloc = [min(len(b), max(80, budget // len(parts))) for _, b in parts]
+    remaining = budget - sum(alloc)
+    while remaining > 0:
+        cut = [i for i, (_, b) in enumerate(parts) if alloc[i] < len(b)]
+        if not cut:
+            break
+        step = max(1, remaining // len(cut))
+        for i in cut:
+            add = min(step, len(parts[i][1]) - alloc[i], remaining)
+            alloc[i] += add
+            remaining -= add
+            if remaining <= 0:
+                break
+    lines = []
+    for (prefix, body), take in zip(parts, alloc, strict=True):
+        if take < len(body):
+            body = body[: max(0, take - 2)].rstrip() + " …"
+        lines.append(prefix + body)
+    return "\n\n".join(lines)
 
 
 def _strip_own_heading(section: str, topic_name: str) -> str:
@@ -213,7 +254,7 @@ def _chunk_to_citation(number: int, chunk: dict) -> dict:
 # ── LLM adımları ───────────────────────────────────────────────────────
 
 async def _extract_topics(
-    slide_text: str, course_id: int, chapter_id: int, tenant_id: str, kazanimlar: str
+    slides: list[dict], course_id: int, chapter_id: int, tenant_id: str, kazanimlar: str
 ) -> list[dict]:
     async def _attempt() -> list[dict]:
         data = await llm_service.chat_json(
@@ -221,13 +262,14 @@ async def _extract_topics(
                 {
                     "role": "user",
                     "content": TOPIC_EXTRACTION_PROMPT.format(
-                        slides=slide_text[:SLIDES_CONTEXT_CHARS],
+                        slides=_slides_digest(slides),
                         dil_talimati=dil_talimati(settings.not_dili),
                         kazanimlar=kazanimlar_blok(kazanimlar),
                     ),
                 }
             ],
             kind="topic_extraction",
+            reasoning_effort=NOTE_REASONING_EFFORT,
             tenant_id=tenant_id,
             course_id=course_id,
             chapter_id=chapter_id,
@@ -241,7 +283,7 @@ async def _extract_topics(
         # id=51, 2026-09-05 — dolu slaytlarla bile gerçekleşti). Tek seferlik yeniden deneme,
         # kalıcı arıza yerine geçici sağlayıcı tekilliğini tolere eder.
         clean = await _attempt()
-    return clean[:MAX_TOPICS]
+    return clean
 
 
 async def _check_coverage(
@@ -259,43 +301,13 @@ async def _check_coverage(
             }
         ],
         kind="coverage_check",
+        reasoning_effort=NOTE_REASONING_EFFORT,
         tenant_id=tenant_id,
         course_id=course_id,
         chapter_id=chapter_id,
     )
     missing = data.get("missing", [])
     return [m for m in missing if isinstance(m, str) and m.strip()]
-
-
-def _remaining(deadline: float) -> float:
-    """`deadline` (monotonic saniye) kadar kalan süre; negatifse 0 döner."""
-    return max(0.0, deadline - time.monotonic())
-
-
-async def _stream_with_deadline(agen, deadline: float):
-    """Bir chat_stream async generator'ını `deadline`'a kadar tüketir.
-
-    Sağlayıcı zinciri tıkanırsa (2026-09-05 kullanıcı geri bildirimi: üretim
-    saatlerce donmuş kalmıştı) tek bir LLM adımı tüm 180sn bütçesini tüketmesin
-    diye her `__anext__()` çağrısı kalan süreyle sınırlanır. Zaman aşımında akış
-    sessizce kesilir (hata fırlatmaz) — o ana kadar üretilen kısım kullanılır.
-    """
-    try:
-        while True:
-            remaining = _remaining(deadline)
-            if remaining <= 0:
-                return
-            try:
-                delta = await asyncio.wait_for(agen.__anext__(), timeout=remaining)
-            except StopAsyncIteration:
-                return
-            except TimeoutError:
-                return
-            yield delta
-    finally:
-        aclose = getattr(agen, "aclose", None)
-        if aclose is not None:
-            await aclose()
 
 
 # ── Üretim yardımcıları ────────────────────────────────────────────────
@@ -361,13 +373,9 @@ def _ensure_topic_heading(section: str, topic_name: str) -> str:
     return f"### {topic_name}\n\n{text}"
 
 
-def _with_slide_notice(section: str) -> str:
-    return f"{section.strip()}\n\n{SLIDE_ONLY_NOTICE}"
-
-
 def _deterministic_slide_section(topic: dict, slides: list[dict]) -> str:
     """LLM başarısız olsa bile slayt içeriğinden asla boş olmayan deterministik bölüm."""
-    return _with_slide_notice(f"### {topic['topic']}\n\n{_slide_content_for_topic(topic, slides)}")
+    return f"### {topic['topic']}\n\n{_slide_content_for_topic(topic, slides)}"
 
 
 async def _generate_fallback_section(
@@ -377,7 +385,6 @@ async def _generate_fallback_section(
     chapter_id: int,
     course_name: str,
     tenant_id: str,
-    deadline: float,
     kazanimlar: str,
     allow_web: bool = True,
 ) -> tuple[str, list[dict], list[str], str]:
@@ -386,18 +393,12 @@ async def _generate_fallback_section(
     allow_web=True → web → slayt → deterministik slayt; allow_web=False → yalnızca
     slayt → deterministik slayt (atıfsız, doğrulaması garantili temiz).
     Dönüş: (bölüm, atıflar, deltalar, durum mesajı). Bölüm asla boş dönmez.
-    Her LLM aşaması `deadline`'a göre bütçe kontrolünden geçer (2026-09-05, 180sn
-    üretim bütçesi garantisi) — kalan süre yetersizse doğrudan deterministik yedeğe düşülür.
     """
     deltas: list[str] = []
     name = topic["topic"]
 
     # (a) Web kaynakları
-    if (
-        allow_web
-        and _remaining(deadline) > MIN_STAGE_SEC
-        and await web_search_service.web_search_enabled()
-    ):
+    if allow_web and await web_search_service.web_search_enabled():
         web_sources = await web_search_service.search_web(name, course_name)
         if web_sources:
             chunks = _web_sources_to_chunks(web_sources)
@@ -409,15 +410,14 @@ async def _generate_fallback_section(
             )
             try:
                 parts: list[str] = []
-                async for delta in _stream_with_deadline(
-                    llm_service.chat_stream(
-                        [{"role": "user", "content": prompt}],
-                        kind="note_generation_web",
-                        tenant_id=tenant_id,
-                        course_id=course_id,
-                        chapter_id=chapter_id,
-                    ),
-                    deadline,
+                async for delta in llm_service.chat_stream(
+                    [{"role": "user", "content": prompt}],
+                    kind="note_generation_web",
+                    max_tokens=SECTION_MAX_TOKENS,
+                    reasoning_effort=NOTE_REASONING_EFFORT,
+                    tenant_id=tenant_id,
+                    course_id=course_id,
+                    chapter_id=chapter_id,
                 ):
                     parts.append(delta)
                     deltas.append(delta)
@@ -433,40 +433,38 @@ async def _generate_fallback_section(
                 logger.warning("web not üretimi başarısız; slayt yedeğine düşülüyor: %s", name)
 
     # (b) Slayt (rehber) içeriğinden tam not
-    if _remaining(deadline) > MIN_STAGE_SEC:
-        prompt = NOTE_SLIDE_ONLY_PROMPT.format(
-            topic=name,
-            slide_content=_slide_content_for_topic(topic, slides),
-            dil_talimati=dil_talimati(settings.not_dili),
-            kazanimlar=kazanimlar_blok(kazanimlar),
-        )
-        try:
-            parts = []
-            async for delta in _stream_with_deadline(
-                llm_service.chat_stream(
-                    [{"role": "user", "content": prompt}],
-                    kind="note_generation_slide_only",
-                    tenant_id=tenant_id,
-                    course_id=course_id,
-                    chapter_id=chapter_id,
-                ),
-                deadline,
-            ):
-                parts.append(delta)
-                deltas.append(delta)
-            section = "".join(parts).strip()
-            if section:
-                return (
-                    _with_slide_notice(_ensure_topic_heading(section, name)),
-                    [],
-                    deltas,
-                    f"“{name}” sunum içeriğinden yazılıyor…",
-                )
-        except llm_service.LLMError:
-            logger.warning("slayt not üretimi başarısız; deterministik bölüme düşülüyor: %s", name)
+    prompt = NOTE_SLIDE_ONLY_PROMPT.format(
+        topic=name,
+        slide_content=_slide_content_for_topic(topic, slides),
+        dil_talimati=dil_talimati(settings.not_dili),
+        kazanimlar=kazanimlar_blok(kazanimlar),
+    )
+    try:
+        parts = []
+        async for delta in llm_service.chat_stream(
+            [{"role": "user", "content": prompt}],
+            kind="note_generation_slide_only",
+            max_tokens=SECTION_MAX_TOKENS,
+            reasoning_effort=NOTE_REASONING_EFFORT,
+            tenant_id=tenant_id,
+            course_id=course_id,
+            chapter_id=chapter_id,
+        ):
+            parts.append(delta)
+            deltas.append(delta)
+        section = "".join(parts).strip()
+        if section:
+            return (
+                _ensure_topic_heading(section, name),
+                [],
+                deltas,
+                f"“{name}” sunum içeriğinden yazılıyor…",
+            )
+    except llm_service.LLMError:
+        logger.warning("slayt not üretimi başarısız; deterministik bölüme düşülüyor: %s", name)
 
-    # (c) Her iki yol da başarısız (ya da bütçe yetersiz): slayt metninden deterministik
-    # bölüm (asla boş değil, LLM gerektirmez — anında biter).
+    # (c) Her iki yol da başarısız: slayt metninden deterministik bölüm (asla boş değil,
+    # LLM gerektirmez — anında biter).
     return (
         _deterministic_slide_section(topic, slides),
         [],
@@ -482,35 +480,30 @@ async def _regen_topic(
     chapter_id: int,
     course_name: str,
     tenant_id: str,
-    deadline: float,
     kazanimlar: str,
 ) -> tuple[str | None, list[dict]]:
     """Kapsama/atıf düzeltme turu için konuyu yeniden üretir (stream'siz).
 
     Kitapta kaynak yoksa aynı zinciri izler (web → slayt yedeği); bölüm asla boş dönmez.
-    Kalan bütçe yetersizse (2026-09-05, 180sn garanti) atlanır — çağıran taraf `None` bölümü
-    "bu turda değişiklik yok" olarak ele alır.
+    Boş yanıt "bu turda değişiklik yok" sayılır (çağıran `None` görür).
     """
-    if _remaining(deadline) <= MIN_STAGE_SEC:
-        return None, []
     chunks = await _safe_hybrid_search(course_id, topic["topic"], topic.get("keywords", []))
     if not chunks:
         section, citations, _deltas, _msg = await _generate_fallback_section(
-            topic, slides, course_id, chapter_id, course_name, tenant_id, deadline, kazanimlar
+            topic, slides, course_id, chapter_id, course_name, tenant_id, kazanimlar
         )
         return _strip_own_heading(section, topic["topic"]), citations
     prompt = _build_prompt(topic, slides, chunks, kazanimlar)
     parts: list[str] = []
     try:
-        async for delta in _stream_with_deadline(
-            llm_service.chat_stream(
-                [{"role": "user", "content": prompt}],
-                kind="note_regeneration",
-                tenant_id=tenant_id,
-                course_id=course_id,
-                chapter_id=chapter_id,
-            ),
-            deadline,
+        async for delta in llm_service.chat_stream(
+            [{"role": "user", "content": prompt}],
+            kind="note_regeneration",
+            max_tokens=SECTION_MAX_TOKENS,
+            reasoning_effort=NOTE_REASONING_EFFORT,
+            tenant_id=tenant_id,
+            course_id=course_id,
+            chapter_id=chapter_id,
         ):
             parts.append(delta)
     except llm_service.LLMError:
@@ -519,6 +512,14 @@ async def _regen_topic(
         logger.warning("konu yeniden üretimi başarısız, mevcut bölüm korunuyor: %s", topic["topic"])
         return None, []
     section = _strip_own_heading("".join(parts).strip(), topic["topic"])
+    if not section:
+        # Boş akış (reasoning sağlayıcısı yanıt bütçesini gizli reasoning'e harcayabiliyor)
+        # "değişiklik yok" sayılır: çağıran taraflar boş bloğu MEVCUT bölümün üzerine
+        # yazdığından, aksi halde iyi bir bölüm tamamen boşaltılabiliyordu (2026-09-17
+        # canlı vaka: chapter 13 notunda "Uyarıcı-Uyarıcı İlişkilendirmesi" bölümü
+        # başlıktan ibaret kalmıştı).
+        logger.warning("boş yeniden üretim yanıtı, mevcut bölüm korunuyor: %s", topic["topic"])
+        return None, []
     return section, _section_citations(section, chunks)
 
 
@@ -627,9 +628,6 @@ async def generate_notes_stream(chapter_id: int, tenant_id: str = LOCAL_TENANT_I
 
 
 async def _generate(chapter_id: int, tenant_id: str):
-    # 180sn toplam üretim bütçesi (kullanıcı kararı, 2026-09-05) — DB sorguları dahil
-    # tüm akışı kapsar; sağlayıcı zinciri tıkanırsa kalan aşamalar deterministik yedeğe düşer.
-    deadline = time.monotonic() + TOTAL_BUDGET_SEC
     db = await get_db()
     try:
         cursor = await db.execute(
@@ -660,19 +658,9 @@ async def _generate(chapter_id: int, tenant_id: str):
             "Bu chapter'da henüz guide slides yok. Önce sunum yükleyin."
         )
 
-    slide_text = "\n\n".join(f"[Slide {s['slide_no']}] {s['content_text']}" for s in slides)
-
     # 1) Konu çıkarımı
     yield {"type": "status", "percent": 6, "message": "Konular belirleniyor…"}
-    try:
-        topics = await asyncio.wait_for(
-            _extract_topics(slide_text, course_id, chapter_id, tenant_id, kazanimlar),
-            timeout=max(1.0, _remaining(deadline)),
-        )
-    except TimeoutError:
-        raise NoteGenerationError(
-            "Konu çıkarımı zaman aşımına uğradı. Lütfen tekrar deneyin."
-        ) from None
+    topics = await _extract_topics(slides, course_id, chapter_id, tenant_id, kazanimlar)
     if not topics:
         raise NoteGenerationError(
             "Sunumdan konu çıkarılamadı. Sunum içeriğini kontrol edip tekrar deneyin."
@@ -690,35 +678,47 @@ async def _generate(chapter_id: int, tenant_id: str):
             "message": f"“{topic['topic']}” için kaynaklar taranıyor…",
         }
         chunks = await _safe_hybrid_search(course_id, topic["topic"], topic.get("keywords", []))
-        if chunks and _remaining(deadline) > MIN_STAGE_SEC:
+        if chunks:
             yield {
                 "type": "status",
                 "percent": base + 3,
                 "message": f"“{topic['topic']}” notu yazılıyor…",
             }
             prompt = _build_prompt(topic, slides, chunks, kazanimlar)
-            parts: list[str] = []
-            try:
-                async for delta in _stream_with_deadline(
-                    llm_service.chat_stream(
+            section = ""
+            # Boş akış toleransı: reasoning sağlayıcısı (opencode/deepseek) ara sıra yanıt
+            # bütçesini tamamen gizli reasoning'e harcayıp BOŞ metin döndürüyor; tek
+            # seferlik yeniden deneme geçici tekilliği tolere eder (aynı desen
+            # `_extract_topics`'te de var). Boş bölüm aksi halde içerik değeri olmayan
+            # ham slayt dökümüne düşüyordu (2026-09-17 canlı vaka: chapter 13 notunun
+            # 12/12 bölümü deterministik slayt dökümüydü).
+            for _attempt in range(2):
+                parts = []
+                try:
+                    async for delta in llm_service.chat_stream(
                         [{"role": "user", "content": prompt}],
                         kind="note_generation",
+                        max_tokens=SECTION_MAX_TOKENS,
+                        reasoning_effort=NOTE_REASONING_EFFORT,
                         tenant_id=tenant_id,
                         course_id=course_id,
                         chapter_id=chapter_id,
-                    ),
-                    deadline,
-                ):
-                    parts.append(delta)
-                    yield {"type": "delta", "text": delta}
-                section = "".join(parts).strip()
-            except llm_service.LLMError:
-                # Sağlayıcı zinciri tükendi — bu konu deterministik yedeğe düşer, üretim
-                # bütünüyle iptal EDİLMEZ (2026-09-05, kullanıcı kararı: her koşulda not teslim).
-                logger.warning(
-                    "konu üretimi başarısız, deterministik yedeğe düşülüyor: %s", topic["topic"]
-                )
-                section = ""
+                    ):
+                        parts.append(delta)
+                        yield {"type": "delta", "text": delta}
+                    section = "".join(parts).strip()
+                except llm_service.LLMError:
+                    # Sağlayıcı zinciri tükendi — bu konu deterministik yedeğe düşer, üretim
+                    # bütünüyle iptal EDİLMEZ (2026-09-05, kullanıcı kararı: her koşulda not teslim).
+                    logger.warning(
+                        "konu üretimi başarısız, deterministik yedeğe düşülüyor: %s",
+                        topic["topic"],
+                    )
+                    section = ""
+                    break
+                if section:
+                    break
+                logger.warning("boş bölüm yanıtı, bir kez daha deneniyor: %s", topic["topic"])
             if section:
                 sections.append(section)
                 topic_citations[topic["topic"]] = _section_citations(section, chunks)
@@ -727,7 +727,7 @@ async def _generate(chapter_id: int, tenant_id: str):
         if not chunks:
             # Kitapta kaynak yok → web → slayt yedeği → deterministik slayt (her koşulda not)
             result = await _safe_fallback_section(
-                topic, slides, course_id, chapter_id, course_name, tenant_id, deadline, kazanimlar
+                topic, slides, course_id, chapter_id, course_name, tenant_id, kazanimlar
             )
             if result is None:
                 # Beklenmeyen hata (LLM dışı) — anında biten deterministik yedeğe düş,
@@ -747,7 +747,7 @@ async def _generate(chapter_id: int, tenant_id: str):
             topic_citations[topic["topic"]] = citations
             continue
 
-        # Kaynak bulundu ama bütçe (ya da akış) tükendi: anında biten deterministik bölüm.
+        # Kaynak bulundu ama LLM iki denemede de boş döndü: anında biten deterministik bölüm.
         yield {
             "type": "status",
             "percent": base + 3,
@@ -763,25 +763,19 @@ async def _generate(chapter_id: int, tenant_id: str):
     # ÇÖPE ATMAMALI; "eksik konu yok" varsayılıp not olduğu gibi kaydedilir.
     yield {"type": "status", "percent": 86, "message": "Kapsama doğrulanıyor…"}
     missing: list[str] = []
-    if _remaining(deadline) > MIN_STAGE_SEC:
-        try:
-            missing = await asyncio.wait_for(
-                _check_coverage(topics, content_md, course_id, chapter_id, tenant_id),
-                timeout=max(1.0, _remaining(deadline)),
-            )
-        except (llm_service.LLMError, TimeoutError):
-            logger.warning(
-                "kapsama doğrulaması başarısız oldu, atlanıyor: chapter=%s", chapter_id
-            )
-            missing = []
+    try:
+        missing = await _check_coverage(topics, content_md, course_id, chapter_id, tenant_id)
+    except llm_service.LLMError:
+        logger.warning("kapsama doğrulaması başarısız oldu, atlanıyor: chapter=%s", chapter_id)
+        missing = []
     for _ in range(MAX_COVERAGE_ITERATIONS):
-        if not missing or _remaining(deadline) <= MIN_STAGE_SEC:
+        if not missing:
             break
         for topic in topics:
             if topic["topic"] not in missing:
                 continue
             section, citations = await _safe_regen_topic(
-                topic, slides, course_id, chapter_id, course_name, tenant_id, deadline, kazanimlar
+                topic, slides, course_id, chapter_id, course_name, tenant_id, kazanimlar
             )
             if section is None:
                 continue
@@ -796,17 +790,10 @@ async def _generate(chapter_id: int, tenant_id: str):
             else:
                 content_md += f"\n\n{new_block}"
                 topic_citations[topic["topic"]] = citations
-        if _remaining(deadline) <= MIN_STAGE_SEC:
-            break
         try:
-            missing = await asyncio.wait_for(
-                _check_coverage(topics, content_md, course_id, chapter_id, tenant_id),
-                timeout=max(1.0, _remaining(deadline)),
-            )
-        except (llm_service.LLMError, TimeoutError):
-            logger.warning(
-                "kapsama doğrulaması başarısız oldu, atlanıyor: chapter=%s", chapter_id
-            )
+            missing = await _check_coverage(topics, content_md, course_id, chapter_id, tenant_id)
+        except llm_service.LLMError:
+            logger.warning("kapsama doğrulaması başarısız oldu, atlanıyor: chapter=%s", chapter_id)
             missing = []
 
     # 5) Atıf doğrulama — çözümsüz atıf kabul edilmez (Yetenek 06)
@@ -814,12 +801,12 @@ async def _generate(chapter_id: int, tenant_id: str):
     problems = await _validate_citations(
         content_md, topic_citations, course_id, chapter_id
     )
-    if problems and _remaining(deadline) > MIN_STAGE_SEC:
+    if problems:
         for topic in topics:
             if topic["topic"] not in problems:
                 continue
             section, citations = await _safe_regen_topic(
-                topic, slides, course_id, chapter_id, course_name, tenant_id, deadline, kazanimlar
+                topic, slides, course_id, chapter_id, course_name, tenant_id, kazanimlar
             )
             if section is None:
                 continue
@@ -833,7 +820,7 @@ async def _generate(chapter_id: int, tenant_id: str):
         problems = await _validate_citations(
             content_md, topic_citations, course_id, chapter_id
         )
-    if problems and _remaining(deadline) > MIN_STAGE_SEC:
+    if problems:
         # SON GÜVENCE 1: çözümsüz atıflı konuları yedek zincirle (web → slayt) yeniden üret —
         # not ASLA atıf hatasıyla bitmez (kullanıcı kararı: her koşulda not teslim edilir).
         yield {
@@ -851,7 +838,6 @@ async def _generate(chapter_id: int, tenant_id: str):
                 chapter_id,
                 course_name,
                 tenant_id,
-                deadline,
                 kazanimlar,
                 allow_web=True,
             )
@@ -869,7 +855,7 @@ async def _generate(chapter_id: int, tenant_id: str):
         problems = await _validate_citations(
             content_md, topic_citations, course_id, chapter_id
         )
-    if problems and _remaining(deadline) > MIN_STAGE_SEC:
+    if problems:
         # SON GÜVENCE 2: slayt temelli atıfsız bölüm — doğrulaması garantili temiz.
         for topic in topics:
             if topic["topic"] not in problems:
@@ -881,7 +867,6 @@ async def _generate(chapter_id: int, tenant_id: str):
                 chapter_id,
                 course_name,
                 tenant_id,
-                deadline,
                 kazanimlar,
                 allow_web=False,
             )
@@ -901,7 +886,7 @@ async def _generate(chapter_id: int, tenant_id: str):
         )
     if problems:
         # SON ÇARE: bölümler korunur, çözümsüz konuların atıfları düşürülür (asla hata dönmez).
-        # Bütçe tükenmişse bu aşamaya doğrudan düşülür — LLM gerektirmez, anında biter.
+        # LLM gerektirmez, anında biter.
         logger.warning("çözümsüz atıf kalan konular (atıflar düşürüldü): %s", problems)
         for topic_name in problems:
             topic_citations[topic_name] = []

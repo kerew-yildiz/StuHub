@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 
 import { coursesApi, type Course, type CourseInput } from '../api/courses'
-import { downloadAuthed } from '../api/exports'
 import { materialsApi } from '../api/materials'
 import { termsApi, type Term } from '../api/terms'
 import { AddContentCard } from '../components/AddContentCard'
@@ -112,7 +111,6 @@ export function TermDetailPage() {
   const [error, setError] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editingCourse, setEditingCourse] = useState<Course | null>(null)
-  const [includeFiles, setIncludeFiles] = useState(false)
 
   const load = useCallback(async () => {
     if (!numericId) return
@@ -174,16 +172,6 @@ export function TermDetailPage() {
     }
   }
 
-  /** Arşivi yetkili yoldan indirir: <a href> gezinmesi `Authorization`
-   * başlığını taşımadığından SaaS modda 401 alıyordu (K5). */
-  const handleDownloadArchive = async () => {
-    const ok = await downloadAuthed(
-      `/terms/${numericId}/archive?include_files=${includeFiles}`,
-      `stuhub-donem-${numericId}.zip`,
-    )
-    if (!ok) setError('Dönem arşivi indirilemedi. Lütfen tekrar deneyin.')
-  }
-
   if (utilityView === 'calendar' || utilityView === 'exam-plan' || utilityView === 'study-now') {
     return <GlobalUtilityPage kind={utilityView} termIdOverride={numericId} />
   }
@@ -198,21 +186,6 @@ export function TermDetailPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-stuhub-text-secondary">
-            <input
-              type="checkbox"
-              checked={includeFiles}
-              onChange={(e) => setIncludeFiles(e.target.checked)}
-            />
-            Materyal dosyalarıyla
-          </label>
-          <button
-            type="button"
-            onClick={() => void handleDownloadArchive()}
-            className="glass-panel-subtle glass-interactive rounded-control px-4 py-2 text-sm font-medium text-stuhub-text-secondary"
-          >
-            Dönem Arşivi İndir (.zip)
-          </button>
           {!showForm && (
             <button
               type="button"

@@ -44,3 +44,23 @@ export async function createStudySession(
   }
   return (await response.json()) as StudySession
 }
+
+/** Chapter görünümünde geçen bir aralığı kaydeder
+ * (POST /courses/{id}/chapters/{chapter_id}/study-time).
+ *
+ * `sessionId` (aralık UUID'si) bazında idempotenttir — ağ hatasında tekrar gönderim
+ * süreyi çift saymaz. */
+export async function sendStudyTimeHeartbeat(
+  courseId: number,
+  chapterId: number,
+  sessionId: string,
+  durationSec: number,
+): Promise<void> {
+  const response = await authFetch(`/courses/${courseId}/chapters/${chapterId}/study-time`, {
+    method: 'POST',
+    body: JSON.stringify({ session_id: sessionId, duration_sec: durationSec }),
+  })
+  if (!response.ok) {
+    throw new Error('Çalışma süresi kaydedilemedi. Lütfen tekrar deneyin.')
+  }
+}

@@ -1,8 +1,5 @@
 import { authFetch } from './client'
 
-/** Dışa aktarma biçimi (flashcard setleri ve ders kartları için). */
-export type FlashcardExportFormat = 'apkg' | 'csv' | 'md'
-
 /** Yetkili indirme — `<a href>` gezinmesi `Authorization: Bearer` başlığını
  * taşımadığından SaaS modda 401 alınıyordu. İçerik `authFetch` ile çekilip blob
  * olarak indirilir; başarısızsa `false` döner ve hata mesajını çağrı yeri kendi

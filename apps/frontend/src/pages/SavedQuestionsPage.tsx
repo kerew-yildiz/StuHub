@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { unsaveQuestion } from '../api/feed'
 import { listSavedQuestions, type SavedQuestion } from '../api/saved'
-import { Bookmark, LoaderCircle, CircleAlert } from 'lucide-react'
+import { Bookmark, CircleAlert } from 'lucide-react'
 
 type LoadState = 'loading' | 'ready' | 'error'
 
@@ -59,10 +59,14 @@ export function SavedQuestionsPage({ courseId, embedded = false }: { courseId?: 
       )}
 
       {state === 'loading' && (
-        <p className="mt-8 flex items-center gap-2 text-sm text-stuhub-text-secondary" role="status">
-          <LoaderCircle size={18} className="animate-spin" />
-          Yükleniyor…
-        </p>
+        /* Boş ekran yerine ANINDA iskelet: veri gelene kadar gerçek kart
+           geometrisiyle aynı yer tutucular (kart: 390px yükseklik, space-y-4
+           yığın — bkz. SavedQuestionsPage ölçümü). Desen .skeleton-block. */
+        <div className="mt-6 space-y-4" aria-busy="true" aria-label="Kaydedilenler yükleniyor">
+          {Array.from({ length: 2 }, (_, index) => (
+            <div key={`kayit-iskelet-${index}`} className="skeleton-block h-[390px]" aria-hidden="true" />
+          ))}
+        </div>
       )}
 
       {state === 'error' && (

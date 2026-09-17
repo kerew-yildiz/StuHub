@@ -15,7 +15,6 @@ from . import (
     errors,
     essay_draft,
     exams,
-    exports,
     feed,
     flashcards,
     heatmap,
@@ -31,6 +30,7 @@ from . import (
     saved_questions,
     slides,
     study_sessions,
+    study_time,
     terms,
     v2_tools,
 )
@@ -57,11 +57,11 @@ api_router.include_router(notes.router)
 api_router.include_router(chat.router)
 api_router.include_router(flashcards.router)
 api_router.include_router(overall.router)
-api_router.include_router(exports.router)
 api_router.include_router(v2_tools.router)
 api_router.include_router(settings_router.router)
 api_router.include_router(billing.router)
 api_router.include_router(study_sessions.router)
+api_router.include_router(study_time.router)
 api_router.include_router(calendar_events.router)
 api_router.include_router(card_summary.router)
 api_router.include_router(essay_draft.router)

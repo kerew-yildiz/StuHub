@@ -242,16 +242,20 @@ CREATE TABLE IF NOT EXISTS activity_log (
 );
 
 -- Pomodoro çalışma oturumu kayıtları (Plan #14; migration 0010 ile de kurulur).
+-- chapter_id: chapter görünümünde geçen aktif sürenin heartbeat kaydı (migration 0015).
 CREATE TABLE IF NOT EXISTS study_sessions (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     tenant_id    TEXT NOT NULL DEFAULT 'local',
     course_id    INTEGER REFERENCES courses(id) ON DELETE CASCADE,
+    chapter_id   INTEGER REFERENCES chapters(id) ON DELETE CASCADE,
     session_id   TEXT NOT NULL,
     duration_sec INTEGER NOT NULL,
     created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_study_sessions_tenant_course
     ON study_sessions(tenant_id, course_id);
+CREATE INDEX IF NOT EXISTS idx_study_sessions_tenant_chapter
+    ON study_sessions(tenant_id, chapter_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_study_sessions_session
     ON study_sessions(tenant_id, session_id);
 

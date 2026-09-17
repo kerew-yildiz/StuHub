@@ -1,45 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 
-import type { LLMProviderStatus } from '../api/settings'
 import { settingsApi } from '../api/settings'
 import type { BackgroundValue } from '../lib/personalization'
 import { applyBackground, DEFAULT_BACKGROUND, isBackgroundValue } from '../lib/personalization'
+import type { ThemeValue } from '../lib/theme'
+import { applyTheme, DEFAULT_THEME, isThemeValue } from '../lib/theme'
 import { useAuthStore } from '../stores/authStore'
-
-/** Ücretsiz LLM sağlayıcı zinciri — geçici çözüm (Kerem kararı, 2026-09-02).
- * Sıra yetenek sırasıdır: biri kota sınırına ulaşınca otomatik sıradakine geçilir. */
-const PROVIDER_FIELDS = [
-  {
-    providerName: 'gemini',
-    settingKey: 'google_api_key',
-    label: 'Google Gemini API anahtarı',
-    hint: 'aistudio.google.com/apikey — en geniş kota, önerilen.',
-  },
-  {
-    providerName: 'openrouter',
-    settingKey: 'openrouter_api_key',
-    label: 'OpenRouter API anahtarı',
-    hint: 'openrouter.ai/keys — Nemotron 3 Ultra 550B ücretsiz varyantı.',
-  },
-  {
-    providerName: 'groq',
-    settingKey: 'groq_api_key',
-    label: 'Groq API anahtarı',
-    hint: 'console.groq.com/keys — en yüksek hacim.',
-  },
-  {
-    providerName: 'cerebras',
-    settingKey: 'cerebras_api_key',
-    label: 'Cerebras API anahtarı',
-    hint: 'cloud.cerebras.ai/platform/keys — geçici test (2026-09-05).',
-  },
-  {
-    providerName: 'github',
-    settingKey: 'github_token',
-    label: 'GitHub Token',
-    hint: 'github.com/settings/tokens — "models: read" izniyle.',
-  },
-] as const
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -47,11 +13,70 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 const SLUG_CHARS: Record<string, string> = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' }
 const slug = (label: string) => label.toLowerCase().replace(/[çğıöşü]/g, (c) => SLUG_CHARS[c]).replace(/\s+/g, '-')
 
-/** Arkaplan katalogu — kartlarda gorunur metin yok; eslesme yalnizca gorsel onizleme. */
-const BACKGROUND_OPTIONS: ReadonlyArray<{ value: BackgroundValue; src: string }> = [
-  { value: 'calisma-masasi', src: '/bg/calisma-masasi.png' },
-  { value: 'zirve', src: '/bg/zirve.jpg' },
+/** Arkaplan katalogu — Turkce gorunur ad + gorsel onizleme.
+ * Sira: once mevcut arkaplanlar, sonra ARKAPLAN-PROMPTLARI.md etiket sirasi. */
+const BACKGROUND_OPTIONS: ReadonlyArray<{ value: BackgroundValue; src: string; label: string }> = [
+  { value: 'calisma-masasi', src: '/bg/calisma-masasi.png', label: 'Çalışma Masası' },
+  { value: 'zirve', src: '/bg/zirve.jpg', label: 'Zirve' },
+  { value: 'uyanis', src: '/bg/uyanis.jpg', label: 'Uyanış' },
+  { value: 'merdiven', src: '/bg/merdiven.jpg', label: 'Merdiven' },
+  { value: 'yolculuk', src: '/bg/yolculuk.jpg', label: 'Yolculuk' },
+  { value: 'ufuk', src: '/bg/ufuk.jpg', label: 'Ufuk' },
+  { value: 'yuk-tasima', src: '/bg/yuk-tasima.jpg', label: 'Yük Taşıma' },
+  { value: 'sinav-sabahi', src: '/bg/sinav-sabahi.jpg', label: 'Sınav Sabahı' },
+  { value: 'kale', src: '/bg/kale.jpg', label: 'Kitap Kalesi' },
+  { value: 'yelken', src: '/bg/yelken.jpg', label: 'Yelken' },
 ]
+
+/** Tema katalogu — Karanlik varsayilan; "ters kutup" ayni tasarimin acik hali. */
+const THEME_OPTIONS: ReadonlyArray<{ value: ThemeValue; label: string; aciklama: string }> = [
+  { value: 'dark', label: 'Karanlık', aciklama: 'Varsayılan' },
+  { value: 'light', label: 'Açık', aciklama: 'Ters kutup' },
+  { value: 'system', label: 'Sistem', aciklama: 'İşletim sistemi tercihi' },
+]
+
+/** Kisillestirme bolumu — tema secici (Karanlik / Acik / Sistem).
+ * Secim aninda uygulanir (html[data-theme]) ve mevcut ayar akisiyla kalici olur;
+ * ilk boyada index.html'deki senkron ayna devreye girer (FOUC yok). */
+function ThemeSection({
+  value,
+  onChange,
+}: {
+  value: ThemeValue
+  onChange: (value: ThemeValue) => void
+}) {
+  return (
+    <div className="glass-panel p-6">
+      <h2 className="text-lg font-semibold">Tema</h2>
+      <p className="mt-1 text-sm text-stuhub-text-secondary">
+        Karanlık varsayılandır; açık tema aynı tasarımın ters çevrilmiş kutbudur (cam,
+        yuvarlaklık ve ölçüler değişmez).
+      </p>
+      <div role="radiogroup" aria-label="Tema" className="mt-5 flex flex-wrap gap-3">
+        {THEME_OPTIONS.map((option) => {
+          const selected = option.value === value
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onChange(option.value)}
+              className={`flex min-w-[132px] flex-col gap-0.5 rounded-control border-2 px-4 py-3 text-left transition-all duration-[var(--duration-state)] ${
+                selected
+                  ? 'border-stuhub-accent opacity-100 shadow-[0_0_0_3px_var(--stuhub-accent-glass)]'
+                  : 'border-stuhub-border opacity-75 hover:opacity-100'
+              }`}
+            >
+              <span className="text-sm font-medium">{option.label}</span>
+              <span className="text-xs text-stuhub-text-muted">{option.aciklama}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 /** Kisillestirme bolumu — arkaplan secici (gorsel onizleme katalogu). */
 function BackgroundSection({
@@ -65,23 +90,29 @@ function BackgroundSection({
     <div className="glass-panel p-6">
       <h2 className="text-lg font-semibold">Arkaplanlar</h2>
       <div className="mt-5 grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">
-        {BACKGROUND_OPTIONS.map((option, index) => {
+        {BACKGROUND_OPTIONS.map((option) => {
           const selected = option.value === value
           return (
             <button
               key={option.value}
               type="button"
               onClick={() => onChange(option.value)}
-              aria-label={`Arkaplan ${index + 1}`}
+              aria-label={option.label}
               aria-pressed={selected}
-              title={`Arkaplan ${index + 1}`}
-              className={`relative aspect-video overflow-hidden rounded-control border-2 transition-all duration-200 ${
+              title={option.label}
+              className={`relative aspect-video overflow-hidden rounded-control border-2 transition-all duration-[var(--duration-state)] ${
                 selected
                   ? 'border-stuhub-accent opacity-100 shadow-[0_0_0_3px_var(--stuhub-accent-glass)]'
                   : 'border-stuhub-border opacity-75 hover:opacity-100'
               }`}
             >
               <img src={option.src} alt="" draggable={false} className="h-full w-full object-cover" />
+              <span
+                aria-hidden="true"
+                className="absolute inset-x-0 bottom-0 truncate bg-stuhub-caption-bg px-1.5 py-1 text-center text-[10px] font-medium leading-none text-stuhub-text-secondary"
+              >
+                {option.label}
+              </span>
               {selected && (
                 <span
                   aria-hidden="true"
@@ -100,7 +131,7 @@ function BackgroundSection({
   )
 }
 
-/** Ayarlar sayfası — ücretsiz LLM sağlayıcı zinciri anahtarları + çalışma alışkanlıkları. */
+/** Ayarlar sayfası — hesap, çalışma alışkanlıkları ve kişiselleştirme. */
 /** Hesap bölümü — gerçek kullanıcı verisi (§102: placeholder yasak). */
 function AccountSection() {
   const user = useAuthStore((s) => s.user)
@@ -141,14 +172,11 @@ function AccountSection() {
 }
 
 export function SettingsPage() {
-  const [apiKeys, setApiKeys] = useState<Record<string, string>>({})
-  const [currentKeyHints, setCurrentKeyHints] = useState<Record<string, string>>({})
-  const [providerStatus, setProviderStatus] = useState<LLMProviderStatus[]>([])
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [error, setError] = useState('')
-  const [loaded, setLoaded] = useState(false)
   const [dailyGoal, setDailyGoal] = useState('3')
   const [background, setBackground] = useState<BackgroundValue>(DEFAULT_BACKGROUND)
+  const [theme, setTheme] = useState<ThemeValue>(DEFAULT_THEME)
   const [category, setCategory] = useState('AI tercihleri')
   // "Kaydedildi" göstergesinin timeout'u — unmount'ta temizlenir (önceden ham
   // setTimeout'tu; hızlı sayfa geçişinde unmount sonrası setState uyarısı üretirdi).
@@ -160,10 +188,6 @@ export function SettingsPage() {
     }
   }, [])
 
-  const refreshStatus = () => {
-    settingsApi.llmStatus().then(setProviderStatus).catch(() => undefined)
-  }
-
   useEffect(() => {
     let cancelled = false
     settingsApi
@@ -172,19 +196,11 @@ export function SettingsPage() {
         if (cancelled) return
         if (settings.daily_goal) setDailyGoal(settings.daily_goal)
         if (isBackgroundValue(settings.background)) setBackground(settings.background)
-        const hints: Record<string, string> = {}
-        for (const field of PROVIDER_FIELDS) {
-          if (settings[field.settingKey]) {
-            hints[field.settingKey] = `${settings[field.settingKey]} (güncel anahtar)`
-          }
-        }
-        setCurrentKeyHints(hints)
-        setLoaded(true)
+        if (isThemeValue(settings.theme)) setTheme(settings.theme)
       })
       .catch(() => {
         if (!cancelled) setError('Ayarlar yüklenemedi. Lütfen tekrar deneyin.')
       })
-    refreshStatus()
     return () => {
       cancelled = true
     }
@@ -197,22 +213,21 @@ export function SettingsPage() {
     settingsApi.set('background', value).catch(() => undefined)
   }
 
+  const handleThemeSelect = (value: ThemeValue) => {
+    setTheme(value)
+    applyTheme(value)
+    // Ayar kaydi kritik degil — hata sessizce yutulur (tema zaten uygulandi).
+    settingsApi.set('theme', value).catch(() => undefined)
+  }
+
   const handleSave = async (event: React.FormEvent) => {
     event.preventDefault()
     setSaveState('saving')
     setError('')
     try {
-      for (const field of PROVIDER_FIELDS) {
-        const value = apiKeys[field.settingKey]?.trim()
-        if (value) {
-          await settingsApi.set(field.settingKey, value)
-        }
-      }
       const goal = Number.parseInt(dailyGoal, 10)
       await settingsApi.set('daily_goal', String(Number.isNaN(goal) || goal <= 0 ? 3 : goal))
       setSaveState('saved')
-      setApiKeys({})
-      refreshStatus()
       if (savedTimerRef.current !== null) window.clearTimeout(savedTimerRef.current)
       savedTimerRef.current = window.setTimeout(() => setSaveState('idle'), 3000)
     } catch {
@@ -226,7 +241,7 @@ export function SettingsPage() {
       <header className="page-header">
         <div>
           <h1 className="page-title">Ayarlar</h1>
-          <p className="page-subtitle">LLM sağlayıcıları ve çalışma alışkanlıkları.</p>
+          <p className="page-subtitle">Çalışma alışkanlıkları ve kişiselleştirme.</p>
         </div>
       </header>
 
@@ -240,33 +255,6 @@ export function SettingsPage() {
         <div className="settings-content" role="tabpanel" id={`panel-${slug(category)}`} aria-labelledby={`sekme-${slug(category)}`}>
           {(category === 'AI tercihleri') && (
             <form onSubmit={handleSave} className="settings-content">
-              <div className="glass-panel p-6">
-                <h2 className="text-lg font-semibold">Yapay zeka — ücretsiz sağlayıcı zinciri</h2>
-                <p className="mt-1 text-sm text-stuhub-text-secondary">
-                  Birden fazla anahtar girersen sağlayıcılar sırayla yedek olarak kullanılabilir.
-                  Anahtar değerleri arayüzde maskeli tutulur.
-                </p>
-                {PROVIDER_FIELDS.map((field, index) => {
-                  const status = providerStatus.find((p) => p.name === field.providerName)
-                  return (
-                    <div key={field.settingKey} className="mt-5">
-                      <div className="mb-1 flex items-center justify-between gap-3">
-                        <label htmlFor={field.settingKey} className="block text-sm font-medium">{index + 1}. {field.label}</label>
-                        {status?.configured && (
-                          <span className="glass-panel-subtle rounded-pill px-2.5 py-1 text-xs text-stuhub-text-secondary">
-                            {status.cooldown_until
-                              ? `Kota doldu — ${new Date(status.cooldown_until).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}`
-                              : status.active ? 'Aktif' : 'Yedekte'}
-                          </span>
-                        )}
-                      </div>
-                      <input id={field.settingKey} type="password" value={apiKeys[field.settingKey] ?? ''} onChange={(e) => setApiKeys((prev) => ({ ...prev, [field.settingKey]: e.target.value }))} placeholder={loaded ? currentKeyHints[field.settingKey] || 'Anahtar girin…' : 'Yükleniyor…'} autoComplete="off" className="w-full rounded-control border border-stuhub-border bg-stuhub-glass-2 px-3 py-2 text-sm text-stuhub-text outline-none focus:border-stuhub-accent" />
-                      <p className="mt-1 text-xs text-stuhub-text-muted">{field.hint}</p>
-                    </div>
-                  )
-                })}
-              </div>
-
               <div className="glass-panel p-6">
                 <h2 className="text-lg font-semibold">Çalışma hedefi</h2>
                 <p className="mt-1 text-sm text-stuhub-text-secondary">Günlük hedef, streak halkasının doluluk ölçüsüdür.</p>
@@ -295,7 +283,6 @@ export function SettingsPage() {
               <ul className="mt-4 space-y-2 text-sm text-stuhub-text-secondary">
                 <li className="glass-panel-subtle rounded-control px-4 py-3">Not / kart / quiz üretimi bittiğinde zil ikonunda rozet belirir.</li>
                 <li className="glass-panel-subtle rounded-control px-4 py-3">Hatalı istekler sağ altta kırmızı toast olarak gösterilir; kapatana kadar ekranda kalır.</li>
-                <li className="glass-panel-subtle rounded-control px-4 py-3">Kota dolan sağlayıcılar AI tercihleri sekmesinde işaretlenir.</li>
               </ul>
             </div>
           )}
@@ -305,12 +292,11 @@ export function SettingsPage() {
               <h2 className="text-lg font-semibold">Veri</h2>
               <p className="mt-1 text-sm text-stuhub-text-secondary">
                 Notların, kartların ve çalışma geçmişin hesabına bağlıdır. Dışa aktarma
-                işlemleri ilgili çalışma alanının içindedir (not için MD/PDF, kartlar için
-                Anki/CSV). Hesap silme talebi için destek ile iletişime geç.
+                işlemleri ilgili çalışma alanının içindedir (not için MD/PDF). Hesap silme
+                talebi için destek ile iletişime geç.
               </p>
               <ul className="mt-4 space-y-2 text-sm text-stuhub-text-secondary">
                 <li className="glass-panel-subtle rounded-control px-4 py-3">Not dışa aktarma: Not görünümü → “PDF İndir” ya da “MD İndir”.</li>
-                <li className="glass-panel-subtle rounded-control px-4 py-3">Kart dışa aktarma: Kartlar görünümü → “Anki (.apkg)” ya da “CSV”.</li>
                 <li className="glass-panel-subtle rounded-control px-4 py-3">Çalışma süreleri haftalık grafikte toplanır; ayrı bir dışa aktarımı yoktur.</li>
               </ul>
             </div>
@@ -348,7 +334,10 @@ export function SettingsPage() {
           )}
 
           {category === 'Kişiselleştirme' && (
-            <BackgroundSection value={background} onChange={handleBackgroundSelect} />
+            <>
+              <ThemeSection value={theme} onChange={handleThemeSelect} />
+              <BackgroundSection value={background} onChange={handleBackgroundSelect} />
+            </>
           )}
 
           {category === 'Kısayollar' && (

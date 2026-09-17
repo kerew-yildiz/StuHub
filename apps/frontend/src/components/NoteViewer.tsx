@@ -92,7 +92,7 @@ function CitationLink({
         <button
           type="button"
           onClick={() => onOpenCitation(citation)}
-          className="mx-0.5 inline-block rounded-sm bg-stuhub-accent/15 px-1 text-sm font-semibold text-stuhub-accent transition-colors duration-150 hover:bg-stuhub-accent/25"
+          className="mx-0.5 inline-block rounded-sm bg-stuhub-accent/15 px-1 text-sm font-semibold text-stuhub-accent transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-accent/25"
           title="Atıf kaynağını göster"
         >
           [{id}]

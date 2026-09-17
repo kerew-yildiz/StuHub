@@ -190,8 +190,9 @@ export function CourseCard({
 }
 
 /** Chapter kartı (yönerge §37): normal ad+progress, hover rotation topic/aktivite,
- * tamamlanmışsa check. Exam/ödev metadata TAŞIMAZ. `onEdit`/`onDelete` verilirse
- * sağ üstte düzenle/sil ikonları gösterilir. */
+ * tamamlanmışsa check. Hover'da chapter'da geçen toplam çalışma süresi de gösterilir
+ * (ders kartındaki etiketle aynı biçim). Exam/ödev metadata TAŞIMAZ.
+ * `onEdit`/`onDelete` verilirse sağ üstte düzenle/sil ikonları gösterilir. */
 export function ChapterCard({
   chapter,
   summary,
@@ -280,6 +281,10 @@ export function ChapterCard({
               <span>{`Son aktivite · ${formatRelative(summary.last_activity)}`}</span>
             </p>
           )}
+          <p className="card-meta">
+            <Timer size={13} aria-hidden="true" />
+            <span>{`Toplam çalışma · ${formatDuration(summary.total_study_sec ?? 0)}`}</span>
+          </p>
         </div>
       ) : (
         <ProgressBar value={summary && summary.topics_total > 0 ? summary.topics_completed / summary.topics_total : null} />

@@ -411,7 +411,7 @@ export function MonthCalendar({ courses: coursesProp }: MonthCalendarProps) {
               // Konum ilk ölçüme kadar hesaplanmış sayılmaz — 0,0'da sıçramasın.
               visibility: popoverPos ? undefined : 'hidden',
             }}
-            className="fixed z-50 w-56 rounded-control border border-stuhub-border bg-[rgba(0,0,0,0.92)] p-3 shadow-[0_12px_32px_rgba(0,0,0,0.75)]"
+            className="fixed z-50 w-56 rounded-control border border-stuhub-border bg-[var(--stuhub-panel-bg)] p-3 shadow-[0_12px_32px_rgba(0,0,0,0.75)]"
             role="status"
             onMouseLeave={(e) => closeIfLeavingPopover(e.relatedTarget)}
             onBlurCapture={(e) => closeIfLeavingPopover(e.relatedTarget)}

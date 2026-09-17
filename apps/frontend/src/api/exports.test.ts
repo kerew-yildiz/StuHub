@@ -17,7 +17,7 @@ function stubFetch(status = 200): FetchCall[] {
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       calls.push({ url: String(input), init })
-      return new Response('PK-test-arsiv', { status })
+      return new Response('not-test-md', { status })
     }),
   )
   return calls
@@ -52,15 +52,15 @@ describe('downloadAuthed', () => {
     const clicked = stubLinkClicks()
     setAccessToken('test-token')
 
-    const ok = await downloadAuthed('/terms/7/archive?include_files=false', 'stuhub-donem-7.zip')
+    const ok = await downloadAuthed('/notes/7/export?format=md', 'stuhub-not-7.md')
 
     expect(ok).toBe(true)
     expect(calls).toHaveLength(1)
-    expect(calls[0].url).toBe('/api/terms/7/archive?include_files=false')
+    expect(calls[0].url).toBe('/api/notes/7/export?format=md')
     expect(new Headers(calls[0].init?.headers).get('Authorization')).toBe('Bearer test-token')
 
     expect(clicked).toHaveLength(1)
-    expect(clicked[0].download).toBe('stuhub-donem-7.zip')
+    expect(clicked[0].download).toBe('stuhub-not-7.md')
     expect(clicked[0].href).toBe('blob:stuhub-test')
     expect(vi.mocked(URL.revokeObjectURL)).toHaveBeenCalledWith('blob:stuhub-test')
   })
@@ -70,7 +70,7 @@ describe('downloadAuthed', () => {
     const clicked = stubLinkClicks()
     setAccessToken('test-token')
 
-    const ok = await downloadAuthed('/terms/7/archive?include_files=false', 'stuhub-donem-7.zip')
+    const ok = await downloadAuthed('/notes/7/export?format=md', 'stuhub-not-7.md')
 
     expect(ok).toBe(false)
     expect(clicked).toHaveLength(0)
