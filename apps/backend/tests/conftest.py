@@ -24,9 +24,10 @@ def _find_turkish_font() -> str:
     """
     for path in FONT_CANDIDATES:
         if Path(path).exists():
-            return path
+            return str(path)
     raise RuntimeError(
-        "Türkçe glif destekli sistem fontu bulunamadı, denenenler: " + ", ".join(FONT_CANDIDATES)
+        "Türkçe glif destekli sistem fontu bulunamadı, denenenler: "
+        + ", ".join(str(path) for path in FONT_CANDIDATES)
     )
 
 

@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
-try:
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
     import lancedb
     import pyarrow as pa
-except (ImportError, OSError):
-    # Windows Uygulama Denetimi (Smart App Control) pyarrow DLL'ini engelleyebilir —
-    # vektör deposu bu ortamda kullanılamaz; backend geri kalanıyla çalışır.
-    lancedb = None  # type: ignore[assignment]
-    pa = None  # type: ignore[assignment]
+else:
+    try:
+        import lancedb
+        import pyarrow as pa
+    except (ImportError, OSError):
+        # Windows Uygulama Denetimi (Smart App Control) pyarrow DLL'ini engelleyebilir —
+        # vektör deposu bu ortamda kullanılamaz; backend geri kalanıyla çalışır.
+        lancedb = None
+        pa = None
 
 from ..config import settings
 

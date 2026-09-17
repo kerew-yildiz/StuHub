@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 
 import { settingsApi } from '../api/settings'
 import type { BackgroundValue } from '../lib/personalization'
-import { applyBackground, DEFAULT_BACKGROUND, isBackgroundValue } from '../lib/personalization'
+import { applyBackground, DEFAULT_BACKGROUND, isBackgroundValue, markBackgroundChosen } from '../lib/personalization'
 import type { ThemeValue } from '../lib/theme'
-import { applyTheme, DEFAULT_THEME, isThemeValue } from '../lib/theme'
+import { applyTheme, DEFAULT_THEME, isThemeValue, markThemeChosen } from '../lib/theme'
 import { useAuthStore } from '../stores/authStore'
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
@@ -208,6 +208,7 @@ export function SettingsPage() {
 
   const handleBackgroundSelect = (value: BackgroundValue) => {
     setBackground(value)
+    markBackgroundChosen()
     applyBackground(value)
     // Ayar kaydi kritik degil — hata sessizce yutulur (attribute zaten uygulandi).
     settingsApi.set('background', value).catch(() => undefined)
@@ -215,6 +216,7 @@ export function SettingsPage() {
 
   const handleThemeSelect = (value: ThemeValue) => {
     setTheme(value)
+    markThemeChosen()
     applyTheme(value)
     // Ayar kaydi kritik degil — hata sessizce yutulur (tema zaten uygulandi).
     settingsApi.set('theme', value).catch(() => undefined)

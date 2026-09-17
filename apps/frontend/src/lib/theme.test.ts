@@ -105,6 +105,28 @@ describe('sunucu ayari', () => {
 
     expect(document.documentElement.dataset.theme).toBe('light')
   })
+
+  /** Regresyon (2026-09-17): açılışta başlayan `/api/settings` isteği, kullanıcı ayarlar
+   * ekranından tema seçtikten SONRA dönerse eski değerle seçimi eziyordu. Statik içe
+   * aktarma burada yetmez: işaret MODÜL seviyesi durumda tutulur ve bu testin onu
+   * kirletmeden gözleyebilmesi için taze modül örneği gerekir (resetModules + import). */
+  it('kullanici sectikten sonra donen acilis yaniti secimi ezmez', async () => {
+    vi.resetModules()
+    const tema = await import('./theme')
+    let coz: (v: Record<string, string>) => void = () => undefined
+    vi.mocked(settingsApi.list).mockImplementation(
+      () => new Promise<Record<string, string>>((resolve) => { coz = resolve }),
+    )
+
+    const bekleyen = tema.applyThemeFromSettings()
+    tema.applyTheme('light')
+    tema.markThemeChosen()
+    coz({ theme: 'dark' })
+    await bekleyen
+
+    expect(document.documentElement.dataset.theme).toBe('light')
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('light')
+  })
 })
 
 describe('ilk boya sozlesmesi (index.html)', () => {

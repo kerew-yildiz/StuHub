@@ -12,6 +12,8 @@ import { HelpPanel } from './components/HelpPanel'
 import { Sidebar } from './components/Sidebar'
 import { StudyTimeTracker } from './components/StudyTimeTracker'
 import { ToastHost } from './components/ToastHost'
+import { applyBackgroundFromSettings } from './lib/personalization'
+import { applyThemeFromSettings } from './lib/theme'
 import { LoginPage } from './pages/LoginPage'
 import { useAuthStore } from './stores/authStore'
 import { useShellStore } from './stores/shellStore'
@@ -130,6 +132,21 @@ export default function App() {
   }, [location.key])
 
   useEffect(() => { void init() }, [init])
+
+  // Sunucu tercihleri (tema/arka plan) KİMLİK ister: token yerleşmeden çağrılırsa
+  // 401 döner (konsol hatası; ölçüm 2026-09-17: her tam yüklemede 2×401
+  // `/api/settings` → sonra reaktif refresh ile 200). Bu yüzden çağrı auth oturumu
+  // hazır olana kadar bekler; SaaS modda oturum yokken (giriş ekranı) hiç yapılmaz.
+  // Yerel modda kimlik gerekmez, `saasMode` false olduğu için her zaman çalışır.
+  // İlk boya zaten index.html'deki yerel aynadan boyanır (bu çağrı onu doğrular).
+  // Bağımlılık oturum NESNESİ değil varlığıdır: token yenilemesi (yeni nesne) boşuna
+  // yeniden yükleme tetiklemesin.
+  const loggedIn = session !== null
+  useEffect(() => {
+    if (loading || (saasMode && !loggedIn)) return
+    void applyThemeFromSettings()
+    void applyBackgroundFromSettings()
+  }, [loading, saasMode, loggedIn])
 
   if (loading) {
     return (

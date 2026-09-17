@@ -4,8 +4,6 @@ import { BrowserRouter } from 'react-router-dom'
 
 import App from './App'
 import { ErrorBoundary } from './components/ErrorBoundary'
-import { applyBackgroundFromSettings } from './lib/personalization'
-import { applyThemeFromSettings } from './lib/theme'
 import './styles/theme.css'
 import './styles/personalization.css'
 
@@ -24,7 +22,5 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 )
 
-// Kayitli arkaplani uygula — acilisi bloklamaz (fire-and-forget).
-void applyBackgroundFromSettings()
-// Sunucudaki tema ayarini uygula (ilk boya zaten yerel aynadan boyandi).
-void applyThemeFromSettings()
+// Sunucu tercihleri (tema/arka plan) artık App içinde, auth oturumu hazır olunca
+// yüklenir — burada çağrıldığında token henüz yerleşmemişti (401 → konsol hatası).

@@ -22,4 +22,13 @@ export default tseslint.config(
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
+  {
+    // `scripts/` altındaki sahneler tek seferlik entry'lerdir (ör. ölçüm sahnesi
+    // `tur-gecis-harness.tsx` → `createRoot(...).render(...)`); Vite HMR grafiğine
+    // girmezler, fast-refresh kuralı burada anlamsızdır.
+    files: ['scripts/**/*.{ts,tsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 )

@@ -27,6 +27,7 @@ async def _insert_note(chapter_id: int, content_md: str = "# Giriş\n\nİçerik 
             (chapter_id, content_md, "{}", "[]", "gemini-2.5-flash"),
         )
         await conn.commit()
+        assert cursor.lastrowid is not None
         return cursor.lastrowid
 
 

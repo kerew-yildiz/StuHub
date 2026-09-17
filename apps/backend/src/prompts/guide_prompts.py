@@ -14,7 +14,10 @@ KURALLAR:
 2. {dil_talimati}
 3. Şu JSON şemasına birebir uy (``` işareti kullanma):
 {{
-  "summary_md": "bölümün iskeleti: her madde tek bir bilgi iddiası (en fazla 25 kelime). Süsleme, gevezelik, 'bu bölümde anlatılmaktadır' türü kalıp cümle YOK. 150-300 kelime. Metnin sonuna '### Kendini sına' bölümü ekle: notu okumadan cevaplamayı deneyeceğin 3-5 soru; her sorunun cevabını hemen altına '**Cevap:**' olarak yaz.",
+  "summary_md": "bölümün iskeleti: her madde tek bir bilgi iddiası (en fazla 25 kelime). \
+Süsleme, gevezelik, 'bu bölümde anlatılmaktadır' türü kalıp cümle YOK. 150-300 kelime. \
+Metnin sonuna '### Kendini sına' bölümü ekle: notu okumadan cevaplamayı deneyeceğin 3-5 soru; \
+her sorunun cevabını hemen altına '**Cevap:**' olarak yaz.",
   "key_terms": ["anahtar terimler (5-15 adet, her biri 1-4 kelime)"],
   "exam_focus": ["sınavda çıkması muhtemel odak noktaları (3-8 adet, cümle halinde)"]
 }}

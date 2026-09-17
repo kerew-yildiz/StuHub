@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
-try:
+if TYPE_CHECKING:
     import lancedb
-except (ImportError, OSError):
-    # Windows Uygulama Denetimi (Smart App Control) pyarrow DLL'ini engelleyebilir —
-    # bu durumda backend vektör arama olmadan (yalnızca keyword retrieval) çalışır.
-    lancedb = None  # type: ignore[assignment]
+else:
+    try:
+        import lancedb
+    except (ImportError, OSError):
+        # Windows Uygulama Denetimi (Smart App Control) pyarrow DLL'ini engelleyebilir —
+        # bu durumda backend vektör arama olmadan (yalnızca keyword retrieval) çalışır.
+        lancedb = None
 import numpy as np
 
 from ..config import settings

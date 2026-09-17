@@ -709,7 +709,7 @@ async def _generate(chapter_id: int, tenant_id: str):
                     section = "".join(parts).strip()
                 except llm_service.LLMError:
                     # Sağlayıcı zinciri tükendi — bu konu deterministik yedeğe düşer, üretim
-                    # bütünüyle iptal EDİLMEZ (2026-09-05, kullanıcı kararı: her koşulda not teslim).
+                    # bütünüyle iptal EDİLMEZ (2026-09-05 kararı: her koşulda not teslim).
                     logger.warning(
                         "konu üretimi başarısız, deterministik yedeğe düşülüyor: %s",
                         topic["topic"],

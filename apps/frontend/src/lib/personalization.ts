@@ -22,6 +22,15 @@ export type BackgroundValue = (typeof BACKGROUND_VALUES)[number]
 /** Attribute yokken theme.css'teki varsayilan arkaplan gecerli olur. */
 export const DEFAULT_BACKGROUND: BackgroundValue = 'calisma-masasi'
 
+/** Kullanıcı bu oturumda arkaplanı elle seçti mi (bkz. `markBackgroundChosen`). */
+let kullaniciSecti = false
+
+/** Ayarlar sayfası arkaplan seçiminde çağrılır: açılışta başlayan `/api/settings`
+ * isteği seçimden sonra dönerse eski değerle seçimi ezmesin (tema ile aynı yarış). */
+export function markBackgroundChosen(): void {
+  kullaniciSecti = true
+}
+
 export function isBackgroundValue(value: string | undefined): value is BackgroundValue {
   return value !== undefined && (BACKGROUND_VALUES as readonly string[]).includes(value)
 }
@@ -39,8 +48,9 @@ export function applyBackground(value: string | undefined): void {
 export async function applyBackgroundFromSettings(): Promise<void> {
   try {
     const settings = await settingsApi.list()
+    if (kullaniciSecti) return  // kullanıcı yanıt dönerken seçti — üzerine yazma
     applyBackground(settings.background)
   } catch {
-    applyBackground(undefined)
+    if (!kullaniciSecti) applyBackground(undefined)
   }
 }

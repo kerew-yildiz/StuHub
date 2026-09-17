@@ -24,6 +24,7 @@ import re
 from datetime import date
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 import pymupdf
 from markdown_it import MarkdownIt
@@ -419,7 +420,10 @@ def note_markdown_to_pdf(
         index: _topic_span_boxes(text_doc[index], topic_set) for index in range(page_count)
     } if topic_set else {}
     open_topic = False
-    for number, text_page in enumerate(text_doc, start=1):
+    for number in range(1, page_count + 1):
+        # `pymupdf.Document` çalışma zamanında gezilebilir ama stub'ı `__iter__`
+        # bildirmiyor; sayfa erişimi `__getitem__` üzerinden tip-güvenli kalır.
+        text_page = text_doc[number - 1]
         page = doc.new_page(width=page_rect.width, height=page_rect.height)
         page.draw_rect(page.rect, color=None, fill=palette["page_bg"])
         if background:
@@ -469,7 +473,20 @@ def _text(
 
 
 def _text_width(value: str, font_path: str, size: float) -> float:
-    return pymupdf.Font(fontfile=str(font_path)).text_length(value, fontsize=size)
+    # PyMuPDF stub'ı `fontsize: int` diyor, çalışma zamanı float kabul ediyor (fraksiyonel
+    # punto — 10.5pt gibi — bozulmasın diye int() ile yuvarlanmaz).
+    return pymupdf.Font(fontfile=str(font_path)).text_length(
+        value, fontsize=size  # type: ignore[arg-type]
+    )
+
+
+def _page_dict(page: pymupdf.Page) -> dict[str, Any]:
+    """`page.get_text("dict")` çıktısı.
+
+    Stub bu çağrıyı `str` döndürüyor sanıyor (`utils.get_text` birleşik dispatch);
+    çalışma zamanı "dict" seçeneğinde sözlük döndürür — tek yerde daraltılır.
+    """
+    return page.get_text("dict")  # type: ignore[return-value]
 
 
 @lru_cache(maxsize=2)
@@ -492,13 +509,15 @@ def _digital_background() -> bytes | None:
     # A4 oranına "cover" kırpma: kısa kenarı hedef orana büyüt, ortadan kırp.
     scale = max(_BG_SIZE[0] / image.width, _BG_SIZE[1] / image.height)
     resized = image.resize(
-        (round(image.width * scale), round(image.height * scale)), Image.LANCZOS
+        (round(image.width * scale), round(image.height * scale)), Image.Resampling.LANCZOS
     )
     left = (resized.width - _BG_SIZE[0]) // 2
     top = (resized.height - _BG_SIZE[1]) // 2
     crop = resized.crop((left, top, left + _BG_SIZE[0], top + _BG_SIZE[1]))
     # Küçük raster + blur: dosya boyutu ve render maliyeti düşük kalır.
-    small = crop.resize(_BG_RASTER, Image.LANCZOS).filter(ImageFilter.GaussianBlur(_BG_BLUR))
+    small = crop.resize(_BG_RASTER, Image.Resampling.LANCZOS).filter(
+        ImageFilter.GaussianBlur(_BG_BLUR)
+    )
     small = ImageEnhance.Brightness(small).enhance(_BG_BRIGHTNESS)
     dimmed = Image.blend(small, Image.new("RGB", small.size, (0, 0, 0)), _BG_DIM)
     out = io.BytesIO()
@@ -509,7 +528,7 @@ def _digital_background() -> bytes | None:
 def _topic_span_boxes(page: pymupdf.Page, topics: set[str]) -> list[pymupdf.Rect]:
     """Sayfadaki konu başlıklarının yerleşim kutuları (üstten alta sıralı)."""
     boxes: list[pymupdf.Rect] = []
-    for block in page.get_text("dict")["blocks"]:
+    for block in _page_dict(page)["blocks"]:
         spans = [s for line in block.get("lines", []) for s in line["spans"]]
         if not spans:
             continue
@@ -612,7 +631,7 @@ def _draw_topic_cards(
     """
     blocks = [
         b
-        for b in text_page.get_text("dict")["blocks"]
+        for b in _page_dict(text_page)["blocks"]
         if b.get("lines") and b["bbox"][3] > content_top
     ]
     if not blocks:

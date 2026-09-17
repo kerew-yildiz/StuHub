@@ -34,6 +34,16 @@ export function resolveTheme(value: ThemeValue, sistemAcik: boolean): ResolvedTh
 /** Son uygulanan ayar — 'system' modunda OS tercihi degisince yeniden cozmek icin. */
 let aktifAyar: ThemeValue = DEFAULT_THEME
 let dinleyiciKuruldu = false
+/** Kullanıcı bu oturumda temayı elle seçti mi (bkz. `markThemeChosen`). */
+let kullaniciSecti = false
+
+/** Ayarlar sayfası tema seçiminde çağrılır: açılışta başlayan `/api/settings` isteği
+ * seçimden SONRA dönerse eski değerle kullanıcının seçimini ezmesin (2026-09-17
+ * ölçümü: sekme açılıp hemen tema seçildiğinde geç dönen açılış yanıtı kutbu geri
+ * çeviriyordu). */
+export function markThemeChosen(): void {
+  kullaniciSecti = true
+}
 
 function sistemDegisiminiIzle(): void {
   if (dinleyiciKuruldu || typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
@@ -73,6 +83,7 @@ export function applyTheme(value: string | undefined): void {
 export async function applyThemeFromSettings(): Promise<void> {
   try {
     const settings = await settingsApi.list()
+    if (kullaniciSecti) return  // kullanıcı yanıt dönerken seçti — üzerine yazma
     if (isThemeValue(settings.theme)) applyTheme(settings.theme)
   } catch {
     // Sunucu okunamadi: yerel ayna (ilk boya) gecerli kalir.

@@ -19,10 +19,12 @@ from __future__ import annotations
 
 import json
 import time
+from typing import Any
 
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
+from jwt import algorithms
 from jwt.exceptions import PyJWKClientConnectionError
 
 from src import auth
@@ -31,15 +33,15 @@ _SUPABASE_URL = "https://proje.supabase.co"
 _JWKS_URI = f"{_SUPABASE_URL}/auth/v1/.well-known/jwks.json"
 
 
-def _keypair(kid: str) -> tuple[object, dict]:
+def _keypair(kid: str) -> tuple[ec.EllipticCurvePrivateKey, dict]:
     """Gerçek ES256 anahtar çifti + JWKS'e girecek public JWK (Supabase varsayılanı)."""
     key = ec.generate_private_key(ec.SECP256R1())
-    jwk = json.loads(jwt.algorithms.ECAlgorithm.to_jwk(key.public_key()))
+    jwk = json.loads(algorithms.ECAlgorithm.to_jwk(key.public_key()))
     return key, {**jwk, "kid": kid, "use": "sig", "alg": "ES256"}
 
 
 @pytest.fixture
-def rotation(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
+def rotation(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     """Eski + yeni `kid`'li JWKS dokümanı, ağsız sahte JWKS ucu ve istemci sayacı."""
     old_key, old_jwk = _keypair("eski-kid")
     new_key, new_jwk = _keypair("yeni-kid")
@@ -71,7 +73,7 @@ def rotation(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
     return {"old": old_key, "new": new_key, "builds": builds}
 
 
-def _token(private_key: object, kid: str, sub: str = "t1") -> str:
+def _token(private_key: ec.EllipticCurvePrivateKey, kid: str, sub: str = "t1") -> str:
     payload = {
         "sub": sub,
         "aud": "authenticated",
