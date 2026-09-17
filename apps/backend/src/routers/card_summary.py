@@ -202,7 +202,7 @@ async def chapter_topic_progress(
         ratings: dict[tuple[int, int], str] = {}
         if set_ids:
             cursor = await db.execute(
-                "SELECT set_id, card_index, last_rating FROM card_reviews "
+                "SELECT set_id, card_index, last_rating FROM card_reviews "  # nosec B608 - araya giren metin sabit `?` yer tutucularıdır; değerler parametreyle geçer
                 f"WHERE tenant_id = ? AND set_id IN ({_placeholders(len(set_ids))})",
                 (tenant_id, *set_ids),
             )
@@ -301,7 +301,7 @@ async def course_card_summary(
         note_rows = []
         if chapter_ids:
             cursor = await db.execute(
-                "SELECT id, chapter_id, topics_json, generated_at FROM notes "
+                "SELECT id, chapter_id, topics_json, generated_at FROM notes "  # nosec B608 - araya giren metin sabit `?` yer tutucularıdır; değerler parametreyle geçer
                 f"WHERE tenant_id = ? AND chapter_id IN ({_placeholders(len(chapter_ids))})",
                 (tenant_id, *chapter_ids),
             )
@@ -342,7 +342,7 @@ async def course_card_summary(
         retained_topics: dict[int, set[str]] = {}  # set_id → topics
         if set_ids:
             cursor = await db.execute(
-                "SELECT set_id, card_index, last_rating FROM card_reviews "
+                "SELECT set_id, card_index, last_rating FROM card_reviews "  # nosec B608 - araya giren metin sabit `?` yer tutucularıdır; değerler parametreyle geçer
                 f"WHERE tenant_id = ? AND set_id IN ({_placeholders(len(set_ids))}) "
                 f"AND last_rating IN ({_placeholders(len(RETAINED_RATINGS))})",
                 (tenant_id, *set_ids, *RETAINED_RATINGS),
@@ -366,7 +366,7 @@ async def course_card_summary(
         quiz_meta: dict[int, tuple[int, list[str]]] = {}
         if chapter_ids:
             cursor = await db.execute(
-                "SELECT q.id AS quiz_id, q.chapter_id, q.questions_json, a.feedback_json "
+                "SELECT q.id AS quiz_id, q.chapter_id, q.questions_json, a.feedback_json "  # nosec B608 - araya giren metin sabit `?` yer tutucularıdır; değerler parametreyle geçer
                 "FROM quiz_attempts a "
                 "JOIN quizzes q ON q.id = a.quiz_id AND q.tenant_id = a.tenant_id "
                 f"WHERE q.tenant_id = ? AND q.chapter_id IN ({_placeholders(len(chapter_ids))})",
@@ -403,7 +403,7 @@ async def course_card_summary(
 
         if chapter_ids:
             cursor = await db.execute(
-                "SELECT a.created_at, a.quiz_id FROM quiz_attempts a "
+                "SELECT a.created_at, a.quiz_id FROM quiz_attempts a "  # nosec B608 - araya giren metin sabit `?` yer tutucularıdır; değerler parametreyle geçer
                 "JOIN quizzes q ON q.id = a.quiz_id AND q.tenant_id = a.tenant_id "
                 f"WHERE q.tenant_id = ? AND q.chapter_id IN ({_placeholders(len(chapter_ids))}) "
                 "ORDER BY a.created_at DESC LIMIT 1",
@@ -420,7 +420,7 @@ async def course_card_summary(
 
         if set_ids:
             cursor = await db.execute(
-                "SELECT cr.reviewed_at, fs.chapter_id, fs.cards_json, cr.card_index "
+                "SELECT cr.reviewed_at, fs.chapter_id, fs.cards_json, cr.card_index "  # nosec B608 - araya giren metin sabit `?` yer tutucularıdır; değerler parametreyle geçer
                 "FROM card_reviews cr JOIN flashcard_sets fs ON fs.id = cr.set_id "
                 "WHERE cr.tenant_id = ? AND cr.reviewed_at IS NOT NULL "
                 f"AND fs.id IN ({_placeholders(len(set_ids))}) "

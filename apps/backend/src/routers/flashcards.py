@@ -162,7 +162,7 @@ async def due_flashcards(
             # json_each() SQLite-özgü — Postgres yolunu kırıyordu (bigint = json).
             placeholders = ", ".join("?" for _ in set_ids)
             cursor = await db.execute(
-                f"SELECT set_id, card_index, ease_factor, interval_days, repetitions, "
+                f"SELECT set_id, card_index, ease_factor, interval_days, repetitions, "  # nosec B608 - araya giren metin sabit `?` yer tutucularıdır; değerler parametreyle geçer
                 f"due_at, last_rating FROM card_reviews "
                 f"WHERE set_id IN ({placeholders}) AND tenant_id = ?",
                 (*set_ids, tenant_id),

@@ -92,7 +92,7 @@ def _embed_remote(texts: list[str]) -> list[list[float]]:
             headers={"Content-Type": "application/json", "x-goog-api-key": key},
         )
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=30) as resp:  # nosec B310 — URL sabit https://generativelanguage.googleapis.com adresidir; kullanıcı girdisi geçmez
                 body = json.loads(resp.read())
             vectors.append(body["embedding"]["values"])
         except Exception as exc:  # noqa: BLE001 — ağ/hizmet hatası tek noktaya iner

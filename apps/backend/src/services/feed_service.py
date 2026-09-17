@@ -169,7 +169,7 @@ async def serve_batch(
         # Kaydırarak Quiz §41: parti sırası randomize edilir (tüm ders chapter'ları
         # karışık). Sıralama stable shuffle (indeks anahtarlı) — Python sort'u
         # deterministik, testler tekrarlanabilir kalır.
-        candidates.sort(key=lambda _: random.random())
+        candidates.sort(key=lambda _: random.random())  # nosec B311 — güvenlik bağlamı dışı: quiz parti sırası karıştırması (kripto değil)
 
         served: list[dict] = []
         for row in candidates:
