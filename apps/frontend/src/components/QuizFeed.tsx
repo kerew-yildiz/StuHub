@@ -79,7 +79,10 @@ export function QuizFeed({ courseId, chapterId }: QuizFeedProps) {
       const from = container.scrollTop
       const to = target.offsetTop
       const distance = to - from
-      const duration = 180
+      // Kaydırma süresi hareket token'ından (theme.css --duration-state) —
+      // bileşen-içi 180ms literali motion sisteminin dışında kalıyordu.
+      const durationToken = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--duration-state'))
+      const duration = Number.isFinite(durationToken) ? durationToken : 200
       const start = performance.now()
       // easeOutCubic — hızlı başlar, yumuşak biter (TikTok'un kısa/keskin snap hissi).
       const ease = (t: number) => 1 - (1 - t) ** 3

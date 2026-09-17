@@ -355,7 +355,7 @@ export function MonthCalendar({ courses: coursesProp }: MonthCalendarProps) {
               aria-label={`${date.toLocaleDateString('tr-TR')}${hasEvent ? `, ${dayEvents.length} etkinlik` : ''}`}
               className={`relative flex min-h-16 flex-col rounded-control border p-1.5 text-left transition-colors duration-[var(--duration-micro)] ${addingDate === iso ? 'cal-cell--adding' : ''} ${
                 hasEvent
-                  ? 'border-stuhub-accent/40 bg-stuhub-accent-glass shadow-[0_0_12px_-4px_rgba(255,255,255,0.35)] hover:bg-stuhub-glass-1-hover'
+                  ? 'border-stuhub-accent/40 bg-stuhub-accent-glass shadow-[0_0_12px_-4px_var(--stuhub-glow-accent)] hover:bg-stuhub-glass-1-hover'
                   : 'border-stuhub-border bg-stuhub-glass-1 hover:bg-stuhub-glass-2-hover'
               } ${inMonth ? '' : 'opacity-40'}`}
               onMouseEnter={() => setHoveredDate(iso)}
@@ -411,7 +411,7 @@ export function MonthCalendar({ courses: coursesProp }: MonthCalendarProps) {
               // Konum ilk ölçüme kadar hesaplanmış sayılmaz — 0,0'da sıçramasın.
               visibility: popoverPos ? undefined : 'hidden',
             }}
-            className="fixed z-50 w-56 rounded-control border border-stuhub-border bg-[var(--stuhub-panel-bg)] p-3 shadow-[0_12px_32px_rgba(0,0,0,0.75)]"
+            className="fixed z-50 w-56 rounded-control border border-stuhub-border bg-[var(--stuhub-panel-bg)] p-3 shadow-[var(--shadow-glass)]"
             role="status"
             onMouseLeave={(e) => closeIfLeavingPopover(e.relatedTarget)}
             onBlurCapture={(e) => closeIfLeavingPopover(e.relatedTarget)}

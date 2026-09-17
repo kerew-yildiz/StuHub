@@ -25,8 +25,14 @@ function citationLabel(citation: Citation): string {
 
 /** Swipe eşiği (px) — bu kadar YATAY sürükleme cevap sayılır. */
 const SWIPE_THRESHOLD = 90
-/** Kart uçuş animasyonu süresi (ms). */
-const FLY_MS = 180
+/** Kart uçuş animasyonu süresi (ms) — hareket token'ından okunur (tek kaynak:
+ * theme.css --duration-state; CursorRing ile aynı okuma deseni). Token
+ * çözülemezse (jsdom/test) token'ın değeri yedek olarak kullanılır. */
+const FLY_MS = (() => {
+  if (typeof document === 'undefined') return 200
+  const v = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--duration-state'))
+  return Number.isFinite(v) ? v : 200
+})()
 
 type SwipeDirection = 'left' | 'right'
 

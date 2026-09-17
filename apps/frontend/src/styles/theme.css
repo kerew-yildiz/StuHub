@@ -123,6 +123,14 @@
   --stuhub-ai: #c6bdd0;
   --stuhub-callout-bg: rgba(213,201,168,.08);
   --stuhub-callout-border: rgba(213,201,168,.18);
+  /* Vurgu ışıması (takvim "bugün/etkinlik" hücresi): karanlıkta beyaz hale,
+   * açık temada aynı alfa ile siyah hale — sabit rgba(255,255,255,.35) açık
+   * temada görünmez kalıyordu. */
+  --stuhub-glow-accent: rgba(255,255,255,.35);
+  /* Kagit yuzeyi (PDF/sunum onizleme zemini): iki temada da beyaz kalir (kagit
+   * metaforu) ama artik token — Tailwind `bg-white` bu degiskene baglanir
+   * (@theme --color-white), boylece tema ile degistirilebilir. */
+  --stuhub-paper: #fff;
   /* ── Tema katmanı: kutup çevrilebilir yüzeyler (acik-tema, 2026-09-17) ──
    * Bu bloktaki DEĞERLER bugünkü karanlık görünümün birebir kopyasıdır
    * (kural öncesi kuralların içindeki sabit renklerden taşındı → regresyon yok).
@@ -195,6 +203,10 @@
   --duration-state: 200ms;
   --duration-entrance: 320ms;
   --duration-scene: 480ms;
+  /* Ambiyans dongusu (skeleton shimmer): etkileşim süreleriyle aynı ölçekte
+   * DEĞİL — bilinçli olarak yavaş, tekrar eden bir "nefes". Token'a bağlandı ki
+   * bileşenlerde 2.8s literal kalmasın. */
+  --duration-shimmer: 2800ms;
   --ease-spring: cubic-bezier(.34,1.56,.64,1);
   --ease-emphasis: cubic-bezier(.2,.9,.25,1);
   --stagger-unit: 45ms;
@@ -210,8 +222,13 @@
   --shell-pad-x: clamp(12px, 1.5vw, 28px);
   /* İçerik hattının (app-content) yatay padding'i — TEK kaynak. Sol/sağ aynı
    * değeri kullanır; grid'ler kalan alanı 1fr ile paylaşır (bkz. .course-grid).
-   * Workspace sağ üst kontrolleri de aynı hatta hizalanır. */
-  --content-pad-x: clamp(16px, 2vw, 34px);
+   * Workspace sağ üst kontrolleri de aynı hatta hizalanır.
+   * Üst sınır 32px: 8px grid (4'ün katı) — 34px ızgarayı kırıyordu. */
+  --content-pad-x: clamp(16px, 2vw, 32px);
+  /* Kontrol hattı (8px grid): birincil/ikincil buton, ikon butonu, nav satırı ve
+   * form kontrolü AYNI yükseklikte durur → aynı satırdaki tüm kontrollerin üst/alt
+   * kenarı çakışır (kullanıcı geri bildirimi: "tüm butonlar hizalı olmalı"). */
+  --control-h: 40px;
 }
 
 /* ── AÇIK TEMA (kullanıcı isteği: "yalnız renkleri tersine çevir") ────────
@@ -314,6 +331,7 @@
   --stuhub-ai: #5b4a78;
   --stuhub-callout-bg: rgba(122,95,30,.08);
   --stuhub-callout-border: rgba(122,95,30,.18);
+  --stuhub-glow-accent: rgba(0,0,0,.35);
   --stuhub-danger-bg: rgba(200,40,40,.10);
   --stuhub-error-bg: rgba(150,50,50,.08);
   --stuhub-error-border: rgba(150,50,50,.4);
@@ -356,6 +374,9 @@
 @property --sidebar-w { syntax: "<length>"; inherits: true; initial-value: 72px; }
 
 @theme {
+  /* `bg-white` (PDF/sunum önizleme zemini) token'a bağlanır — iki temada beyaz
+   * kalır ama artık tek kaynaktan yönetilir (bkz. :root --stuhub-paper). */
+  --color-white: var(--stuhub-paper);
   --color-stuhub-bg: var(--stuhub-bg);
   --color-stuhub-bg-elevated: var(--stuhub-bg-elevated);
   --color-stuhub-glass-1: var(--stuhub-glass-1);
@@ -516,7 +537,7 @@ body::before {
 
   .btn-primary {
     display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
-    min-height: 40px; padding: 0 .95rem; border-radius: var(--radius-control);
+    min-height: var(--control-h); padding: 0 16px; border-radius: var(--radius-control);
     background: var(--stuhub-accent); color: var(--stuhub-on-accent); font-weight: 600;
     transition: background-color var(--duration-micro) var(--ease-out-expo), transform var(--duration-micro) var(--ease-out-expo);
   }
@@ -526,7 +547,7 @@ body::before {
 
   .icon-btn {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 38px; height: 38px; border-radius: var(--radius-control);
+    width: var(--control-h); height: var(--control-h); padding: 0; border-radius: var(--radius-control);
     color: var(--stuhub-text-secondary); background: var(--stuhub-glass-2);
     border: 1px solid var(--stuhub-border);
     /* `transition: background …` KISA YAZIMI: `background` bir shorthand'dır ve
@@ -544,7 +565,7 @@ body::before {
     position: sticky; top: 0; z-index: 70; min-height: var(--header-h);
     display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
     padding: 12px var(--shell-pad-x);
-    background: var(--stuhub-chrome-bg); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    background: var(--stuhub-chrome-bg); backdrop-filter: blur(var(--blur-glass-1)); -webkit-backdrop-filter: blur(var(--blur-glass-1));
   }
   .app-header__left { justify-self: start; display: flex; align-items: center; }
   .app-header__right { justify-self: end; display:flex; align-items:center; gap: 8px; }
@@ -553,25 +574,28 @@ body::before {
     /* Sidebar tepe bandında arama — hover ile açılan sidebar'ın ilk satırı. */
     display:flex; align-items:center; gap:10px; width:100%; min-width:0;
     margin-inline:auto; justify-self:center;
-    padding: 9px 14px; border-radius: var(--radius-pill); border: 1px solid var(--stuhub-border);
+    padding: 8px 12px; border-radius: var(--radius-pill); border: 1px solid var(--stuhub-border);
+    min-height: var(--control-h);
     background: var(--stuhub-glass-2); color: var(--stuhub-text-secondary);
     transition: background-color var(--duration-micro) var(--ease-out-expo), border-color var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo);
   }
   .search-control:hover { background: var(--stuhub-glass-2-hover); color: var(--stuhub-text); border-color: var(--stuhub-border-strong); }
   .search-control__hint { font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .search-control kbd { margin-left:auto; flex-shrink:0; font-size:11px; color:var(--stuhub-text-muted); border:1px solid var(--stuhub-border); background:var(--stuhub-glass-1); padding:2px 6px; border-radius:var(--radius-chip); }
-  .profile-trigger { display:flex; align-items:center; gap:7px; height:38px; padding: 3px 7px 3px 3px; border-radius: var(--radius-pill); border:1px solid var(--stuhub-border); background:var(--stuhub-glass-2); color:var(--stuhub-text-secondary); transition: background-color var(--duration-micro) var(--ease-out-expo), border-color var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo); }
+  .search-control kbd { margin-left:auto; flex-shrink:0; font-size:12px; color:var(--stuhub-text-muted); border:1px solid var(--stuhub-border); background:var(--stuhub-glass-1); padding:2px 8px; border-radius:var(--radius-chip); }
+  /* Header profil tetikleyicisi: sidebar varyantıyla (aşağıda) TEK geometri —
+   * 40px kontrol hattı + 4/8px padding; öncesinde 38px/3-7px idi (çift tanım). */
+  .profile-trigger { display:flex; align-items:center; gap:8px; min-height:var(--control-h); padding: 4px 8px 4px 4px; border-radius: var(--radius-pill); border:1px solid var(--stuhub-border); background:var(--stuhub-glass-2); color:var(--stuhub-text-secondary); transition: background-color var(--duration-micro) var(--ease-out-expo), border-color var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo); }
   .profile-trigger:hover { background:var(--stuhub-glass-2-hover); border-color:var(--stuhub-border-strong); color:var(--stuhub-text); }
   .avatar { display:flex; align-items:center; justify-content:center; border-radius:var(--radius-pill); background:var(--stuhub-accent-glass); border:1px solid var(--stuhub-accent-glass-border); color:var(--stuhub-text); font-weight:700; }
-  .avatar--small { width:30px; height:30px; font-size:11px; }
-  .avatar--large { width:50px; height:50px; font-size:15px; }
-  .popover-panel { position:absolute; z-index:80; background:var(--stuhub-popover-bg); backdrop-filter:blur(6px); border:1px solid var(--stuhub-border); border-radius:var(--radius-panel); box-shadow:var(--shadow-glass); padding:14px; }
-  .popover-panel__heading { font-size:12px; text-transform:uppercase; letter-spacing:.12em; color:var(--stuhub-text-muted); padding:4px 5px 10px; }
-  .empty-inline { display:flex; align-items:center; gap:10px; color:var(--stuhub-text-secondary); font-size:13px; padding:14px 6px; }
+  .avatar--small { width:32px; height:32px; font-size:12px; }
+  .avatar--large { width:48px; height:48px; font-size:16px; }
+  .popover-panel { position:absolute; z-index:80; background:var(--stuhub-popover-bg); backdrop-filter:blur(var(--blur-glass-1)); border:1px solid var(--stuhub-border); border-radius:var(--radius-panel); box-shadow:var(--shadow-glass); padding:16px; }
+  .popover-panel__heading { font-size:12px; text-transform:uppercase; letter-spacing:.12em; color:var(--stuhub-text-muted); padding:4px 8px 8px; }
+  .empty-inline { display:flex; align-items:center; gap:8px; color:var(--stuhub-text-secondary); font-size:14px; padding:12px 8px; }
   .profile-card__identity { display:flex; align-items:center; gap:12px; padding:4px; }
-  .profile-tier { margin-top:14px; padding:9px 10px; border:1px solid var(--stuhub-border); border-radius:var(--radius-chip); background:var(--stuhub-glass-2); font-size:11px; letter-spacing:.12em; font-weight:600; }
-  .profile-card__links { margin-top:10px; display:grid; gap:4px; }
-  .list-row { display:flex; align-items:center; width:100%; min-height:38px; padding:7px 9px; border-radius:var(--radius-control); color:var(--stuhub-text-secondary); font-size:13px; transition: background-color var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo); }
+  .profile-tier { margin-top:16px; padding:8px 12px; border:1px solid var(--stuhub-border); border-radius:var(--radius-chip); background:var(--stuhub-glass-2); font-size:12px; letter-spacing:.12em; font-weight:600; }
+  .profile-card__links { margin-top:8px; display:grid; gap:4px; }
+  .list-row { display:flex; align-items:center; width:100%; min-height:var(--control-h); padding:8px 12px; border-radius:var(--radius-control); color:var(--stuhub-text-secondary); font-size:13px; transition: background-color var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo); }
   .list-row:hover { background:var(--stuhub-glass-2-hover); color:var(--stuhub-text); }
   .list-row--emphasis { color:var(--stuhub-text); }
   .list-row--destructive:hover { color:var(--stuhub-error); background:var(--stuhub-error-bg); }
@@ -588,8 +612,8 @@ body::before {
   .stuhub-app { --sidebar-w: var(--sidebar-collapsed); transition: --sidebar-w var(--duration-state) var(--ease-out-expo); }
   .stuhub-app--sidebar-open { --sidebar-w: var(--sidebar-expanded); }
 
-  .app-sidebar { position:fixed; inset:0 auto 0 0; z-index:60; display:flex; flex-direction:column; width:var(--sidebar-w); background:var(--stuhub-chrome-bg); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
-  .app-sidebar__brand { min-height:70px; display:flex; align-items:center; gap:10px; padding:10px; }
+  .app-sidebar { position:fixed; inset:0 auto 0 0; z-index:60; display:flex; flex-direction:column; width:var(--sidebar-w); background:var(--stuhub-chrome-bg); backdrop-filter:blur(var(--blur-glass-1)); -webkit-backdrop-filter:blur(var(--blur-glass-1)); }
+  .app-sidebar__brand { min-height:var(--header-h); display:flex; align-items:center; gap:8px; padding:10px 12px; }
   /* Mobil brand satırı yalnızca kapatma düğmesi taşır */
   .app-sidebar__brand { justify-content:flex-end; }
   /* Arama artık sidebar'ın tepesinde (header'daki markanın altındaki bant) */
@@ -603,17 +627,20 @@ body::before {
   .app-sidebar--collapsed .search-control__hint, .app-sidebar--collapsed .search-control kbd { display:none; }
   .brand-mark { flex:0 0 48px; width:48px; height:48px; display:flex; align-items:center; justify-content:center; border-radius:var(--radius-control); overflow:hidden; object-fit:contain; }
   .brand-mark img { width:42px; height:42px; object-fit:contain; }
-  .brand-wordmark { font-size:15px; font-weight:700; letter-spacing:-.02em; }
-  .brand-context { margin-top:2px; font-size:11px; color:var(--stuhub-text-muted); }
+  .brand-wordmark { font-size:16px; font-weight:700; letter-spacing:-.02em; }
+  .brand-context { margin-top:2px; font-size:12px; color:var(--stuhub-text-muted); }
   .app-sidebar__nav { flex:1; overflow-y:auto; padding: clamp(10px,1vw,16px); display:flex; flex-direction:column; gap:6px; }
   .app-sidebar__footer { padding:clamp(10px,1vw,16px); display:grid; gap:6px; }
   /* Yönerge §26: workspace sağ üst kontrolleri */
-  .workspace-chrome { position:absolute; top:clamp(14px,1.4vw,22px); right:var(--content-pad-x); display:flex; gap:8px; z-index:30; }
+  /* Workspace kontrolleri header hattina oturur: header butonlariyla ayni merkez
+   * ((72-40)/2 = 16px ust bosluk) — oncesinde 22px top ile 5px asagida duruyordu
+   * (olcum: ayni satirda merkezY 36 vs 41). */
+  .workspace-chrome { position:absolute; top:calc((var(--header-h) - var(--control-h)) / 2); right:var(--content-pad-x); display:flex; gap:8px; z-index:30; }
   /* Yönerge §7: sidebar içindeki profil kontrolü — glass account card tetikleyicisi */
   .profile-trigger { display:flex; align-items:center; gap:7px; width:100%; min-height:40px; padding:4px 8px 4px 4px; border-radius: var(--radius-control); border:1px solid transparent; background:transparent; color:var(--stuhub-text-secondary); transition: background-color var(--duration-micro) var(--ease-out-expo), border-color var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo); }
   .profile-trigger:hover { background:var(--stuhub-glass-2-hover); border-color:var(--stuhub-border); color:var(--stuhub-text); }
   .sidebar-item-wrap { position:relative; }
-  .nav-item { display:flex; align-items:center; gap:10px; min-height:40px; padding:8px 10px; border-radius:var(--radius-control); color:var(--stuhub-text-secondary); border:1px solid transparent; transition: background-color var(--duration-micro) var(--ease-out-expo), border-color var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo); }
+  .nav-item { display:flex; align-items:center; gap:10px; min-height:var(--control-h); padding:8px 12px; border-radius:var(--radius-control); color:var(--stuhub-text-secondary); border:1px solid transparent; transition: background-color var(--duration-micro) var(--ease-out-expo), border-color var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo); }
   .nav-item:hover { background:var(--stuhub-glass-2-hover); color:var(--stuhub-text); border-color:var(--stuhub-border); }
   .nav-item--active { background:var(--stuhub-accent-glass); border-color:var(--stuhub-accent-glass-border); color:var(--stuhub-text); }
   .nav-item--collapsed { justify-content:center; padding-inline:0; width:100%; }
@@ -635,8 +662,8 @@ body::before {
   .app-main--workspace-fullscreen { padding-left:0; }
   .app-main--workspace-fullscreen .app-header { display:none; }
   .app-main--workspace-fullscreen .app-sidebar { display:none; }
-  .app-content { min-height:calc(100dvh - 70px); padding:clamp(18px,2vw,28px) var(--content-pad-x) clamp(32px,3vw,48px); }
-  .content-skeleton { display:grid; gap:18px; }
+  .app-content { min-height:calc(100dvh - var(--header-h)); padding:clamp(16px,2vw,28px) var(--content-pad-x) clamp(32px,3vw,48px); }
+  .content-skeleton { display:grid; gap:16px; }
   /* Route choreography (P4): rota değişince App tetikler — içerik 8px yükselerek
    * girer. Remount YOK; React state korunur, yalnızca animasyon replay.
    * OPACITY YOK: rise-in'in opacity:0 from-frame'i sekme throttle/compositor
@@ -644,7 +671,7 @@ body::before {
    * girişi yalnızca translate — en kötü durum: içerik 8px kaymış ama GÖRÜNÜR. */
   .app-content.route-entering { animation: route-rise var(--duration-entrance) var(--ease-out-expo) backwards; }
   @keyframes route-rise { from { transform: translateY(var(--distance-entrance)); } to { transform: translateY(0); } }
-  .skeleton-block { border-radius:var(--radius-panel); background:linear-gradient(90deg, var(--stuhub-glass-2), var(--stuhub-skeleton-2), var(--stuhub-glass-2)); background-size:220% 100%; animation:skeleton-shimmer 2.8s ease-in-out infinite; }
+  .skeleton-block { border-radius:var(--radius-panel); background:linear-gradient(90deg, var(--stuhub-glass-2), var(--stuhub-skeleton-2), var(--stuhub-glass-2)); background-size:220% 100%; animation:skeleton-shimmer var(--duration-shimmer) ease-in-out infinite; }
   .skeleton-block--title { width:min(320px,55vw); height:34px; }
   /* Layout-shift: iskelet kartlar GERÇEK kart geometrisini taşır — .course-card/
    * .chapter-card 3/2 oran + min 180px; kolonlar da gerçek grid ile aynı
@@ -652,7 +679,7 @@ body::before {
    * fallback'i sayfaya dönüşürken satır yüksekliği değişmez (önceki: 150px
    * iskelet → 280px kart; alttakiler kayıyordu).
    * Ray şablonu .course-grid/.chapter-grid ile BİREBİR aynı olmalı. */
-  .skeleton-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(clamp(220px,22vw,320px),1fr)); gap:14px; align-items:stretch; }
+  .skeleton-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(clamp(220px,22vw,320px),420px)); justify-content:center; justify-items:center; gap:16px; align-items:stretch; }
   .skeleton-block--card { aspect-ratio:3/2; min-height:180px; }
   @keyframes skeleton-shimmer { 0%,100%{background-position:200% 0} 50%{background-position:-20% 0} }
 
@@ -664,47 +691,92 @@ body::before {
   /* break-words + overflow-wrap: uzun ders/chapter başlıkları satırı taşırıp
    * yatay kaydırmaya ve üst üste binmeye yol açıyordu (kullanıcı raporu: uzun
    * başlıkta görsel bug). Kelime içinde kırılma en kötü durumda devreye girer. */
-  .page-title { font-size:clamp(22px,2.2vw,30px); line-height:1.2; font-weight:600; letter-spacing:-.03em; overflow-wrap:anywhere; word-break:break-word; min-width:0; }
+  .page-title { font-size:clamp(24px,2.2vw,30px); line-height:1.2; font-weight:600; letter-spacing:-.03em; overflow-wrap:anywhere; word-break:break-word; min-width:0; }
   .page-subtitle { margin-top:7px; color:var(--stuhub-text-secondary); font-size:13px; line-height:1.6; overflow-wrap:anywhere; min-width:0; }
   .section-title { font-size:18px; line-height:1.35; font-weight:600; letter-spacing:-.02em; }
-  /* Kart hücresi = kart genişliği (sayfa tarafındaki max-w-[420px] ile eşit):
-     kolon rayı artık ÜST SINIRSIZ → kalan alanı raylar paylaşır (1fr). Önceden
-     `minmax(240px,420px)` idi: 420px'lik tavan yüzünden artan alan sağda birikiyor,
-     içerik sola yapışıp sağda ölü boşluk kalıyordu (ölçüldü: 1600'de 176px,
-     1200'de 226px asimetri). Ray tabanı .glass-grid ile aynı: clamp(220px,22vw,320px)
-     → kart boyu ~320-356px'te sabit kalır, kolon sayısı viewport'la uyum sağlar. */
-  .glass-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(clamp(220px,22vw,320px),1fr)); gap:14px; align-items:stretch; }
-  .course-grid, .chapter-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(clamp(220px,22vw,320px),1fr)); gap:14px; align-items:stretch; }
+  /* Ray tabanı clamp(220px,22vw,320px), ray üst sınırı = kart üst sınırı (420px):
+     dolu satırlarda kartlar rayı birebir doldurur (kolon sayısı viewport'la uyum
+     sağlar). */
+  .glass-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(clamp(220px,22vw,320px),420px)); justify-content:center; justify-items:center; gap:16px; align-items:stretch; }
+  /* Kısmi satır / az öğe simetrisi (kullanıcı: "sağ tarafta gereksiz padding,
+   * simetri yok"): `auto-fill` boş rayları koruduğu için az öğeli grid sola
+   * yaslanıp sağda ölü boşluk bırakıyordu (ölçüm: /dersler 9 öğede 1110px).
+   * Üç ayar birlikte: (1) `auto-fit` boş rayları KAPATIR → ray sayısı öğe
+   * sayısına göre daralır; (2) ray üst sınırı kart üst sınırıyla (420px) aynı
+   * olduğu için daralma kartları şişirmez; (3) `justify-content:center` grubu,
+   * `justify-items:center` rayından dar kalan kartı ortalar → sol/sağ artık
+   * EŞİT olur. Dolu satırlarda kartlar rayı birebir doldurur (webkit: auto-fit
+   * daralması yalnız ray hiç kullanılmadığında devreye girer). */
+  .course-grid, .chapter-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(clamp(220px,22vw,320px),420px)); justify-content:center; justify-items:center; gap:16px; align-items:stretch; }
+  /* `justify-items:center` tek başına öğeyi içerik genişliğine daraltır (dönem
+   * kartı sarmalayıcısı gibi blok öğeler ile boş iskelet div'leri farklı
+   * genişlikte görünürdü) → öğe genişliği ray genişliğiyle (en çok kart üst
+   * sınırı 420px) sabitlenir. */
+  .course-grid > *, .chapter-grid > *, .term-grid > *, .skeleton-grid > * {
+    width: min(100%, 420px);
+  }
   /* P5 render-perf: ekran dışı kart çocukları atlanır (içerik tabanlı boyut
    * korunduğu için scrollbar zıplamaz).contain: paint — hover sheen taşmasını izole eder. */
   .course-grid > *, .chapter-grid > *, .term-grid > *, .list-stack > * {
     content-visibility: auto;
     contain-intrinsic-size: auto 220px;
   }
-  .course-card, .chapter-card { aspect-ratio:3/2; min-height:180px; padding:18px; display:flex; flex-direction:column; justify-content:space-between; box-shadow: var(--glass-inner-light), var(--glass-edge), var(--shadow-card); border-color: var(--glass-border); border-top-color: var(--glass-border-top); }
+  .course-card, .chapter-card { aspect-ratio:3/2; min-height:180px; padding:20px; display:flex; flex-direction:column; justify-content:space-between; box-shadow: var(--glass-inner-light), var(--glass-edge), var(--shadow-card); border-color: var(--glass-border); border-top-color: var(--glass-border-top); }
   /* Kart meta rotation (§36/§37): sabit geometri, hover çıkışında layout zıplamaz. */
   .card-meta-stack { display:grid; gap:6px; min-height:44px; align-content:end; }
-  .card-meta { display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--stuhub-text-secondary); min-width:0; }
+  .card-meta { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--stuhub-text-secondary); min-width:0; }
   .card-meta svg { flex-shrink:0; opacity:.75; }
   .card-meta span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .card-meta--faded { color:var(--stuhub-text-muted); }
-  .card-progress { display:flex; align-items:center; gap:10px; }
-  .card-progress__track { flex:1; height:3px; border-radius:var(--radius-pill); background:var(--stuhub-track); overflow:hidden; }
+  .card-progress { display:flex; align-items:center; gap:8px; }
+  .card-progress__track { flex:1; height:4px; border-radius:var(--radius-pill); background:var(--stuhub-track); overflow:hidden; }
   .card-progress__fill { display:block; height:100%; border-radius:var(--radius-pill); background:var(--stuhub-fill); }
-  .card-progress__value { font-size:11.5px; color:var(--stuhub-text-secondary); font-variant-numeric:tabular-nums; }
+  .card-progress__value { font-size:12px; color:var(--stuhub-text-secondary); font-variant-numeric:tabular-nums; }
   .chapter-card__head { display:flex; align-items:center; gap:8px; min-width:0; }
   .chapter-card__title { font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .chapter-card__check { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:var(--radius-pill); background:var(--stuhub-accent-glass); color:var(--stuhub-accent); flex-shrink:0; }
   .chapter-card__actions { display:inline-flex; gap:2px; margin-left:auto; }
   .chapter-card__go { color:var(--stuhub-text-muted); align-self:flex-end; opacity:.6; }
-  .icon-btn { display:inline-flex; align-items:center; justify-content:center; border-radius:var(--radius-control); padding:6px; color:var(--stuhub-text-secondary); }
+  /* Ders karti metin katmanlari: GlobalCoursesPage bu siniflari kullaniyor ama
+   * theme.css'te TANIMSIZDI (kurs kartlari sistemsiz boş satirlarla ciziliyordu).
+   * Chapter karti varyantlariyla ayni dil: ust satir = donem etiketi + chevron,
+   * alt blok = baslik (--text-lg) + egitmen (meta). */
+  .course-card__head { display:flex; align-items:center; justify-content:space-between; gap:8px; color:var(--stuhub-text-muted); font-size:12px; }
+  .course-card__term { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .course-card__title { font-size:18px; line-height:1.35; font-weight:600; letter-spacing:-.02em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .course-card__meta { margin-top:4px; font-size:13px; color:var(--stuhub-text-secondary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  /* Bos durum (tasarim sistemi §4: "Cam panel icinde ikon + tek cumle; asla bos
+   * alan"). Sinif kullaniliyordu ama TANIMSIZDI → icerik sola yapisik, dikey
+   * ortalanmamis duruyordu. Tailwind utility'leri (utilities katmani) bu kurali
+   * her zaman ezer: satir ici kullanimlar (or. NotebookPage bilgi seridi) kendi
+   * `flex` sinifini getirir. */
+  .empty-state { display:grid; place-items:center; gap:8px; padding:24px; text-align:center; color:var(--stuhub-text-secondary); font-size:14px; }
+  .empty-state.flex { text-align:left; }
+  /* Skeleton karti: GlobalCoursesPage/GlobalUtilityPage iskelet bloklari bu sinifi
+   * kullaniyor ama TANIMSIZDI → iskelet "shimmer" yerine duz cam panel ciziliyordu. */
+  .skeleton-card { background:linear-gradient(90deg, var(--stuhub-glass-2), var(--stuhub-skeleton-2), var(--stuhub-glass-2)); background-size:220% 100%; animation:skeleton-shimmer var(--duration-shimmer) ease-in-out infinite; border-radius:var(--radius-control); }
+  /* Ad-hoc ikincil butonlar: bileşenler `rounded-control px-N py-N` utility'leriyle
+   * yazıyor (kendi min-height'ı yok) → yükseklikleri 28-36px arasında değişiyordu,
+   * ana eylem butonuyla (40px) ve pill segmentlerle aynı satırda kaçık duruyordu.
+   * `rounded-control` SÖZLEŞMESİ burada tek yerden kontrol hattına bağlanır: tüm
+   * bu butonlar 40px'e oturur, ikon/metin dikey ortalanır (öncesinde inline akış
+   * yüzünden ikon 1.25px aşağı kayıyordu — `.lucide` vertical-align). */
+  :is(button, a)[class~="rounded-control"] {
+    display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+    min-height: var(--control-h);
+  }
+  /* Metin girişleri de aynı hat: LoginPage ve benzeri form yüzeyleri chip
+   * radius'u (10px) kullanıyordu — tooltip/buton/form kontrolü tasarım
+   * sisteminde --radius-control'tur (14px). */
+  :is(input, select)[class~="rounded-sm"] { border-radius: var(--radius-control); min-height: var(--control-h); }
+  button[class~="rounded-sm"] { border-radius: var(--radius-control); min-height: var(--control-h); }
   .icon-btn:hover { background:var(--stuhub-glass-2-hover); }
   .icon-btn--danger:hover { background:var(--stuhub-danger-bg); color:var(--stuhub-error); }
-  .secondary-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:clamp(12px,1.25vw,18px); }
-  .list-stack { display:grid; gap:10px; }
-  .list-card { display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:62px; padding:12px 15px; box-shadow: var(--glass-inner-light), var(--glass-edge), var(--shadow-card); border-color: var(--glass-border); border-top-color: var(--glass-border-top); }
+  .secondary-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:clamp(12px,1.25vw,16px); }
+  .list-stack { display:grid; gap:12px; }
+  .list-card { display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:64px; padding:12px 16px; box-shadow: var(--glass-inner-light), var(--glass-edge), var(--shadow-card); border-color: var(--glass-border); border-top-color: var(--glass-border-top); }
   .topic-list { display:grid; gap:4px; }
-  .topic-row { display:grid; grid-template-columns:1fr auto; gap:12px; align-items:center; padding:10px 12px; border-bottom:1px solid var(--stuhub-border); }
+  .topic-row { display:grid; grid-template-columns:1fr auto; gap:12px; align-items:center; padding:12px; border-bottom:1px solid var(--stuhub-border); }
   .thin-progress { height:2px; border-radius:var(--radius-pill); background:var(--stuhub-track); overflow:hidden; }
   .thin-progress > span { display:block; height:100%; background:var(--stuhub-fill-strong); }
 }
@@ -785,8 +857,8 @@ body::before {
  * hatalar kapatana kadar kalır. role=alert (hata) / role=status (diğer). */
 .toast-host {
   position: fixed;
-  right: clamp(14px, 2vw, 26px);
-  bottom: clamp(14px, 2vw, 26px);
+  right: clamp(16px, 2vw, 24px);
+  bottom: clamp(16px, 2vw, 24px);
   z-index: 120;
   display: grid;
   gap: 8px;
@@ -795,12 +867,12 @@ body::before {
 .toast {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 11px 12px;
+  gap: 8px;
+  padding: 12px;
   border-radius: var(--radius-control);
   background: var(--stuhub-panel-bg);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(var(--blur-glass-1));
+  -webkit-backdrop-filter: blur(var(--blur-glass-1));
   border: 1px solid var(--stuhub-border-strong);
   box-shadow: var(--shadow-glass);
   font-size: 13px;
@@ -814,7 +886,7 @@ body::before {
 .toast__msg { flex: 1; min-width: 0; }
 .toast__close {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 22px; height: 22px; border-radius: var(--radius-chip);
+  width: 24px; height: 24px; border-radius: var(--radius-chip);
   color: var(--stuhub-text-muted); flex-shrink: 0;
   transition: background-color var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo);
 }
@@ -843,7 +915,7 @@ body::before {
 
 /* Takvim gününe not ekleme micro-bounce (P5): form açıldığında hücre vurgusu */
 @keyframes cell-pop { 0% { transform: scale(1); } 40% { transform: scale(1.035); } 100% { transform: scale(1); } }
-.cal-cell--adding { animation: cell-pop 260ms var(--ease-spring); border-color: var(--stuhub-accent-glass-border) !important; }
+.cal-cell--adding { animation: cell-pop var(--duration-state) var(--ease-spring); border-color: var(--stuhub-accent-glass-border) !important; }
 @media (prefers-reduced-motion: reduce) { .cal-cell--adding { animation: none; } }
 .anim-rise { animation: rise-in var(--duration-entrance) var(--ease-out-expo) backwards; animation-delay: calc(var(--stagger-index, 0) * var(--stagger-unit)); }
 .anim-fade { animation: fade-in var(--duration-entrance) var(--ease-out) backwards; animation-delay: calc(var(--stagger-index, 0) * var(--stagger-unit)); }
@@ -862,22 +934,22 @@ body::before {
   /* P5: logo yüklenemezse display:none (onError) — bozuk görsel ikonu ASLA görünmesin.
    * Yer tutucu yükseklik korunur; loading skeleton taşmayı önler. */
   .app-loading img[data-hidden] { display: none; }
-.app-loading__skeleton { width:min(280px,65vw); height:5px; border-radius:9999px; background:var(--stuhub-glass-2); position:relative; overflow:hidden; }
-.app-loading__skeleton::after { content:""; position:absolute; inset:0; transform:translateX(-100%); background:linear-gradient(90deg, transparent, var(--stuhub-skeleton-3), transparent); animation:skeleton-shimmer 2.8s ease-in-out infinite; }
+.app-loading__skeleton { width:min(280px,65vw); height:4px; border-radius:var(--radius-pill); background:var(--stuhub-glass-2); position:relative; overflow:hidden; }
+.app-loading__skeleton::after { content:""; position:absolute; inset:0; transform:translateX(-100%); background:linear-gradient(90deg, transparent, var(--stuhub-skeleton-3), transparent); animation:skeleton-shimmer var(--duration-shimmer) ease-in-out infinite; }
 
 @layer components {
-  .welcome-panel { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; padding:clamp(18px,2vw,28px); margin-bottom:clamp(14px,1.5vw,22px); }
+  .welcome-panel { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; padding:clamp(16px,2vw,28px); margin-bottom:clamp(16px,1.5vw,24px); }
   .eyebrow { font-size:10px; line-height:1.3; text-transform:uppercase; letter-spacing:.16em; color:var(--stuhub-text-muted); font-weight:600; }
-  .home-kpis { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:clamp(12px,1.2vw,18px); margin-bottom:clamp(14px,1.5vw,22px); }
-  .metric-card { min-height:112px; padding:17px; display:grid; grid-template-columns:auto 1fr; align-content:center; column-gap:10px; row-gap:5px; }
+  .home-kpis { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:clamp(12px,1.2vw,16px); margin-bottom:clamp(16px,1.5vw,24px); }
+  .metric-card { min-height:112px; padding:16px; display:grid; grid-template-columns:auto 1fr; align-content:center; column-gap:8px; row-gap:4px; }
   .metric-card strong { grid-column:1 / -1; font-size:28px; font-weight:600; letter-spacing:-.03em; }
   .metric-card > span:last-child { grid-column:1 / -1; font-size:13px; color:var(--stuhub-text-secondary); }
-  .home-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:clamp(12px,1.2vw,18px); margin-bottom:clamp(14px,1.5vw,22px); }
-  .feature-card { min-height:180px; padding:18px; }
-  .feature-card__top { display:flex; align-items:center; gap:9px; font-size:14px; font-weight:600; }
-  .weekly-bars { margin-top:24px; display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:10px; align-items:end; height:100px; }
+  .home-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:clamp(12px,1.2vw,16px); margin-bottom:clamp(16px,1.5vw,24px); }
+  .feature-card { min-height:180px; padding:20px; }
+  .feature-card__top { display:flex; align-items:center; gap:8px; font-size:14px; font-weight:600; }
+  .weekly-bars { margin-top:24px; display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:12px; align-items:end; height:100px; }
   .weekly-bar { height:100%; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:8px; font-size:10px; color:var(--stuhub-text-muted); }
-  .weekly-bar__fill { width:100%; min-height:8px; border-radius:var(--radius-chip) var(--radius-chip) 4px 4px; background:var(--stuhub-bar-fill); border:1px solid var(--stuhub-bar-border); transform-origin:bottom; animation:bar-grow var(--duration-scene) var(--ease-out-expo) both; }
+  .weekly-bar__fill { width:100%; min-height:8px; border-radius:var(--radius-chip); background:var(--stuhub-bar-fill); border:1px solid var(--stuhub-bar-border); transform-origin:bottom; animation:bar-grow var(--duration-scene) var(--ease-out-expo) both; }
   /* Gün sırasına göre kademeli büyüme — veri hikayesi soldan sağa okunur */
   .weekly-bar:nth-child(2) .weekly-bar__fill { animation-delay: calc(1 * var(--stagger-unit)); }
   .weekly-bar:nth-child(3) .weekly-bar__fill { animation-delay: calc(2 * var(--stagger-unit)); }
@@ -890,12 +962,12 @@ body::before {
   /* Yönerge §32: monochrome luminosity hiyerarşisi — hover'da gün parlar */
   .weekly-bar:hover .weekly-bar__fill { background:var(--stuhub-bar-fill-hover); }
   .weekly-bar--today .weekly-bar__fill { background:var(--stuhub-bar-fill-today); }
-  .pricing-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:clamp(14px,1.6vw,22px); align-items:stretch; }
-  .plan-card { min-height:360px; padding:22px; display:flex; flex-direction:column; justify-content:space-between; }
+  .pricing-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:clamp(16px,1.6vw,24px); align-items:stretch; }
+  .plan-card { min-height:360px; padding:24px; display:flex; flex-direction:column; justify-content:space-between; }
   .plan-card h2 { margin-top:8px; font-size:28px; letter-spacing:-.03em; font-weight:600; }
   .plan-card--plus { border-color:var(--stuhub-border-mid); transform:translateY(-2px); }
   .plan-card--pro { border-color:var(--stuhub-border-strong); box-shadow:var(--shadow-plan-pro); transform:translateY(-4px); }
-  .plan-features { margin-top:22px; display:grid; gap:10px; }
+  .plan-features { margin-top:24px; display:grid; gap:12px; }
   .plan-features p { display:flex; gap:9px; align-items:flex-start; font-size:13px; color:var(--stuhub-text-secondary); }
   @media (prefers-reduced-motion: reduce) { .plan-card--plus,.plan-card--pro { transform:none; } }
 }
@@ -907,11 +979,11 @@ body::before {
 }
 @layer components {
   .settings-layout { display:grid; grid-template-columns:minmax(190px,220px) minmax(0,1fr); gap:clamp(16px,2vw,28px); align-items:start; }
-  .settings-nav { position:sticky; top:90px; padding:8px; display:grid; gap:3px; }
-  .settings-nav__item { min-height:40px; padding:8px 10px; border-radius:var(--radius-control); text-align:left; color:var(--stuhub-text-secondary); font-size:13px; transition: background-color var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo); }
+  .settings-nav { position:sticky; top:90px; padding:8px; display:grid; gap:4px; }
+  .settings-nav__item { min-height:var(--control-h); padding:8px 12px; border-radius:var(--radius-control); text-align:left; color:var(--stuhub-text-secondary); font-size:13px; transition: background-color var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo); }
   .settings-nav__item:hover { background:var(--stuhub-glass-2-hover); color:var(--stuhub-text); }
   .settings-nav__item--active { background:var(--stuhub-accent-glass); color:var(--stuhub-text); }
-  .settings-content { display:grid; gap:18px; }
+  .settings-content { display:grid; gap:16px; }
 }
 @media (max-width: 800px) { .settings-layout { grid-template-columns:1fr; } .settings-nav { position:static; display:flex; overflow:auto; } .settings-nav__item { white-space:nowrap; } }
 
@@ -927,16 +999,16 @@ body::before {
   .tour-overlay { position:fixed; inset:0; z-index:110; }
   .tour-spot {
     position:fixed; left:0; top:0; z-index:110; pointer-events:none;
-    border-radius: calc(var(--radius-control) + 4px);
+    border-radius: var(--radius-panel);
     border: 1.5px solid var(--tour-spot-border);
     box-shadow: 0 0 0 4px var(--tour-spot-ring), 0 0 0 100vmax var(--tour-dim);
   }
   /* Anchor'sız adım (rota adımı): spotlight yok, dim tüm viewport'u kaplar. */
   .tour-spot--full { width:100%; height:100%; border-color:transparent; box-shadow:none; background:var(--tour-dim); }
-  .tour-popover { position:fixed; z-index:111; background:var(--stuhub-panel-bg); backdrop-filter:blur(16px); border:1px solid var(--stuhub-border); border-radius:var(--radius-panel); box-shadow:var(--shadow-glass); padding:18px; }
+  .tour-popover { position:fixed; z-index:111; background:var(--stuhub-panel-bg); backdrop-filter:blur(var(--blur-glass-1)); border:1px solid var(--stuhub-border); border-radius:var(--radius-panel); box-shadow:var(--shadow-glass); padding:20px; }
   /* Kapat: metin butonu (İleri/Geri ile aynı ölçü, sessiz ton) — tur her an
    * tek tuşla kapanabilir, Escape ve dim tıklaması da kapatır. */
-  .tour-popover__kapat { display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:0 12px; border-radius:var(--radius-control); border:1px solid transparent; color:var(--stuhub-text-muted); font-size:14px; transition: background-color var(--duration-micro) var(--ease-out-expo), border-color var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo); }
+  .tour-popover__kapat { display:inline-flex; align-items:center; justify-content:center; min-height:var(--control-h); padding:0 12px; border-radius:var(--radius-control); border:1px solid transparent; color:var(--stuhub-text-muted); font-size:14px; transition: background-color var(--duration-micro) var(--ease-out-expo), border-color var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo); }
   .tour-popover__kapat:hover { color:var(--stuhub-text); background:var(--stuhub-glass-2-hover); border-color:var(--stuhub-border); }
   [data-tour-id] { position:relative; }
 }
@@ -973,9 +1045,9 @@ body::before {
   .scroll-none, .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
   .scroll-none::-webkit-scrollbar, .no-scrollbar::-webkit-scrollbar { display: none; }
   /* Sıkıntı #3: dönem kartları geniş hücreler — dar sütunlarda sıramasın.
-     Ray tabanı clamp ile sabit kart boyu; üst sınır YOK (kalan alan 1fr ile
-     raylara dağılır) → sağda ölü boşluk oluşmaz. */
-  .term-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(clamp(220px,22vw,320px),1fr)); gap:14px; align-items:start; }
+     Ray tabanı clamp ile sabit kart boyu; kısmi satır simetrisi .course-grid ile
+     aynı (auto-fit daralması + justify-content/items center). */
+  .term-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(clamp(220px,22vw,320px),420px)); justify-content:center; justify-items:center; gap:16px; align-items:start; }
 }
 
 /* ── Custom cursor: glass halka + cam yansimasi (kullanici onayli ozellik) ──
@@ -1043,7 +1115,9 @@ body::before {
   top: 0;
   width: var(--cursor-beam-genislik);
   height: var(--cursor-beam-yukseklik);
-  border-radius: 1px;
+  /* 2px genislikte cubuk: pill yaricapi = uclari tam yuvarlak (1px) — radius
+   * kilidinin disina cikmadan ayni gorunum. */
+  border-radius: var(--radius-pill);
   background: var(--cursor-beam-renk);
   opacity: 0;
   transform: translate(-50%,-50%) scaleY(.6);
