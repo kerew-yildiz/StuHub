@@ -317,7 +317,7 @@ def _resolve_citations(
 
 async def _extract_topics(
     slides: list[dict], course_id: int, chapter_id: int, tenant_id: str, kazanimlar: str
-) -> tuple[list[dict], str]:
+) -> tuple[list[dict], str | None]:
     """Konular + notun GENEL ANA BAŞLIĞI (note_title).
 
     note_title prompt ile istenir (şema: {"note_title": ..., "topics": ...}); model
@@ -749,7 +749,12 @@ def _bibliography_block(
             body = f"{marker} {title} — <{url}>" if url and " " not in url else f"{marker} {title}"
             lines.append(f"- {body}")
             continue
-        name = _md_safe(labels.get(citation.get("source_id")) or "") or "Ders materyali"
+        raw_source_id = citation.get("source_id")
+        name = (
+            _md_safe(labels.get(int(raw_source_id)) or "")
+            if isinstance(raw_source_id, int)
+            else ""
+        ) or "Ders materyali"
         marker = f"[{number}]"
         if citation["source_type"] == "textbook" and citation.get("page") is not None:
             lines.append(f"- {marker} {name}, s. {citation['page']}")
@@ -1190,13 +1195,13 @@ def _merge_repeated_memory_headings(content_md: str) -> str:
         name = m.group(1).strip().lower()
         if name in _MEMORY_SUBSECTION_NAMES:
             if name in offsets:
-                out[offsets[name]] = None  # ikinci başlık: konumu sil (içerik akar)
+                out[offsets[name]] = ""  # ikinci başlık: konumu sil (içerik akar)
             else:
                 offsets[name] = len(out)
             out.append(line)
             continue
         out.append(line)
-    return "\n".join(ln for ln in out if ln is not None)
+    return "\n".join(out)
 
 
 _GLUED_HEADING_RE = re.compile(r"(?<![\n#])(#{1,6}\s+\S)")

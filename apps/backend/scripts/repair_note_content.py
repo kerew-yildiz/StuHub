@@ -39,7 +39,7 @@ async def repair(*, apply: bool) -> int:
     db = await get_db()
     try:
         cursor = await db.execute("SELECT id, content_md FROM notes ORDER BY id")
-        rows = await cursor.fetchall()
+        rows = list(await cursor.fetchall())
         changed: list[tuple[int, str, str]] = []
         skipped: list[int] = []
         for row in rows:
