@@ -27,6 +27,9 @@ export default defineConfig({
         start_url: '/',
         icons: [
           { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+          { src: 'brand/favicon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'brand/favicon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: 'brand/apple-touch-icon.png', sizes: '180x180', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {
