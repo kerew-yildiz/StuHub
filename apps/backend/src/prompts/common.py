@@ -86,15 +86,28 @@ ATIF_KURALLARI = """ATIF KURALLARI:
 2. Listede olmayan numara YAZMA. Numara aralığı dışına çıkma.
 3. Tek cümle iki kaynağa dayanıyorsa [1][2] biçiminde arka arkaya yaz.
 4. Başlıklara, sorulara ve hatırlatıcı satırlarına atıf koyma; yalnız bilgi cümlelerine koy.
-5. Atıf uyduramazsın: kaynağı olmayan cümleyi yazma, cümleyi sil."""
+5. Atıf uyduramazsın: kaynağı olmayan cümleyi yazma, cümleyi sil.
+6. KAYNAKÇA YAZMA: notun sonuna "Kaynakça", "Kaynaklar", "Referanslar" başlıklı bölüm EKLEME.
+   Kaynak listesini sistem otomatik üretir; senin işin yalnız metin içindeki [n] atıflarıdır.
+7. Numaralandırmayı SEN yeniden başlatmazsın: yalnız sana verilen KAYNAKLAR listesindeki numaraları
+   kullan. Bölüm birleştirme sırasında numaralar sistem tarafından yeniden eşlenir."""
 
 
-def dil_talimati(not_dili: str) -> str:
-    """Ayarlanan üretim dili için prompt talimatı (tr/en/auto)."""
+def dil_talimati(not_dili: str, *, json_sema: bool = True) -> str:
+    """Ayarlanan üretim dili için prompt talimatı (tr/en/auto).
+
+    `json_sema=False`: MARKDOWN üreten promptlar için (not bölümleri). Varsayılan
+    metindeki "JSON anahtar adları şemada verildiği gibi İngilizce kalacak" cümlesi
+    JSON şemalı çağrılar için yazılmıştır; markdown not promptuna girince model notu
+    JSON zarfına sarıyordu (2026-09-18 vakası: İngilizce anahtarlı {"content": "..."}
+    zarfı ham olarak kaydedildi). Markdown promptlarında bu cümle GEÇMEZ.
+    """
     if not_dili == "en":
         return "Tüm çıktıları İngilizce yaz."
     if not_dili == "auto":
         return "Çıktı dilini kaynak içeriğin diliyle eşleştir (kaynak Türkçeyse Türkçe yaz)."
+    if not json_sema:
+        return "Tüm çıktıları Türkçe yaz."
     return "Tüm çıktıları Türkçe yaz. JSON anahtar adları şemada verildiği gibi İngilizce kalacak."
 
 
