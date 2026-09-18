@@ -63,6 +63,25 @@ describe('NoteViewer', () => {
     expect(screen.getAllByRole('button', { name: '[1]' }).length).toBeGreaterThan(0)
   })
 
+  it('ham JSON zarfı kaydedilmiş notu markdown olarak render eder', () => {
+    const brokenNote: SavedNote = {
+      ...note,
+      content_md:
+        '### Konu A\n\n```json\n{"content": "### Konu A\\n\\nBağlı listeler doğrusaldır [1]."}\n```',
+    }
+    const { container } = render(<NoteViewer note={brokenNote} />)
+
+    expect(container.textContent).not.toContain('"content"')
+    expect(container.textContent).not.toContain('\\n')
+    expect(container.querySelector('code')).toBeNull()
+    expect(screen.getAllByRole('heading', { name: 'Konu A' }).length).toBeGreaterThan(0)
+    const matches = screen.getAllByText(
+      (_, element) => element?.textContent?.includes('Bağlı listeler doğrusaldır') ?? false,
+    )
+    expect(matches.length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: '[1]' }).length).toBeGreaterThan(0)
+  })
+
   it('atıf tıklanınca pop-up açılır ve Esc ile kapanır', async () => {
     render(<NoteViewer note={note} />)
     const buttons = screen.getAllByRole('button', { name: '[1]' })

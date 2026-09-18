@@ -25,7 +25,7 @@ from ..prompts.note_prompts import (
     NOTE_SLIDE_ONLY_PROMPT,
     TOPIC_EXTRACTION_PROMPT,
 )
-from . import llm_service, retrieval, web_search_service
+from . import llm_service, note_cleanup, retrieval, web_search_service
 
 logger = logging.getLogger(__name__)
 
@@ -350,7 +350,7 @@ def _build_prompt(topic: dict, slides: list[dict], chunks: list[dict], kazanimla
         topic=topic["topic"],
         slide_content=_slide_content_for_topic(topic, slides),
         numbered_sources=_numbered_sources(chunks),
-        dil_talimati=dil_talimati(settings.not_dili),
+        dil_talimati=dil_talimati(settings.not_dili, json_sema=False),
         kazanimlar=kazanimlar_blok(kazanimlar),
     )
 
@@ -405,11 +405,11 @@ async def _generate_fallback_section(
             prompt = NOTE_GENERATION_WEB_PROMPT.format(
                 topic=name,
                 numbered_sources=_numbered_web_sources(chunks),
-                dil_talimati=dil_talimati(settings.not_dili),
+                dil_talimati=dil_talimati(settings.not_dili, json_sema=False),
                 kazanimlar=kazanimlar_blok(kazanimlar),
             )
             try:
-                parts: list[str] = []
+                stream = note_cleanup.SectionStream()
                 async for delta in llm_service.chat_stream(
                     [{"role": "user", "content": prompt}],
                     kind="note_generation_web",
@@ -419,9 +419,10 @@ async def _generate_fallback_section(
                     course_id=course_id,
                     chapter_id=chapter_id,
                 ):
-                    parts.append(delta)
-                    deltas.append(delta)
-                section = "".join(parts).strip()
+                    emitted = stream.feed(delta)
+                    if emitted:
+                        deltas.append(emitted)
+                section = stream.cleaned()
                 if section:
                     return (
                         _ensure_topic_heading(section, name),
@@ -436,11 +437,11 @@ async def _generate_fallback_section(
     prompt = NOTE_SLIDE_ONLY_PROMPT.format(
         topic=name,
         slide_content=_slide_content_for_topic(topic, slides),
-        dil_talimati=dil_talimati(settings.not_dili),
+        dil_talimati=dil_talimati(settings.not_dili, json_sema=False),
         kazanimlar=kazanimlar_blok(kazanimlar),
     )
     try:
-        parts = []
+        stream = note_cleanup.SectionStream()
         async for delta in llm_service.chat_stream(
             [{"role": "user", "content": prompt}],
             kind="note_generation_slide_only",
@@ -450,9 +451,10 @@ async def _generate_fallback_section(
             course_id=course_id,
             chapter_id=chapter_id,
         ):
-            parts.append(delta)
-            deltas.append(delta)
-        section = "".join(parts).strip()
+            emitted = stream.feed(delta)
+            if emitted:
+                deltas.append(emitted)
+        section = stream.cleaned()
         if section:
             return (
                 _ensure_topic_heading(section, name),
@@ -511,7 +513,9 @@ async def _regen_topic(
         # notu tamamen çöpe atıyordu) — bu turda değişiklik yok sayılır, önceki bölüm korunur.
         logger.warning("konu yeniden üretimi başarısız, mevcut bölüm korunuyor: %s", topic["topic"])
         return None, []
-    section = _strip_own_heading("".join(parts).strip(), topic["topic"])
+    section = _strip_own_heading(
+        note_cleanup.normalize_note_markdown("".join(parts)), topic["topic"]
+    )
     if not section:
         # Boş akış (reasoning sağlayıcısı yanıt bütçesini gizli reasoning'e harcayabiliyor)
         # "değişiklik yok" sayılır: çağıran taraflar boş bloğu MEVCUT bölümün üzerine
@@ -693,7 +697,7 @@ async def _generate(chapter_id: int, tenant_id: str):
             # ham slayt dökümüne düşüyordu (2026-09-17 canlı vaka: chapter 13 notunun
             # 12/12 bölümü deterministik slayt dökümüydü).
             for _attempt in range(2):
-                parts = []
+                stream = note_cleanup.SectionStream()
                 try:
                     async for delta in llm_service.chat_stream(
                         [{"role": "user", "content": prompt}],
@@ -704,9 +708,10 @@ async def _generate(chapter_id: int, tenant_id: str):
                         course_id=course_id,
                         chapter_id=chapter_id,
                     ):
-                        parts.append(delta)
-                        yield {"type": "delta", "text": delta}
-                    section = "".join(parts).strip()
+                        emitted = stream.feed(delta)
+                        if emitted:
+                            yield {"type": "delta", "text": emitted}
+                    section = stream.cleaned()
                 except llm_service.LLMError:
                     # Sağlayıcı zinciri tükendi — bu konu deterministik yedeğe düşer, üretim
                     # bütünüyle iptal EDİLMEZ (2026-09-05 kararı: her koşulda not teslim).
@@ -756,7 +761,10 @@ async def _generate(chapter_id: int, tenant_id: str):
         sections.append(_deterministic_slide_section(topic, slides))
         topic_citations[topic["topic"]] = []
 
-    content_md = "\n\n".join(s for s in sections if s)
+    # Kayıt öncesi SON savunma: bölümler zaten normalize edilerek geldi, burada
+    # birleşim düzeyinde de uygulanır (bölümler arası sızmış JSON/kod çiti kalmasın;
+    # 2026-09-18 vaka: ham JSON zarfı `notes.content_md`ye yazılmıştı).
+    content_md = note_cleanup.normalize_note_markdown("\n\n".join(s for s in sections if s))
 
     # 4) Kapsama doğrulama + yeniden üretim (max 3 iterasyon) — bu bir kalite kontrolü,
     # başarısız olması (ör. yedek modelin geçerli JSON üretememesi) zaten üretilmiş notu
@@ -923,7 +931,13 @@ async def _generate(chapter_id: int, tenant_id: str):
 
 
 def _replace_section(content_md: str, pattern: re.Pattern, new_block: str) -> tuple[str, bool]:
-    """Başlık bazlı bölümü değiştirir; bulunamazsa (orijinal, False) döner."""
+    """Başlık bazlı bölümü değiştirir; bulunamazsa (orijinal, False) döner.
+
+    Değiştirilen aralık bir SONRAKİ başlığın `#` işaretine kadar gider; ayırıcı satır
+    sonları bu aralığın içinde kaldığından yeni blok eskiden başlığa YAPIŞIYORDU
+    (`... [2].### Oral Dönem`) ve o başlık markdown olarak render edilmiyordu
+    (2026-09-18; kullanıcı notlarının 9'unda bu iz vardı). Ayırıcı burada yeniden konur.
+    """
     match = pattern.search(content_md)
     if not match:
         return content_md, False
@@ -934,4 +948,7 @@ def _replace_section(content_md: str, pattern: re.Pattern, new_block: str) -> tu
         end += next_heading.start()
     else:
         end = len(content_md)
-    return content_md[:start] + new_block + content_md[end:], True
+    tail = content_md[end:]
+    if tail and not tail.startswith("\n"):
+        tail = "\n\n" + tail
+    return content_md[:start] + new_block.rstrip() + tail, True

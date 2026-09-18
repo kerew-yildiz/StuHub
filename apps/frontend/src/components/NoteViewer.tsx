@@ -2,6 +2,7 @@ import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 
 import type { Citation, SavedNote } from '../api/notes'
+import { normalizeNoteMarkdown } from '../lib/noteCleanup'
 import { CitationPopup } from './CitationPopup'
 
 interface NoteViewerProps {
@@ -32,15 +33,19 @@ function topicMatches(heading: string, topic: string): boolean {
   return a.length >= 4 && b.includes(a)
 }
 
-/** content_md'yi başlık bazlı bölerek her bölüme kendi atıf haritasını bağlar. */
+/** content_md'yi başlık bazlı bölerek her bölüme kendi atıf haritasını bağlar.
+ *
+ * `normalizeNoteMarkdown` SON SAVUNMA HATTI: kayıtlı içerik modelin JSON zarfını
+ * taşıyorsa (bkz. `lib/noteCleanup`) burada açılır — ekranda ham JSON/kod çiti görünmez. */
 function splitSections(note: SavedNote): RenderedSection[] {
   const topicMap = new Map<string, Citation[]>()
   for (const topic of note.citations_json.topics ?? []) {
     topicMap.set(topic.topic, topic.citations)
   }
 
+  const contentMd = normalizeNoteMarkdown(note.content_md)
   const sections: RenderedSection[] = []
-  const lines = note.content_md.split('\n')
+  const lines = contentMd.split('\n')
   let current: RenderedSection | null = null
 
   for (const line of lines) {
@@ -63,7 +68,7 @@ function splitSections(note: SavedNote): RenderedSection[] {
   if (current) sections.push(current)
 
   if (sections.length === 0) {
-    sections.push({ heading: null, body: note.content_md, citations: [] })
+    sections.push({ heading: null, body: contentMd, citations: [] })
   }
   return sections
 }

@@ -19,16 +19,27 @@ ATIF_LISTESI_KURALI = (
 )
 
 
-def dil_talimati(not_dili: str) -> str:
+def dil_talimati(not_dili: str, *, json_sema: bool = True) -> str:
     """Ayarlanan üretim dili için prompt talimatı (tr/en/auto).
 
     settings `not_dili`: tr (varsayılan) | en | auto.
+
+    `json_sema=False`: MARKDOWN üreten promptlar için (not bölümleri). Varsayılan
+    metindeki "JSON anahtar adları şemada verildiği gibi İngilizce kalacak" cümlesi
+    JSON şemalı çağrılar için yazılmıştı; markdown not promptuna girince model
+    notu JSON zarfına sarıyordu (2026-09-18 vaka: `{"content": "...", ...}` —
+    İngilizce anahtarlar, ham JSON kaydı). Markdown promptlarında bu cümle geçmez.
     """
     if not_dili == "en":
         return "Tüm çıktıları İngilizce yaz."
     if not_dili == "auto":
         return "Çıktı dilini kaynak içeriğin diliyle eşleştir (kaynak Türkçeyse Türkçe yaz)."
-    return "Tüm çıktıları Türkçe yaz. JSON anahtar adları şemada verildiği gibi İngilizce kalacak."
+    if json_sema:
+        return (
+            "Tüm çıktıları Türkçe yaz. JSON anahtar adları şemada verildiği gibi "
+            "İngilizce kalacak."
+        )
+    return "Tüm çıktıları Türkçe yaz."
 
 
 def kazanimlar_blok(kazanimlar: str) -> str:
