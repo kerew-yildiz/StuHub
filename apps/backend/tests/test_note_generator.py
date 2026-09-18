@@ -58,12 +58,15 @@ def _setup_mocks(monkeypatch, *, topics=None, section=None, coverage_missing=Non
             chapter_id=kwargs.get("chapter_id"),
         )
         prompt = messages[0]["content"]
-        if "konu listesini çıkar" in prompt:
+        # Yönlendirme prompt METNİNE değil, çağrı TİPİNE bağlıdır: prompt metni
+        # değiştiğinde (bkz. prompts v3) mock sessizce boş dönüp akışı kırmasın.
+        kind = kwargs.get("kind", "")
+        if kind == "topic_extraction" or "konu listesini çıkar" in prompt.lower():
             return {"topics": topics}
-        if "YETERSİZ" in prompt or "EKSİK" in prompt:
+        if kind == "coverage_check" or "YETERSİZ" in prompt or "EKSİK" in prompt:
             coverage_calls["count"] += 1
             return {"missing": coverage_missing or []}
-        if "destekliyor mu" in prompt:
+        if kind == "citation_confirm" or "destekliyor mu" in prompt:
             return {"supported": confirm}
         return {}
 
@@ -157,14 +160,15 @@ async def test_generate_notes_missing_topic_regenerated(client, monkeypatch):
 
     async def fake_chat_json(messages, **kwargs):
         prompt = messages[0]["content"]
-        if "konu listesini çıkar" in prompt:
+        kind = kwargs.get("kind", "")
+        if kind == "topic_extraction" or "konu listesini çıkar" in prompt.lower():
             return {
                 "topics": [
                     {"topic": "Bağlı Listeler", "keywords": ["düğüm"], "slide_refs": [1]},
                     {"topic": "Sıralama", "keywords": ["sıralama"], "slide_refs": [1]},
                 ]
             }
-        if "YETERSİZ" in prompt or "EKSİK" in prompt:
+        if kind == "coverage_check" or "YETERSİZ" in prompt or "EKSİK" in prompt:
             coverage["calls"] += 1
             return {"missing": ["Sıralama"] if coverage["calls"] == 1 else []}
         return {"supported": True}
