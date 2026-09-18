@@ -4,7 +4,8 @@ import { useToastStore, type Toast } from '../stores/toastStore'
 
 /**
  * ToastHost (P3): app kökünde tek instance. Sağ alttan kademeli girer,
- * transform/opacity yalnız; hatalar kapatana kadar kalır.
+ * transform/opacity yalnız; hatalar kapatana kadar kalır. `action` taşıyanlar
+ * (ör. "Yeni sürüm hazır → Yenile") da kalıcıdır — kararı kullanıcı verir.
  */
 
 const ICONS: Record<Toast['kind'], typeof Info> = {
@@ -23,6 +24,18 @@ function ToastItem({ t }: { t: Toast }) {
     >
       <Icon size={16} aria-hidden="true" />
       <span className="toast__msg">{t.message}</span>
+      {t.action && (
+        <button
+          type="button"
+          className="toast__action"
+          onClick={() => {
+            t.action?.onClick()
+            dismiss(t.id)
+          }}
+        >
+          {t.action.label}
+        </button>
+      )}
       <button
         type="button"
         className="toast__close"

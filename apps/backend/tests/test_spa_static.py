@@ -58,6 +58,36 @@ async def test_index_html_text_html_olarak_sunulur(client, fake_dist):
     assert "SPA" in resp.text
 
 
+async def test_index_kabugu_onbelleklenmez(client, fake_dist):
+    """Deploy sonrası eski kabuk önbellekten gelmesin (PWA otomatik güncelleme).
+
+    Ölçüm (2026-09-18, prod): `/` yanıtında Cache-Control HİÇ yoktu — başlıksız
+    yanıtta tarayıcı sezgisel önbellekleme uygular ve yeni deploy'u hiç görmez.
+    """
+    resp = await client.get("/index.html")
+
+    assert resp.headers["cache-control"] == main.CACHE_NO_STORE
+
+
+async def test_spa_fallback_kabugu_onbelleklenmez(client, fake_dist):
+    resp = await client.get("/dersler/4")
+
+    assert resp.headers["cache-control"] == main.CACHE_NO_STORE
+
+
+async def test_hashli_asset_immutable_onbelleklenir(client):
+    """`/assets/*` içerik-hash'li — asla değişmez, 1 yıl immutable (doğru önbellek)."""
+    assets_dir = main.FRONTEND_DIST / "assets"
+    adaylar = sorted(assets_dir.glob("*")) if assets_dir.exists() else []
+    if not adaylar:
+        pytest.skip("assets/ bu build çıktısında yok")
+
+    resp = await client.get(f"/assets/{adaylar[0].name}")
+
+    assert resp.status_code == 200
+    assert resp.headers["cache-control"] == main.CACHE_IMMUTABLE
+
+
 async def test_js_dosyasi_javascript_olarak_sunulur(client, fake_dist):
     """Asıl prod bug'ı: kök seviyesindeki .js dosyası index.html olarak dönüyordu."""
     resp = await client.get("/app.js")
@@ -114,6 +144,8 @@ async def test_api_yolu_index_e_dusmez(client, fake_dist):
     resp = await client.get("/api/boyle-bir-uc-yok")
 
     assert resp.status_code == 404
+    # API yanıtlarına önbellek middleware'i dokunmaz (başlığı uçlar belirler).
+    assert "cache-control" not in resp.headers
 
 
 async def test_manifest_keeps_its_media_type(client):
@@ -125,6 +157,7 @@ async def test_manifest_keeps_its_media_type(client):
 
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("application/manifest+json")
+    assert resp.headers["cache-control"] == main.CACHE_NO_STORE
 
 
 async def test_service_worker_served_as_javascript(client):
@@ -136,3 +169,5 @@ async def test_service_worker_served_as_javascript(client):
 
     assert resp.status_code == 200
     assert "javascript" in resp.headers["content-type"]
+    # SW betiği HTTP önbelleğinden gelirse yeni sürüm hiç görülmez.
+    assert resp.headers["cache-control"] == main.CACHE_NO_STORE

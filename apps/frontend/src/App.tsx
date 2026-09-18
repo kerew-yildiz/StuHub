@@ -157,7 +157,18 @@ export default function App() {
     )
   }
 
-  if (saasMode && !session) return <LoginPage />
+  // ToastHost oturum açmamışken de mount edilir: PWA güncelleme bildirimi
+  // ("Yeni sürüm hazır → Yenile") giriş ekranında da görünmeli — önceden
+  // yalnızca oturum içi ağaçta olduğu için giriş formu doldurulmuşken çıkan
+  // bildirim görünmez oluyordu (2026-09-18 ölçüldü).
+  if (saasMode && !session) {
+    return (
+      <>
+        <LoginPage />
+        <ToastHost />
+      </>
+    )
+  }
 
 
   return (

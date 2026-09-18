@@ -7,7 +7,7 @@ import mimetypes
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -80,6 +80,33 @@ if settings.cors_origin_list:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+# ── Önbellek başlıkları (2026-09-18 — PWA otomatik güncelleme) ─────────
+# Ölçüm (prod, curl): `/`, `/sw.js`, `/registerSW.js`, `/manifest.webmanifest`
+# yanıtlarında `Cache-Control` HİÇ yoktu (yalnızca ETag/Last-Modified). Başlık
+# yokken tarayıcı *sezgisel* önbellekleme uygular — deploy sonrası eski HTML
+# kabuğu önbellekten servis edilir; service worker betiği de önbellekten
+# okunabildiği için güncelleme hiç görülmez (kullanıcı Ctrl+Shift+R'a mahkûm).
+# Tek kural, tüm statik yanıtlar için:
+#   - `/assets/*` içerik-hash'li, asla değişmez → 1 yıl immutable
+#   - diğer her şey (HTML kabuğu, sw.js, manifest, ikon/font) → her istekte doğrula
+# API yanıtlarına dokunulmaz; kendi başlıklarını uçlar belirler.
+ASSETS_PATH_PREFIX = "/assets/"
+CACHE_IMMUTABLE = "public, max-age=31536000, immutable"
+CACHE_NO_STORE = "no-cache, no-store, must-revalidate"
+
+
+@app.middleware("http")
+async def static_cache_headers(request: Request, call_next):
+    response = await call_next(request)
+    yol = request.url.path
+    if yol.startswith(ASSETS_PATH_PREFIX):
+        response.headers["Cache-Control"] = CACHE_IMMUTABLE
+    elif not yol.startswith("/api/"):
+        # Bir uç kendi başlığını koyduysa ona dokunma (setdefault).
+        response.headers.setdefault("Cache-Control", CACHE_NO_STORE)
+    return response
+
 
 app.include_router(api_router)
 
