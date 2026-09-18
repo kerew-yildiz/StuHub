@@ -176,12 +176,12 @@ def _strip_own_heading(section: str, topic_name: str) -> str:
     `_replace_section` yeni bloğa başlığı kendisi ekler; LLM çıktısı başlıkla
     başlıyorsa kopya oluşurdu (bölüm ayrıştırmayı bozar).
     """
-    pattern = re.compile(rf"^#{{1,4}}\s+{re.escape(topic_name)}\s*\n+", re.MULTILINE)
+    pattern = re.compile(rf"^#{{2,4}}\s+{re.escape(topic_name)}\s*\n+", re.MULTILINE)
     return pattern.sub("", section, count=1).strip()
 
 
 def _section_for_topic(content_md: str, topic_name: str) -> str:
-    pattern = re.compile(r"^(#{1,4})\s+(.+?)\s*$", re.MULTILINE)
+    pattern = re.compile(r"^(#{2,4})\s+(.+?)\s*$", re.MULTILINE)
     match = None
     for m in pattern.finditer(content_md):
         if topic_matches(m.group(2), topic_name):
@@ -317,8 +317,15 @@ def _resolve_citations(
 
 async def _extract_topics(
     slides: list[dict], course_id: int, chapter_id: int, tenant_id: str, kazanimlar: str
-) -> list[dict]:
-    async def _attempt() -> list[dict]:
+) -> tuple[list[dict], str]:
+    """Konular + notun GENEL ANA BAŞLIĞI (note_title).
+
+    note_title prompt ile istenir (şema: {"note_title": ..., "topics": ...}); model
+    döndürmezse None döner — çağıran taraf chapter başlığıyla düşer (kullanıcı isteği:
+    genel başlık MUTLAKA olmalı).
+    """
+
+    async def _attempt() -> tuple[list[dict], str | None]:
         data = await llm_service.chat_json(
             [
                 {
@@ -337,15 +344,18 @@ async def _extract_topics(
             chapter_id=chapter_id,
         )
         topics = data.get("topics", [])
-        return [t for t in topics if isinstance(t, dict) and t.get("topic", "").strip()]
+        clean = [t for t in topics if isinstance(t, dict) and t.get("topic", "").strip()]
+        raw_title = data.get("note_title")
+        note_title = raw_title.strip() if isinstance(raw_title, str) else None
+        return clean, (note_title or None)
 
-    clean = await _attempt()
+    clean, note_title = await _attempt()
     if not clean:
         # Ücretsiz LLM zinciri ara sıra boş/geçersiz JSON döndürüyor (bkz. generation_logs
         # id=51, 2026-09-05 — dolu slaytlarla bile gerçekleşti). Tek seferlik yeniden deneme,
         # kalıcı arıza yerine geçici sağlayıcı tekilliğini tolere eder.
-        clean = await _attempt()
-    return clean
+        clean, note_title = await _attempt()
+    return clean, note_title
 
 
 async def _check_coverage(
@@ -420,7 +430,7 @@ def _build_prompt(topic: dict, slides: list[dict], chunks: list[dict], kazanimla
 def _ensure_topic_heading(section: str, topic_name: str) -> str:
     """Bölüm kendi `### {konu}` başlığıyla başlamıyorsa ekler."""
     text = section.strip()
-    if re.match(rf"^#{{1,4}}\s+{re.escape(topic_name)}\s*$", text, re.MULTILINE):
+    if re.match(rf"^#{{2,4}}\s+{re.escape(topic_name)}\s*$", text, re.MULTILINE):
         return text
     return f"### {topic_name}\n\n{text}"
 
@@ -507,7 +517,12 @@ async def _generate_fallback_section(
         ):
             parts.append(delta)
             deltas.append(delta)
-        section = "".join(parts).strip()
+        # Bu yol asla atıf listesi döndürmez ([] — aşağıda); model yine de yasağa
+        # rağmen [n]/⟨n⟩ biçiminde bir işaret bırakırsa gövdede sahipsiz kalır ve
+        # kaynakça senkronizasyonu (_sync_bibliography) onu YANLIŞLIKLA gerçek bir
+        # atıfla eşleştirebilir (kayıttaki başka bir numarayla çakışarak). Kaynağı
+        # olmayan bu yolda işaretler baştan temizlenir.
+        section = _MARKER_RE.sub("", "".join(parts).strip())
         if section:
             return (
                 _ensure_topic_heading(section, name),
@@ -765,13 +780,14 @@ async def _generate(chapter_id: int, tenant_id: str):
     db = await get_db()
     try:
         cursor = await db.execute(
-            "SELECT id, course_id FROM chapters WHERE id = ? AND tenant_id = ?",
+            "SELECT id, course_id, title FROM chapters WHERE id = ? AND tenant_id = ?",
             (chapter_id, tenant_id),
         )
         chapter = await cursor.fetchone()
         if chapter is None:
             raise NoteGenerationError("Chapter bulunamadı")
         course_id = chapter["course_id"]
+        chapter_title = chapter["title"]
         cursor = await db.execute(
             "SELECT name FROM courses WHERE id = ? AND tenant_id = ?", (course_id, tenant_id)
         )
@@ -792,13 +808,15 @@ async def _generate(chapter_id: int, tenant_id: str):
             "Bu chapter'da henüz guide slides yok. Önce sunum yükleyin."
         )
 
-    # 1) Konu çıkarımı
+    # 1) Konu çıkarımı (+ notun genel ana başlığı)
     yield {"type": "status", "percent": 6, "message": "Konular belirleniyor…"}
-    topics = await _extract_topics(slides, course_id, chapter_id, tenant_id, kazanimlar)
+    topics, note_title = await _extract_topics(slides, course_id, chapter_id, tenant_id, kazanimlar)
     if not topics:
         raise NoteGenerationError(
             "Sunumdan konu çıkarılamadı. Sunum içeriğini kontrol edip tekrar deneyin."
         )
+    # Genel başlık garantisi (kullanıcı isteği): model vermezse chapter başlığı düşer.
+    general_title = (note_title or chapter_title or "").strip() or "Ders Notu"
 
     # 2+3) Konu bazlı map-reduce üretim (stream'li)
     sections: list[str] = []
@@ -903,6 +921,14 @@ async def _generate(chapter_id: int, tenant_id: str):
 
     content_md = "\n\n".join(s for s in sections if s)
 
+    # 3.5) Genel ana başlık (kullanıcı isteği: MUTLAKA olmalı). Model note_title döndürmediyse
+    # chapter başlığı düşer. H1 her zaman içeriğin EN ÜSTÜNE eklenir: düzgün üretilen not da
+    # "### Konu" ile başladığı için "ilk satır başlık mı" koşulu H1'i fiilen hiç eklemiyordu
+    # (2026-09-18 kullanıcı bildirimi: genel başlık eksik). (Yapışık/duplicate başlık onarımı
+    # kaynakça senkronizasyonunda yapılır — bkz. _sync_bibliography; _dedupe_adjacent_headings
+    # H1'i asla düşürmez.)
+    content_md = f"# {general_title}\n\n{content_md}"
+
     # 4) Kapsama doğrulama + yeniden üretim (max 3 iterasyon) — bu bir kalite kontrolü,
     # başarısız olması (ör. yedek modelin geçerli JSON üretememesi) zaten üretilmiş notu
     # ÇÖPE ATMAMALI; "eksik konu yok" varsayılıp not olduğu gibi kaydedilir.
@@ -933,7 +959,7 @@ async def _generate(chapter_id: int, tenant_id: str):
                 continue
             # eski bölümü yenisiyle değiştir
             pattern = re.compile(
-                rf"^#{{1,4}}\s+{re.escape(topic['topic'])}\s*$", re.MULTILINE
+                rf"^#{{2,4}}\s+{re.escape(topic['topic'])}\s*$", re.MULTILINE
             )
             new_block = f"### {topic['topic']}\n\n{section}"
             content_md, replaced = _replace_section(content_md, pattern, new_block)
@@ -971,7 +997,7 @@ async def _generate(chapter_id: int, tenant_id: str):
                 continue
             new_block = f"### {topic['topic']}\n\n{section}"
             pattern = re.compile(
-                rf"^#{{1,4}}\s+{re.escape(topic['topic'])}\s*$", re.MULTILINE
+                rf"^#{{2,4}}\s+{re.escape(topic['topic'])}\s*$", re.MULTILINE
             )
             content_md, replaced = _replace_section(content_md, pattern, new_block)
             if replaced:
@@ -1006,7 +1032,7 @@ async def _generate(chapter_id: int, tenant_id: str):
             section, citations, _deltas, _msg = result
             new_block = f"### {topic['topic']}\n\n{_strip_own_heading(section, topic['topic'])}"
             pattern = re.compile(
-                rf"^#{{1,4}}\s+{re.escape(topic['topic'])}\s*$", re.MULTILINE
+                rf"^#{{2,4}}\s+{re.escape(topic['topic'])}\s*$", re.MULTILINE
             )
             content_md, replaced = _replace_section(content_md, pattern, new_block)
             if not replaced:
@@ -1036,7 +1062,7 @@ async def _generate(chapter_id: int, tenant_id: str):
             section, citations, _deltas, _msg = result
             new_block = f"### {topic['topic']}\n\n{_strip_own_heading(section, topic['topic'])}"
             pattern = re.compile(
-                rf"^#{{1,4}}\s+{re.escape(topic['topic'])}\s*$", re.MULTILINE
+                rf"^#{{2,4}}\s+{re.escape(topic['topic'])}\s*$", re.MULTILINE
             )
             content_md, replaced = _replace_section(content_md, pattern, new_block)
             if not replaced:
@@ -1047,7 +1073,8 @@ async def _generate(chapter_id: int, tenant_id: str):
         )
     if problems:
         # SON ÇARE: bölümler korunur, çözümsüz konuların atıfları düşürülür (asla hata dönmez).
-        # LLM gerektirmez, anında biter.
+        # LLM gerektirmez, anında biter. Düşen konunun gövdede kalmış sahipsiz çipleri
+        # kayıt aşamasından önce _sync_bibliography tarafından da temizlenir.
         logger.warning("çözümsüz atıf kalan konular (atıflar düşürüldü): %s", problems)
         for topic_name in problems:
             topic_citations[topic_name] = []
@@ -1055,11 +1082,16 @@ async def _generate(chapter_id: int, tenant_id: str):
     # 6) Kaynakça + kayıt. Kaynakça not içeriğinin PARÇASI olarak yazılır: PDF/dışa
     # aktarımda ve not görüntüleyicide aynen çıkar. Doğrulama turlarından SONRA eklenir
     # (kaynakça metni kapsama/atıf denetimine girmesin).
-    bibliography = _bibliography_block(
-        registry, topic_citations, await _load_material_labels(course_id, tenant_id)
+    # SENKRONİZASYON (kullanıcı isteği: "kaynakça tüm atıfları kapsamalı"): gövde
+    # gerçeği (çipler) ile topic_citations kayıtları eşitlenir, başlık yapısı onarılır
+    # (yapışık/duplicate başlık), kaynakça YALNIZ gövdede duran atıflarla yazılır.
+    content_md, topic_citations = _sync_bibliography(
+        content_md,
+        registry,
+        topic_citations,
+        await _load_material_labels(course_id, tenant_id),
+        atilmis_konular=set(problems or ()),
     )
-    if bibliography:
-        content_md = f"{content_md}\n\n{bibliography}"
 
     yield {"type": "status", "percent": 98, "message": "Not kaydediliyor…"}
     citations_json = {
@@ -1091,8 +1123,143 @@ async def _generate(chapter_id: int, tenant_id: str):
     }
 
 
-def _replace_section(content_md: str, pattern: re.Pattern, new_block: str) -> tuple[str, bool]:
-    """Başlık bazlı bölümü değiştirir; bulunamazsa (orijinal, False) döner."""
+# Prompt'un (v4) yasağa rağmen ürettiği hafıza alt başlıkları — İÇERİK SIRASI adlarıdır,
+# ekranda başlık OLMAMALI (kullanıcı isteği: "içerikler dursun ama başlık olmasın").
+# Sadece tam satır başlığı kaldırılır; konu başlıkları ve ## Kaynakça korunur.
+_MEMORY_SUBSECTION_NAMES = (
+    "hatırlatıcı",
+    "ne işe yarar",
+    "ne işe yarar?",
+    "kavramlar",
+)
+
+
+def _strip_memory_subsection_headings(content_md: str) -> str:
+    """Konu BÖLÜMLERİ içindeki hafıza alt başlık satırlarını siler; içerik satırları durur.
+
+    normalize ederek eşler ("### Hatırlatıcı", "**Hatırlatıcı**", "### Ne işe yarar?");
+    `## Kaynakça` bölümü TARANMAZ (kaynakça satırları bu adlarla eşleşemez ama güvence).
+    """
+    lines = content_md.split("\n")
+    out: list[str] = []
+    in_bibliography = False
+    for line in lines:
+        if re.match(r"^##\s+Kaynakça\s*$", line):
+            in_bibliography = True
+            out.append(line)
+            continue
+        m = re.match(r"^#{1,4}\s+(.+?)\s*$", line)
+        if not in_bibliography and m:
+            name = m.group(1).strip().lower()
+            if name in _MEMORY_SUBSECTION_NAMES:
+                continue  # başlık satırı atılır; altındaki içerik satırları aynen akar
+        out.append(line)
+    return "\n".join(out)
+
+
+def _merge_repeated_memory_headings(content_md: str) -> str:
+    """Aynı adlı hafıza alt başlıklarını TEK başlığa birleştirir (kayıp içeriği önler).
+
+    Model, üç hafıza parçasını TEK bölümde yazması gerekirken ara sıra her hafıza parçası
+    için AYRI "### Hatırlatıcı" başlığı açıp konu bölümünü KAPATIYOR. Bölüm yenileme +
+    yapışık başlık onarımı bu başlıkları gerçek konu bölümlerine TAŞIR; aynı adlı başlıklar
+    sonra birleştirilir (ikincisinin içeriği ilkinin altına akar). Yalnız tam eşleşen adlar;
+    konu başlıklarına dokunmaz.
+    """
+    lines = content_md.split("\n")
+    out: list[str] = []
+    offsets: dict[str, int] = {}
+    in_bibliography = False
+    for line in lines:
+        if re.match(r"^##\s+Kaynakça\s*$", line):
+            in_bibliography = True
+            out.append(line)
+            continue
+        m = re.match(r"^#{1,4}\s+(.+?)\s*$", line)
+        if in_bibliography or not m:
+            out.append(line)
+            continue
+        name = m.group(1).strip().lower()
+        if name in _MEMORY_SUBSECTION_NAMES:
+            if name in offsets:
+                out[offsets[name]] = None  # ikinci başlık: konumu sil (içerik akar)
+            else:
+                offsets[name] = len(out)
+            out.append(line)
+            continue
+        out.append(line)
+    return "\n".join(ln for ln in out if ln is not None)
+
+
+_GLUED_HEADING_RE = re.compile(r"(?<![\n#])(#{1,6}\s+\S)")
+
+
+def _split_glued_headings(content_md: str) -> str:
+    """Satır ortasında kalmış başlığı (`...metin.### Başlık`) yeni satıra alır.
+
+    LLM ara sıra sonraki konunun başlığını önceki bölümün son satırına YAPIŞTIRIP
+    yazıyor (2026-09-18 canlı koşu: `...birleştirir.### Kesitsel Araştırma Tasarımı`).
+    Yapışık başlık `^#{1,4}` ile eşleşmediği için bölüm ayrışması ve atıf çipi
+    eşlemesi bozuluyordu (kullanıcının "kaynakça eksik" bildiriminin kök nedeni).
+    Belgenin İLK konumu atlanır: dosya başındaki meşru H1 (genel not başlığı) önüne
+    boş satır almadan kalır.
+    """
+
+    def _sub(m: re.Match) -> str:
+        return m.group(0) if m.start() == 0 else f"\n\n{m.group(1)}"
+
+    return _GLUED_HEADING_RE.sub(_sub, content_md)
+
+
+def _dedupe_adjacent_headings(content_md: str) -> str:
+    """Arka arkaya gel duplicate başlıkları tekilleştirir (not 26/27 koşularında
+    aynı konu başlığı iki kez peş peşe göründü). Normalize: küçük harf + noktalama temizliği.
+    """
+    lines = content_md.split("\n")
+    out: list[str] = []
+
+    def _norm(s: str) -> str:
+        return re.sub(r"[^\w\s]", "", s).strip().lower()
+
+    last_heading: str | None = None
+    last_was_h1 = False
+    for line in lines:
+        m = re.match(r"^#{1,4}\s+(.+?)\s*$", line)
+        if m:
+            normalized = _norm(m.group(1))
+            is_h1 = line.startswith("# ")
+            if (
+                last_heading is not None
+                and normalized == last_heading
+                and not is_h1
+                and not last_was_h1
+            ):
+                # komşu duplicate başlık — atla. NOT: H1 (genel not başlığı) asla düşürülmez —
+                # chapter başlığıyla ilk konu aynı ada denk gelirse (note_title fallback)
+                # "# A" + "### A" komşusu iki başlıktan birini silerdi.
+                continue
+            last_heading = normalized
+            last_was_h1 = is_h1
+        elif line.strip():
+            last_heading = None
+            last_was_h1 = False
+        out.append(line)
+    return "\n".join(out)
+
+
+def _repair_heading_structure(content_md: str) -> str:
+    """Başlık yapısını onarır: yapışık başlıkları böler, komşu duplicate'leri tekilleştirir."""
+    return _dedupe_adjacent_headings(_split_glued_headings(content_md))
+
+
+def _replace_section(
+    content_md: str, pattern: re.Pattern, new_block: str
+) -> tuple[str, bool]:
+    """Başlık bazlı bölümü değiştirir; bulunamazsa (orijinal, False) döner.
+
+    Önceki bölüm satır sonuyla bitmiyorsa araya boş satır konur — yeni bloğun
+    başlığı önceki metne YAPIŞMASIN (yapışıklık atıf çipi kaybına yol açıyordu).
+    """
     match = pattern.search(content_md)
     if not match:
         return content_md, False
@@ -1103,4 +1270,99 @@ def _replace_section(content_md: str, pattern: re.Pattern, new_block: str) -> tu
         end += next_heading.start()
     else:
         end = len(content_md)
-    return content_md[:start] + new_block + content_md[end:], True
+    prefix = content_md[:start]
+    if prefix and not prefix.endswith("\n\n"):
+        prefix += _make_section_separator(prefix)
+    return prefix + new_block + content_md[end:], True
+
+
+def _make_section_separator(content_md: str) -> str:
+    """Bölümler arasına güvenli ayraç: bir önceki blok satır sonuyla bitmiyorsa
+    boş satır ekle — başlık sonraki bölümün metnine YAPIŞMASIN (not 26 hatası:
+    `...birleştirir.### Kesitsel ...` yapışıklığı çip kaybına yol açıyordu)."""
+    return "" if content_md.endswith("\n\n") else ("\n" if content_md.endswith("\n") else "\n\n")
+
+
+def _sync_bibliography(
+    content_md: str,
+    registry: _CitationRegistry,
+    topic_citations: dict[str, list[dict]],
+    labels: dict[int, str],
+    atilmis_konular: set[str] | None = None,
+) -> tuple[str, dict[str, list[dict]]]:
+    """Kaynakçayı gövdeyle SENKRONİZE eder (kullanıcı isteği: kaynakça tüm atıfları kapsamalı).
+
+    Gövde, son kayıtlı topic_citations'a göre geride kalabilir: yedek zincirdeki
+    `if not replaced: content_md += new_block` (atıf kaydı güncellenmez) ve regen
+    turlarında bölümün iki kez yazılması bu uyuşmazlığın kaynaklarıdır. Bu yüzden
+    kaynakça üretmeden ÖNCE:
+    1. Başlık yapısı onarılır (yapışık başlık bölünür, komşu duplicate tekilleştirilir) —
+       aksi halde çipler doğru bölüme eşlenemez.
+    2. Her konunun çipleri GERÇEK gövdeden sayılır; topic_citations kayıtları buna
+       göre budanır.
+    3. Kaynakça YALNIZ gövdede gerçekten duran atıflarla yazılır — her çipin kaynağı
+       mutlaka listede olur.
+    Dönüş: (onarılmış content_md, güncellenmiş topic_citations).
+    """
+    atilmis_konular = set(atilmis_konular or ())
+    content_md = _repair_heading_structure(content_md)
+    content_md = _merge_repeated_memory_headings(content_md)
+
+    def _nums(m: re.Match) -> list[int]:
+        return [int(x) for x in re.findall(r"\d+", m.group(0))]
+
+    kalan_idler = {c["id"] for c in registry.ordered()}
+    govde_numaralari: set[int] = set()
+    for m in _MARKER_RE.finditer(content_md):
+        govde_numaralari.update(n for n in _nums(m) if n in kalan_idler)
+
+    # SON ÇARE'de AÇIKÇA atılan konu (atilmis_konular): gövdede kalmış sahipsiz çipler
+    # TEMİZLENİR — bu çipler doğrulanmadı, kaynakçada da listelenemez. Sadece kayıt listesi
+    # boş olan konuya dokunulmaz (boş kayıt meşrudur: konu gerçekten atıfsız yazılmıştır).
+    for ad in atilmis_konular:
+        bolum = _section_for_topic(content_md, ad)
+        if not bolum:
+            continue
+        yeni_bolum = bolum
+        for n in {x for m in _MARKER_RE.finditer(bolum) for x in _nums(m) if x in kalan_idler}:
+            yeni_bolum = re.sub(
+                rf"(?<!\d)({re.escape(f'[{n}]')}|{re.escape(f'⟨{n}⟩')})(?!\d)",
+                "",
+                yeni_bolum,
+            )
+        content_md = content_md.replace(bolum, yeni_bolum)
+        govde_numaralari = {
+            x
+            for m in _MARKER_RE.finditer(content_md)
+            for x in _nums(m)
+            if x in kalan_idler
+        }
+
+    # Topic kayıtlarını gövde gerçeğiyle eşitle (kayıtta olup gövdede olmayan atıf düşer)
+    guncel: dict[str, list[dict]] = {}
+    for topic_name, cites in topic_citations.items():
+        guncel[topic_name] = [c for c in cites if c["id"] in govde_numaralari]
+
+    # Bölüm ayrıştırması değişmiş olabilir (duplicate birleşimi, yapışık başlık bölünmesi):
+    # her konunun bölümündeki çipleri bulup kaydı o bölümün çipleriyle eşle. Kaydı HİÇ
+    # kurulmamış konu (yedek zincirin `content_md += new_block` ekleme yolu — çip gövdede
+    # ama kayıt yok) gövdesindeki çiplerden YENİDEN kurulur; aksi halde gövdede çipi duran
+    # kaynak kaynakçada hiç yer alırdı (kullanıcı isteği: "kaynakça tüm atıfları kapsamalı").
+    tum_atiflar = {c["id"]: dict(c) for c in registry.ordered()}
+    for topic_name in list(guncel.keys()):
+        bolum = _section_for_topic(content_md, topic_name)
+        if not bolum:
+            continue
+        bolum_nums: set[int] = set()
+        for m in _MARKER_RE.finditer(bolum):
+            bolum_nums.update(_nums(m))
+        mevcut = {c["id"]: c for c in guncel[topic_name]}
+        if not mevcut and topic_name not in atilmis_konular:
+            mevcut = tum_atiflar
+        guncel[topic_name] = [mevcut[n] for n in sorted(bolum_nums) if n in mevcut]
+
+    kaynakca = _bibliography_block(registry, guncel, labels)
+    if kaynakca:
+        govde = content_md.split("## Kaynakça")[0].rstrip()
+        content_md = f"{govde}\n\n{kaynakca}"
+    return content_md, guncel

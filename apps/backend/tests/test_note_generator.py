@@ -4,8 +4,8 @@ from src.services import llm_service, note_generator, retrieval, web_search_serv
 
 TOPIC = "Bağlı Listeler"
 CHUNK_TEXT = "Bağlı listeler, her düğümün bir sonraki düğüme işaret ettiği doğrusal veri yapısıdır."
-CHUNKS = [
-    {
+CHUNKS = [        {
+
         "chunk_id": "chk_9_1_1",
         "material_id": 9,
         "text": CHUNK_TEXT,
@@ -470,7 +470,8 @@ def _mock_note_llm(monkeypatch, *, topics, sections, chunks_for, web_sources=Non
 
     async def fake_chat_json(messages, **kwargs):
         if kwargs.get("kind") == "topic_extraction":
-            return {"topics": topics}
+            # dict ise birebir geçirilir (note_title + topics); liste ise sarılır.
+            return topics if isinstance(topics, dict) else {"topics": topics}
         return {}
 
     async def fake_chat_stream(messages, **kwargs):
@@ -667,3 +668,164 @@ async def test_bibliography_lists_all_source_types(client, monkeypatch):
         row = await cursor.fetchone()
     assert row is not None
     assert "## Kaynakça" in row[0]
+
+
+async def test_bibliography_covers_every_body_chip(client, monkeypatch):
+    """Kaynakça, gövdede duran HER atıf çipini kapsar (kullanıcı isteği 1).
+
+    Not 25 koşusunun hatası: yedek zincir `content_md += new_block` ile bölümü ekliyor,
+    atıf kaydını GÜNCELLEMİYOR → kaynakça atıfı listelemiyor ama gövdede çip kalıyordu.
+    Artık kayıt aşamasından önce gövde gerçeğiyle eşitleniyor.
+    """
+    chapter_id = await _make_chapter_with_slides(client)
+    await _insert_slide(chapter_id, 1, "İçerik")
+    course_id = await _course_id_for_chapter(chapter_id)
+    textbook_id = await _insert_material(course_id, "Veri Yapıları.pdf", "textbook")
+
+    # İkinci konunun bölümünü yalnız topic kaydına ekle (yedek zincir senaryosu:
+    # gövdeye çip yazıldı ama topic_citations kaydı güncel değil).
+    topics = [
+        {"topic": "Bağlı Listeler", "keywords": ["düğüm"], "slide_refs": [1]},
+        {"topic": "Sıralama", "keywords": ["sıralama"], "slide_refs": [1]},
+    ]
+    _mock_note_llm(
+        monkeypatch,
+        topics=topics,
+        sections={
+            "Bağlı Listeler": f"### Bağlı Listeler\n\n{GD_TEXT} [1]",
+            "Sıralama": f"### Sıralama\n\n{GD_SORT_TEXT} [1]",
+        },
+        chunks_for={
+            "Bağlı Listeler": [_chunk("chk_1", GD_TEXT, material_id=textbook_id, page=3)],
+            "Sıralama": [_chunk("chk_2", GD_SORT_TEXT, material_id=textbook_id, page=7)],
+        },
+    )
+
+    events = await _collect_events(note_generator.generate_notes_stream(chapter_id))
+    errors = [e for e in events if e["type"] == "error"]
+    assert not errors, errors
+    note = next(e for e in events if e["type"] == "done")["note"]
+    content = note["content_md"]
+    govde = content.split("## Kaynakça")[0]
+    # Gövdede her iki çip de duruyor
+    assert f"{GD_TEXT} [1]" in govde
+    assert f"{GD_SORT_TEXT} [2]" in govde
+    # Kaynakça İKİ ATIFI da listeliyor — gövdede çipi olmayan kaynak yok
+    kaynakca_satirlari = content.split("## Kaynakça")[1]
+    assert "- [1] Veri Yapıları.pdf, s. 3" in kaynakca_satirlari
+    assert "- [2] Veri Yapıları.pdf, s. 7" in kaynakca_satirlari
+    # topic kayıtları da gövdeyle eşit
+    ids = [c["id"] for t in note["citations_json"]["topics"] for c in t["citations"]]
+    assert ids == [1, 2]
+
+
+async def test_note_title_h1_always_present(client, monkeypatch):
+    """Notun genel ana başlığı MUTLAKA var (kullanıcı isteği 3):
+    - model note_title döndürürse o kullanılır,
+    - döndürmezse chapter başlığına düşer,
+    - H1, düzgün üretilmiş "### Konu" başlangıçlı notun da üstüne EKLENİR.
+    """
+    chapter_id = await _make_chapter_with_slides(client)
+    await _insert_slide(chapter_id, 1, "İçerik")
+    topics = [
+        {"topic": "Bağlı Listeler", "keywords": ["düğüm"], "slide_refs": [1]},
+        {"topic": "Sıralama", "keywords": ["sıralama"], "slide_refs": [1]},
+    ]
+    _mock_note_llm(
+        monkeypatch,
+        topics={"note_title": "Bağlı Liste ve Sıralama Yöntemleri", "topics": topics},
+        sections={
+            "Bağlı Listeler": f"### Bağlı Listeler\n\n{GD_TEXT} [1]",
+            "Sıralama": f"### Sıralama\n\n{GD_SORT_TEXT} [1]",
+        },
+        chunks_for={
+            "Bağlı Listeler": [_chunk("chk_1", GD_TEXT, material_id=9, page=3)],
+            "Sıralama": [_chunk("chk_2", GD_SORT_TEXT, material_id=9, page=7)],
+        },
+    )
+
+
+
+    note = await _note_of(chapter_id)
+    content = note["content_md"]
+    assert content.startswith("# Bağlı Liste ve Sıralama Yöntemleri\n\n### Bağlı Listeler")
+    assert "\n## Kaynakça" in content
+
+
+async def test_note_title_falls_back_to_chapter_title(client, monkeypatch):
+    """Model note_title döndürmezse chapter başlığı genel başlığa düşer."""
+    chapter_id = await _make_chapter_with_slides(client)
+    await _insert_slide(chapter_id, 1, "İçerik")
+    _mock_note_llm(
+        monkeypatch,
+        topics=[{"topic": "Bağlı Listeler", "keywords": ["düğüm"], "slide_refs": [1]}],
+        sections={"Bağlı Listeler": f"### Bağlı Listeler\n\n{GD_TEXT} [1]"},
+        chunks_for={"Bağlı Listeler": [_chunk("chk_1", GD_TEXT, material_id=9, page=3)]},
+    )
+
+    note = await _note_of(chapter_id)
+    assert note["content_md"].startswith("# Bağlı Listeler\n")
+
+
+def test_sync_bibliography_reconstructs_from_body_and_repairs_headings():
+    """Birim: yapışık başlık bölünür, duplicate birleşir, kayıt gövde çiplerine eşitlenir."""
+    reg = note_generator._CitationRegistry()
+    c1 = reg.resolve(_chunk("chk_1", "A metni", material_id=9, page=3))
+    reg.resolve(_chunk("chk_2", "B metni", material_id=9, page=7))
+
+    content = (
+        "### İlk Konu\n"
+        "gövde [1]\n"
+        "birleştirir.### İkinci Konu\n"  # yapışık başlık
+        "gövde [2]\n"
+        "\n"
+        "### İkinci Konu\n"  # komşu duplicate
+        "gövde [2]"
+    )
+    # Kayıt "İkinci Konu"nun atıfını BİLMİYOR (yedek zincir senaryosu): boş liste
+    topic_citations = {"İlk Konu": [dict(c1)], "İkinci Konu": []}
+
+    out_content, out_cites = note_generator._sync_bibliography(
+        content, reg, topic_citations, {9: "Veri Yapıları.pdf"}
+    )
+
+    assert "birleştirir.###" not in out_content
+    # komşu duplicate birleşir; kayıt gövdede duran [2] ile eşitlenir
+    assert [c["id"] for c in out_cites["İkinci Konu"]] == [2]
+    kayn = out_content.split("## Kaynakça")[1]
+    assert "- [1] Veri Yapıları.pdf, s. 3" in kayn
+    assert "- [2] Veri Yapıları.pdf, s. 7" in kayn
+    assert [c["id"] for c in out_cites["İkinci Konu"]] == [2]
+
+
+def test_strip_memory_subsection_headings_keeps_topic_headings():
+    src = (
+        "### Konu A\n"
+        "giriş cümlesi\n"
+        "\n"
+        "### Hatırlatıcı\n"
+        "- ipucu\n"
+        "### Ne işe yarar?\n"
+        "kullanım cümlesi\n"
+        "### Kavramlar\n"
+        "- **Terim** — tanım [1]\n"
+        "### Konu B\n"
+        "devam [1]"
+    )
+    out = note_generator._strip_memory_subsection_headings(src)
+    assert "### Konu A" in out and "### Konu B" in out
+    assert "Hatırlatıcı" not in out and "Ne işe yarar" not in out and "Kavramlar" not in out
+    assert "- ipucu" in out and "kullanım cümlesi" in out and "- **Terim**" in out
+
+
+def test_strip_memory_subsection_headings_protects_kaynakca():
+    src = "### Konu\ngövde\n## Kaynakça\n- [1] Kaynak"
+    out = note_generator._strip_memory_subsection_headings(src)
+    assert "## Kaynakça" in out and "- [1] Kaynak" in out
+
+
+def test_merge_repeated_memory_headings_merges_duplicates():
+    src = "### Konu\n\n### Hatırlatıcı\n- a\n\n### Hatırlatıcı\n- b\n\n### Diğer"
+    out = note_generator._merge_repeated_memory_headings(src)
+    assert out.count("### Hatırlatıcı") == 1
+    assert "- a" in out and "- b" in out
