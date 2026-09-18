@@ -130,6 +130,82 @@ async def test_generate_notes_full_flow(client, monkeypatch):
     assert row is not None and TOPIC in row[0]
 
 
+ENVELOPE_SECTION = (
+    '```json\n{"content": "### ' + TOPIC + '\\n\\nBağlı listeler, her düğümün bir sonraki '
+    'düğüme işaret ettiği doğrusal veri yapısıdır [1].\\n\\n- Her düğüm veri ve işaretçi '
+    'taşır [1]."}\n```'
+)
+
+
+async def test_json_envelope_section_saved_as_markdown(client, monkeypatch):
+    """Model JSON zarfı döndürse bile KAYIT ve AKIŞ temiz markdown olmalı (2026-09-18 vaka).
+
+    Canlı vaka: gemini `note_generation_slide_only` akışında `{"content": "### ..."}` zarfı
+    döndürdü; ham hâli `notes.content_md`ye yazıldı ve ekranda ```json bloğu olarak göründü.
+    """
+    chapter_id = await _make_chapter_with_slides(client)
+    await _insert_slide(chapter_id, 1, "Bağlı listeler konusu")
+
+    monkeypatch.setattr(llm_service.settings, "google_api_key", "sk-test")
+    _setup_mocks(monkeypatch, section=ENVELOPE_SECTION)
+
+    events = await _collect_events(note_generator.generate_notes_stream(chapter_id))
+    done = next(e for e in events if e["type"] == "done")
+    content = done["note"]["content_md"]
+
+    assert "```" not in content
+    assert '"content"' not in content
+    assert "\\n" not in content
+    # H1 genel başlık (note_title fallback) + AYNI adlı `###` duplike düşmüş olmalı.
+    assert content.startswith(f"# {TOPIC}\n\nBağlı listeler,")
+    assert f"### {TOPIC}" not in content
+    # Canlı akış da ham JSON taşımaz (yarım zarf ekrana düşmez).
+    streamed = "".join(e["text"] for e in events if e["type"] == "delta")
+    assert '"content"' not in streamed
+
+    import aiosqlite
+
+    from src.config import settings
+
+    async with aiosqlite.connect(settings.db_path) as conn:
+        cursor = await conn.execute(
+            "SELECT content_md FROM notes WHERE chapter_id = ?", (chapter_id,)
+        )
+        row = await cursor.fetchone()
+    assert row is not None
+    assert "```" not in row[0] and '"content"' not in row[0]
+
+
+async def test_content_less_envelope_falls_back_to_slide_section(client, monkeypatch):
+    """Yalnızca şema dökümü dönen bölüm boş kalmaz: deterministik slayt bölümüne düşer."""
+    chapter_id = await _make_chapter_with_slides(client)
+    await _insert_slide(chapter_id, 1, "Bağlı listeler slayt metni")
+
+    monkeypatch.setattr(llm_service.settings, "google_api_key", "sk-test")
+    _setup_mocks(monkeypatch, section='{"topic": "Bağlı Listeler", "summary": "Özet"}')
+
+    events = await _collect_events(note_generator.generate_notes_stream(chapter_id))
+    done = next(e for e in events if e["type"] == "done")
+    content = done["note"]["content_md"]
+    assert '"summary"' not in content and '"topic"' not in content
+    assert "Bağlı listeler slayt metni" in content
+
+
+def test_replace_section_keeps_heading_separator():
+    """Yeniden üretilen bölüm, sonraki başlığa YAPIŞMAMALI (2026-09-18 vaka).
+
+    Yapışınca `### Konu` markdown başlığı olarak render edilmiyor, ekranda düz metin
+    olarak görünüyordu; kullanıcı notlarının 9'unda bu iz vardı.
+    """
+    import re as _re
+
+    content = "### A\n\neski [1].\n\n### B\n\nyeni [1]."
+    pattern = _re.compile(r"^#{1,4}\s+A\s*$", _re.MULTILINE)
+    out, replaced = note_generator._replace_section(content, pattern, "### A\n\ndüzeltilmiş [1].")
+    assert replaced
+    assert out == "### A\n\ndüzeltilmiş [1].\n\n### B\n\nyeni [1]."
+
+
 async def test_generate_notes_no_slides(client, monkeypatch):
     chapter_id = await _make_chapter_with_slides(client)
     monkeypatch.setattr(llm_service.settings, "google_api_key", "sk-test")

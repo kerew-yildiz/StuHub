@@ -61,6 +61,8 @@ describe('NoteViewer', () => {
     )
     expect(matches.length).toBeGreaterThan(0)
     expect(screen.getAllByRole('button', { name: '[1]' }).length).toBeGreaterThan(0)
+    // materyal atıfı köşeli kalır: dış-bağlantı oku TAŞIMAZ (web atıfından farkı)
+    expect(screen.getAllByRole('button', { name: '[1]' })[0].textContent).not.toContain('↗')
   })
 
   it('ham JSON zarfı kaydedilmiş notu markdown olarak render eder', () => {
@@ -100,7 +102,7 @@ describe('NoteViewer', () => {
     const webNote: SavedNote = {
       id: 2,
       chapter_id: 1,
-      content_md: '### Konu A\n\nBu bilgi [1] kaynağından gelir.\n',
+      content_md: '### Konu A\n\nBu bilgi ⟨1⟩ kaynağından gelir.\n',
       citations_json: {
         topics: [
           {
@@ -127,7 +129,10 @@ describe('NoteViewer', () => {
     }
 
     render(<NoteViewer note={webNote} />)
-    fireEvent.click(screen.getByRole('button', { name: '[1]' }))
+    const webChip = screen.getByRole('button', { name: '⟨1⟩' })
+    // web atıfı açılı parantezli + dış-bağlantı oklu (renk farkı YOK, biçim farkı)
+    expect(webChip.textContent).toContain('↗')
+    fireEvent.click(webChip)
 
     // Başlık + alıntı + tıklanabilir URL gösterilir
     expect(screen.getByRole('dialog')).toBeInTheDocument()
@@ -139,5 +144,23 @@ describe('NoteViewer', () => {
 
     // Web atıfı için kaynak parça API'sine gidilmez
     expect(vi.mocked(resolveCitation)).not.toHaveBeenCalled()
+  })
+
+  it('kaynakça: web satırındaki URL bağlantı, materyal satırı düz metin', () => {
+    const bibNote: SavedNote = {
+      ...note,
+      content_md:
+        '### Konu A\n\nBağlı listeler doğrusaldır [1].\n\n## Kaynakça\n\n' +
+        '- [1] Veri Yapıları.pdf, s. 42\n- ⟨2⟩ Web Kaynağı — <https://example.com/makale>\n',
+    }
+    render(<NoteViewer note={bibNote} />)
+
+    expect(screen.getByRole('heading', { name: 'Kaynakça' })).toBeInTheDocument()
+    const link = screen.getByRole('link', { name: 'https://example.com/makale' })
+    expect(link).toHaveAttribute('href', 'https://example.com/makale')
+    expect(link).toHaveAttribute('target', '_blank')
+    // Kaynakça bölümü kendi atıf listesini taşımaz: numaralar bağlantıya dönüşmez.
+    expect(screen.queryByRole('link', { name: '[1]' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '⟨2⟩' })).not.toBeInTheDocument()
   })
 })

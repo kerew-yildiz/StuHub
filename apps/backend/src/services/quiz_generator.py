@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 MAX_QUESTIONS_PER_TOPIC = 5
 MAX_CORRECT_PER_INDEX = 2
 
+# Notun sonuna KOD eklenen bölümler konu DEĞİLDİR — bunlardan quiz/kart üretilmez
+# (bkz. note_generator._bibliography_block).
+_NON_TOPIC_HEADINGS = {"kaynakça", "kaynaklar", "referanslar", "bibliyografya"}
+
 
 def _split_topics(content_md: str, topics: list[dict]) -> list[dict]:
     """Notu başlık yapısına göre böler; her bölüme topics_json'dan atıf listesi bağlar.
@@ -50,6 +54,9 @@ def _split_topics(content_md: str, topics: list[dict]) -> list[dict]:
             if current:
                 result.append(current)
             heading = match.group(1).strip()
+            if heading.lower() in _NON_TOPIC_HEADINGS:
+                current = None  # kaynakça bölümü atlanır (satırları da toplanmaz)
+                continue
             current = {
                 "topic": heading,
                 "section": "",
