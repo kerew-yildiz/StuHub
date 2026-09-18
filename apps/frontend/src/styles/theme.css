@@ -891,6 +891,16 @@ body::before {
   transition: background-color var(--duration-micro) var(--ease-out-expo), color var(--duration-micro) var(--ease-out-expo);
 }
 .toast__close:hover { color: var(--stuhub-text); background: var(--stuhub-glass-2-hover); }
+/* Eylem düğmesi (ör. "Yenile"): toast içi kompakt dolu buton — renkler tema
+ * token'larından gelir, iki temada da kontrast korunur. */
+.toast__action {
+  display: inline-flex; align-items: center; flex-shrink: 0;
+  height: 26px; padding: 0 10px; border-radius: var(--radius-chip);
+  background: var(--stuhub-accent); color: var(--stuhub-on-accent);
+  font-size: 12px; font-weight: 600;
+  transition: background-color var(--duration-micro) var(--ease-out-expo);
+}
+.toast__action:hover { background: var(--stuhub-accent-hover); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
 

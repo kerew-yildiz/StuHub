@@ -124,6 +124,7 @@ jobs:
           build-args: |
             VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
             VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}
+            BUILD_SHA=${{ github.sha }}
           cache-from: type=gha
           # mode=max tüm ara katmanları cache'e yazar; GitHub cache kotası 10 GB,
           # bu build ondan büyük — sürekli tahliye + fazladan disk baskısı demek.

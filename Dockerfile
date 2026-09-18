@@ -25,8 +25,12 @@ COPY apps/frontend/ ./
 # olarak gelir (VITE_* değişkenleri tarayıcıya gömülür, gizli DEĞİLdir).
 ARG VITE_SUPABASE_URL=""
 ARG VITE_SUPABASE_ANON_KEY=""
+# Derleme kimliği (dist/version.json + tarayıcıya gömülü sürüm): CI kısa commit
+# SHA'yı geçer; yoksa vite.config.ts git'e düşer, o da yoksa 'bilinmiyor' yazar.
+ARG BUILD_SHA=""
 ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
+ENV BUILD_SHA=$BUILD_SHA
 RUN npm run build
 
 
