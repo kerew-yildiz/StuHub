@@ -13,6 +13,7 @@ import asyncio
 import json
 import logging
 import re
+from pathlib import Path
 
 from ..auth import LOCAL_TENANT_ID
 from ..config import settings
@@ -60,8 +61,10 @@ class NoteGenerationError(Exception):
 
 # ── Metin yardımcıları ─────────────────────────────────────────────────
 
-def _extract_citation_numbers(text: str) -> list[int]:
-    return [int(m) for m in re.findall(r"\[(\d+)\]", text)]
+# Atıf işaretleri: materyal kaynaklı `[3]`, web kaynaklı `⟨3⟩` (U+27E8 / U+27E9).
+# Model tek biçim (`[n]`) üretir; ayrımı `_resolve_citations` yapar. TARAYICI tek
+# noktadır: numaralandırma, alıntı çıkarma ve doğrulama aynı desenden beslenir.
+_MARKER_RE = re.compile(r"\[(\d+)\]|⟨(\d+)⟩")
 
 
 def _normalize(text: str) -> str:
@@ -97,14 +100,17 @@ def _fuzzy_match(quote: str, chunk_text: str) -> bool:
 
 
 def _quote_before_citation(text: str, number: int) -> str:
-    """[n] işaretinden hemen önceki cümleyi alıntı adayı olarak döner.
+    """`[n]` / `⟨n⟩` işaretinden hemen önceki cümleyi alıntı adayı olarak döner.
 
     Markdown başlık satırları (`### ...`) ve boş satırlar alıntıdan ayıklanır —
     tek cümlelik bölümlerde başlığın alıntıya karışıp fuzzy eşleşmeyi bozmasını
     önler (kullanıcı geri bildirimi).
     """
-    marker = f"[{number}]"
-    idx = text.find(marker)
+    idx = -1
+    for marker in (f"[{number}]", f"⟨{number}⟩"):
+        found = text.find(marker)
+        if found != -1 and (idx == -1 or found < idx):
+            idx = found
     if idx == -1:
         return ""
     window = text[max(0, idx - QUOTE_WINDOW_CHARS) : idx]
@@ -251,6 +257,62 @@ def _chunk_to_citation(number: int, chunk: dict) -> dict:
     }
 
 
+class _CitationRegistry:
+    """Not üretimi boyunca `chunk_id → global atıf numarası` kaydı (1'den artan sayaç).
+
+    Bölümler kendi kaynak listesine göre yerel `[1..n]` üretir (prompt böyle yazılmıştır);
+    bölümler birleşince numaralar çakışıyordu. Kayıt, yerel numarayı global numaraya
+    çevirir ve AYNI chunk'a her zaman AYNI numarayı verir (tekrar üretmez). Numara ataması
+    üretim boyunca (yeniden üretim turları dahil) yaşadığı için numaralar kaymaz.
+    """
+
+    def __init__(self) -> None:
+        self._ids: dict[str, int] = {}
+        self._citations: dict[int, dict] = {}
+
+    def resolve(self, chunk: dict) -> dict:
+        """Chunk'ın global atıf kaydını döner; ilk görülüşünde sıradaki numarayı atar."""
+        number = self._ids.get(chunk["chunk_id"])
+        if number is None:
+            number = len(self._ids) + 1
+            self._ids[chunk["chunk_id"]] = number
+            self._citations[number] = _chunk_to_citation(number, chunk)
+        return self._citations[number]
+
+    def ordered(self) -> list[dict]:
+        """Global numara sırasına göre tüm atıflar (kaynakça bu sırayı kullanır)."""
+        return [self._citations[n] for n in sorted(self._citations)]
+
+
+def _resolve_citations(
+    section: str, chunks: list[dict], registry: _CitationRegistry
+) -> tuple[str, list[dict]]:
+    """Bölüm metnini global numaralara çevirir; (yeni metin, atıflar) döner.
+
+    Yerel `[n]` → global numara; web kaynağı `⟨n⟩`, kitap/slayt `[n]` (görsel tip
+    ayrımını backend yapar, model tek biçim üretir). Aynı chunk bölümde birden çok
+    geçerse TEK atıf kaydı olur. Çözümsüz (aralık dışı) numaranın metni değiştirilmez.
+    """
+    quotes: dict[int, str] = {}
+    used: dict[int, dict] = {}
+
+    def _rewrite(match: re.Match[str]) -> str:
+        local = int(match.group(1) or match.group(2))
+        if not 1 <= local <= len(chunks):
+            return match.group(0)
+        citation = registry.resolve(chunks[local - 1])
+        if local not in quotes:
+            # Alıntı ÖZGÜN metinden çıkarılır — yeniden yazım sırasında işaret kaymasın.
+            quotes[local] = _quote_before_citation(section, local)
+        used[local] = citation
+        number = citation["id"]
+        return f"⟨{number}⟩" if citation["source_type"] == "web" else f"[{number}]"
+
+    text = _MARKER_RE.sub(_rewrite, section)
+    citations = [{**used[local], "quote": quotes[local]} for local in used]
+    return text, citations
+
+
 # ── LLM adımları ───────────────────────────────────────────────────────
 
 async def _extract_topics(
@@ -355,16 +417,6 @@ def _build_prompt(topic: dict, slides: list[dict], chunks: list[dict], kazanimla
     )
 
 
-def _section_citations(section: str, chunks: list[dict]) -> list[dict]:
-    citations = []
-    for n in _extract_citation_numbers(section):
-        if 1 <= n <= len(chunks):
-            citation = _chunk_to_citation(n, chunks[n - 1])
-            citation["quote"] = _quote_before_citation(section, n)
-            citations.append(citation)
-    return citations
-
-
 def _ensure_topic_heading(section: str, topic_name: str) -> str:
     """Bölüm kendi `### {konu}` başlığıyla başlamıyorsa ekler."""
     text = section.strip()
@@ -387,6 +439,8 @@ async def _generate_fallback_section(
     tenant_id: str,
     kazanimlar: str,
     allow_web: bool = True,
+    *,
+    registry: _CitationRegistry,
 ) -> tuple[str, list[dict], list[str], str]:
     """Kitapta kaynak yokken (ya da atıf sorunu giderilirken) kaynak zinciri.
 
@@ -423,9 +477,10 @@ async def _generate_fallback_section(
                     deltas.append(delta)
                 section = "".join(parts).strip()
                 if section:
+                    section, citations = _resolve_citations(section, chunks, registry)
                     return (
                         _ensure_topic_heading(section, name),
-                        _section_citations(section, chunks),
+                        citations,
                         deltas,
                         f"“{name}” için web kaynakları kullanılıyor…",
                     )
@@ -481,6 +536,8 @@ async def _regen_topic(
     course_name: str,
     tenant_id: str,
     kazanimlar: str,
+    *,
+    registry: _CitationRegistry,
 ) -> tuple[str | None, list[dict]]:
     """Kapsama/atıf düzeltme turu için konuyu yeniden üretir (stream'siz).
 
@@ -490,7 +547,14 @@ async def _regen_topic(
     chunks = await _safe_hybrid_search(course_id, topic["topic"], topic.get("keywords", []))
     if not chunks:
         section, citations, _deltas, _msg = await _generate_fallback_section(
-            topic, slides, course_id, chapter_id, course_name, tenant_id, kazanimlar
+            topic,
+            slides,
+            course_id,
+            chapter_id,
+            course_name,
+            tenant_id,
+            kazanimlar,
+            registry=registry,
         )
         return _strip_own_heading(section, topic["topic"]), citations
     prompt = _build_prompt(topic, slides, chunks, kazanimlar)
@@ -520,7 +584,8 @@ async def _regen_topic(
         # başlıktan ibaret kalmıştı).
         logger.warning("boş yeniden üretim yanıtı, mevcut bölüm korunuyor: %s", topic["topic"])
         return None, []
-    return section, _section_citations(section, chunks)
+    section, citations = _resolve_citations(section, chunks, registry)
+    return section, citations
 
 
 async def _safe_regen_topic(*args, **kwargs) -> tuple[str | None, list[dict]]:
@@ -607,6 +672,75 @@ def _strip_internal(citations: list[dict]) -> list[dict]:
     return [{k: v for k, v in c.items() if k != "chunk_text"} for c in citations]
 
 
+# ── Kaynakça (model değil, KOD üretir) ─────────────────────────────────
+
+# Yüklenen dosyalar `{uuid4().hex}_{özgün ad}` olarak saklanır (bkz. routers/materials.py).
+_UUID_PREFIX_RE = re.compile(r"^[0-9a-f]{32}_")
+
+
+def _material_label(filepath: str) -> str:
+    """Materyalin görünen adı (UUID öneki gizlenir)."""
+    return _UUID_PREFIX_RE.sub("", Path(filepath).name)
+
+
+async def _load_material_labels(course_id: int, tenant_id: str) -> dict[int, str]:
+    """Kaynakça için {materyal_id: görünen ad}. Okunamazsa boş döner — kaynakça
+    "Ders materyali" ile yazılır, not üretimi bu yüzden çökmez."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT id, filepath FROM materials WHERE course_id = ? AND tenant_id = ?",
+            (course_id, tenant_id),
+        )
+        return {row["id"]: _material_label(row["filepath"]) for row in await cursor.fetchall()}
+    except Exception:
+        logger.warning("materyal adları okunamadı, kaynakça genel adla yazılıyor", exc_info=True)
+        return {}
+    finally:
+        await db.close()
+
+
+def _md_safe(text: str) -> str:
+    """Markdown yapısını bozabilecek karakterleri temizler (tek satıra indirir)."""
+    return re.sub(r"[\[\]<>|\n\r]+", " ", text).strip()
+
+
+def _bibliography_block(
+    registry: _CitationRegistry,
+    topic_citations: dict[str, list[dict]],
+    labels: dict[int, str],
+) -> str:
+    """Notun sonuna eklenen `## Kaynakça` bölümü (model yazmaz).
+
+    Yalnız notta GERÇEKTEN kalan atıflar listelenir: yeniden üretimde düşen atıf
+    kaynakçaya girmez. Sıra global numara sırasıdır. Atıf yoksa "" döner.
+    """
+    used = {c["id"] for cites in topic_citations.values() for c in cites}
+    lines: list[str] = []
+    for citation in registry.ordered():
+        number = citation["id"]
+        if number not in used:
+            continue
+        if citation["source_type"] == "web":
+            title = _md_safe(citation.get("title") or "") or "Web kaynağı"
+            url = (citation.get("url") or "").strip()
+            marker = f"⟨{number}⟩"
+            # URL otomatik bağlantı (`<url>`) — markdown bağlantı sözdizimini bozmaz
+            # ve tıklanabilir kalır (URL içinde parantez olsa bile).
+            body = f"{marker} {title} — <{url}>" if url and " " not in url else f"{marker} {title}"
+            lines.append(f"- {body}")
+            continue
+        name = _md_safe(labels.get(citation.get("source_id")) or "") or "Ders materyali"
+        marker = f"[{number}]"
+        if citation["source_type"] == "textbook" and citation.get("page") is not None:
+            lines.append(f"- {marker} {name}, s. {citation['page']}")
+        elif citation["source_type"] == "slides" and citation.get("slide") is not None:
+            lines.append(f"- {marker} {name}, slayt {citation['slide']}")
+        else:
+            lines.append(f"- {marker} {name}")
+    return "## Kaynakça\n\n" + "\n".join(lines) if lines else ""
+
+
 # ── Ana akış ───────────────────────────────────────────────────────────
 
 async def generate_notes_stream(chapter_id: int, tenant_id: str = LOCAL_TENANT_ID):
@@ -669,6 +803,9 @@ async def _generate(chapter_id: int, tenant_id: str):
     # 2+3) Konu bazlı map-reduce üretim (stream'li)
     sections: list[str] = []
     topic_citations: dict[str, list[dict]] = {}
+    # Global atıf kaydı: bölümler kendi yerel [1..n] numaralarını üretir, birleştirmede
+    # global numaraya çevrilir (numaralar bölümler arasında ÇAKIŞMAZ; bkz. _CitationRegistry).
+    registry = _CitationRegistry()
 
     for i, topic in enumerate(topics):
         base = 10 + int(72 * i / max(len(topics), 1))
@@ -720,14 +857,22 @@ async def _generate(chapter_id: int, tenant_id: str):
                     break
                 logger.warning("boş bölüm yanıtı, bir kez daha deneniyor: %s", topic["topic"])
             if section:
+                section, citations = _resolve_citations(section, chunks, registry)
                 sections.append(section)
-                topic_citations[topic["topic"]] = _section_citations(section, chunks)
+                topic_citations[topic["topic"]] = citations
                 continue
 
         if not chunks:
             # Kitapta kaynak yok → web → slayt yedeği → deterministik slayt (her koşulda not)
             result = await _safe_fallback_section(
-                topic, slides, course_id, chapter_id, course_name, tenant_id, kazanimlar
+                topic,
+                slides,
+                course_id,
+                chapter_id,
+                course_name,
+                tenant_id,
+                kazanimlar,
+                registry=registry,
             )
             if result is None:
                 # Beklenmeyen hata (LLM dışı) — anında biten deterministik yedeğe düş,
@@ -775,7 +920,14 @@ async def _generate(chapter_id: int, tenant_id: str):
             if topic["topic"] not in missing:
                 continue
             section, citations = await _safe_regen_topic(
-                topic, slides, course_id, chapter_id, course_name, tenant_id, kazanimlar
+                topic,
+                slides,
+                course_id,
+                chapter_id,
+                course_name,
+                tenant_id,
+                kazanimlar,
+                registry=registry,
             )
             if section is None:
                 continue
@@ -806,7 +958,14 @@ async def _generate(chapter_id: int, tenant_id: str):
             if topic["topic"] not in problems:
                 continue
             section, citations = await _safe_regen_topic(
-                topic, slides, course_id, chapter_id, course_name, tenant_id, kazanimlar
+                topic,
+                slides,
+                course_id,
+                chapter_id,
+                course_name,
+                tenant_id,
+                kazanimlar,
+                registry=registry,
             )
             if section is None:
                 continue
@@ -840,6 +999,7 @@ async def _generate(chapter_id: int, tenant_id: str):
                 tenant_id,
                 kazanimlar,
                 allow_web=True,
+                registry=registry,
             )
             if result is None:
                 continue
@@ -869,6 +1029,7 @@ async def _generate(chapter_id: int, tenant_id: str):
                 tenant_id,
                 kazanimlar,
                 allow_web=False,
+                registry=registry,
             )
             if result is None:
                 continue
@@ -891,7 +1052,15 @@ async def _generate(chapter_id: int, tenant_id: str):
         for topic_name in problems:
             topic_citations[topic_name] = []
 
-    # 6) Kayıt
+    # 6) Kaynakça + kayıt. Kaynakça not içeriğinin PARÇASI olarak yazılır: PDF/dışa
+    # aktarımda ve not görüntüleyicide aynen çıkar. Doğrulama turlarından SONRA eklenir
+    # (kaynakça metni kapsama/atıf denetimine girmesin).
+    bibliography = _bibliography_block(
+        registry, topic_citations, await _load_material_labels(course_id, tenant_id)
+    )
+    if bibliography:
+        content_md = f"{content_md}\n\n{bibliography}"
+
     yield {"type": "status", "percent": 98, "message": "Not kaydediliyor…"}
     citations_json = {
         "topics": [

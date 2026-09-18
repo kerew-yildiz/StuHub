@@ -418,3 +418,252 @@ async def test_load_kazanimlar_truncates_long_text(client):
     finally:
         await db.close()
     assert len(text) == note_generator.KAZANIMLAR_MAX_CHARS
+
+
+# ── Global atıf numaralandırma + kaynakça (atif-kaynakca) ──────────────
+#
+# Kullanıcı hatası: her bölüm kendi kaynak listesini 1'den numaralıyordu → birleşen
+# notta numaralar çakışıyordu (1 2 3 / 1 2 3). Ayrıca web kaynağı ile materyal kaynağı
+# görsel olarak ayrılmıyordu ve notun sonunda kaynakça yoktu.
+
+GD_TEXT = "Bağlı listeler her düğümün bir sonraki düğüme işaret ettiği doğrusal veri yapısıdır."
+GD_SORT_TEXT = "Sıralama algoritmaları karşılaştırma tabanlı çalışır ve karmaşıklıkları farklıdır."
+GD_SLIDE_TEXT = "Yığınlar son giren ilk çıkar kuralıyla çalışan bir veri yapısıdır."
+GD_WEB_URL = "https://example.com/liste"
+
+
+def _chunk(chunk_id: str, text: str, *, material_id: int, page=None, slide=None) -> dict:
+    return {
+        "chunk_id": chunk_id,
+        "text": text,
+        "material_id": material_id,
+        "page": page,
+        "slide": slide,
+        "score": 0.9,
+    }
+
+
+async def _insert_material(course_id: int, filename: str, mtype: str) -> int:
+    """Materyal satırı ekler; kaynakça satırındaki görünen ad bundan türetilir."""
+    import aiosqlite
+
+    from src.auth import LOCAL_TENANT_ID
+    from src.config import settings
+
+    async with aiosqlite.connect(settings.db_path) as conn:
+        cursor = await conn.execute(
+            "INSERT INTO materials (tenant_id, course_id, type, filepath) VALUES (?, ?, ?, ?)",
+            (LOCAL_TENANT_ID, course_id, mtype, f"/tmp/mat/{course_id}/{'a' * 32}_{filename}"),
+        )
+        await conn.commit()
+        row_id = cursor.lastrowid
+    assert row_id is not None
+    return row_id
+
+
+def _mock_note_llm(monkeypatch, *, topics, sections, chunks_for, web_sources=None):
+    """Konu bazlı sahte üretim: bölüm metni konu adına göre seçilir.
+
+    Çıpa `"{konu}" konusunu`dur (üç üretim prompt'unda da var) — chunk/slayt metni
+    başka bir konu adı içerse bile eşleşme karışmaz.
+    """
+
+    async def fake_chat_json(messages, **kwargs):
+        if kwargs.get("kind") == "topic_extraction":
+            return {"topics": topics}
+        return {}
+
+    async def fake_chat_stream(messages, **kwargs):
+        prompt = messages[0]["content"]
+        for name, text in sections.items():
+            if f'"{name}" konusunu' in prompt:
+                yield text
+                return
+        yield ""
+
+    monkeypatch.setattr(llm_service, "chat_json", fake_chat_json)
+    monkeypatch.setattr(llm_service, "chat_stream", fake_chat_stream)
+    monkeypatch.setattr(
+        retrieval,
+        "hybrid_search",
+        lambda course_id, query, keywords=None, **kw: list(chunks_for.get(query, [])),
+    )
+
+    async def _web_enabled():
+        return web_sources is not None
+
+    async def _search(topic, course_name, max_results=3):
+        return list(web_sources or [])
+
+    monkeypatch.setattr(web_search_service, "web_search_enabled", _web_enabled)
+    monkeypatch.setattr(web_search_service, "search_web", _search)
+
+
+async def _note_of(chapter_id: int) -> dict:
+    events = await _collect_events(note_generator.generate_notes_stream(chapter_id))
+    errors = [e for e in events if e["type"] == "error"]
+    assert not errors, errors
+    return next(e for e in events if e["type"] == "done")["note"]
+
+
+async def test_citation_numbers_continue_across_sections(client, monkeypatch):
+    """İkinci bölümün numaraları 1'den BAŞLAMAZ; birinci bölümün bıraktığı yerden sürer."""
+    chapter_id = await _make_chapter_with_slides(client)
+    await _insert_slide(chapter_id, 1, "İçerik")
+    topics = [
+        {"topic": "Bağlı Listeler", "keywords": ["düğüm"], "slide_refs": [1]},
+        {"topic": "Sıralama", "keywords": ["sıralama"], "slide_refs": [1]},
+    ]
+    _mock_note_llm(
+        monkeypatch,
+        topics=topics,
+        sections={
+            "Bağlı Listeler": f"### Bağlı Listeler\n\n{GD_TEXT} [1]",
+            "Sıralama": f"### Sıralama\n\n{GD_SORT_TEXT} [1]",
+        },
+        chunks_for={
+            "Bağlı Listeler": [_chunk("chk_9_1_1", GD_TEXT, material_id=9, page=3)],
+            "Sıralama": [_chunk("chk_9_2_1", GD_SORT_TEXT, material_id=9, page=7)],
+        },
+    )
+
+    note = await _note_of(chapter_id)
+    content = note["content_md"]
+    assert f"{GD_TEXT} [1]" in content
+    assert f"{GD_SORT_TEXT} [2]" in content  # 1'den yeniden başlamaz
+    assert "[2]" in content and content.count("[1]") >= 1
+    ids = [c["id"] for t in note["citations_json"]["topics"] for c in t["citations"]]
+    assert ids == [1, 2]
+    # kaynakça: materyal adı veritabanında yoksa genel adla yazılır
+    assert "- [1] Ders materyali, s. 3" in content
+    assert "- [2] Ders materyali, s. 7" in content
+
+
+async def test_same_chunk_in_two_sections_reuses_one_number(client, monkeypatch):
+    """Aynı chunk iki bölümde geçerse TEK global numara alır (yeni numara üretilmez)."""
+    chapter_id = await _make_chapter_with_slides(client)
+    await _insert_slide(chapter_id, 1, "İçerik")
+    topics = [
+        {"topic": "Bağlı Listeler", "keywords": ["düğüm"], "slide_refs": [1]},
+        {"topic": "Düğüm Yapısı", "keywords": ["işaretçi"], "slide_refs": [1]},
+    ]
+    shared = _chunk("chk_9_1_1", GD_TEXT, material_id=9, page=3)
+    _mock_note_llm(
+        monkeypatch,
+        topics=topics,
+        sections={
+            "Bağlı Listeler": f"### Bağlı Listeler\n\n{GD_TEXT} [1]",
+            "Düğüm Yapısı": f"### Düğüm Yapısı\n\n{GD_TEXT} [1]",
+        },
+        chunks_for={"Bağlı Listeler": [shared], "Düğüm Yapısı": [shared]},
+    )
+
+    note = await _note_of(chapter_id)
+    content = note["content_md"]
+    assert content.count(GD_TEXT) == 2
+    assert content.count(f"{GD_TEXT} [1]") == 2  # ikisi de [1]
+    assert "[2]" not in content
+    entries = [c for t in note["citations_json"]["topics"] for c in t["citations"]]
+    assert [c["id"] for c in entries] == [1, 1]
+    assert all(c["chunk_id"] == "chk_9_1_1" for c in entries)
+    # kaynakçada tek satır (aynı chunk iki kez listelenmez)
+    assert content.count("- [1] Ders materyali, s. 3") == 1
+
+
+async def test_web_citation_uses_angle_brackets(client, monkeypatch):
+    """Web kaynağı ⟨n⟩, kitap/slayt [n] — görsel tip ayrımı backend'de yapılır."""
+    chapter_id = await _make_chapter_with_slides(client)
+    await _insert_slide(chapter_id, 1, "İçerik")
+    topics = [
+        {"topic": "Bağlı Listeler", "keywords": ["düğüm"], "slide_refs": [1]},
+        {"topic": "Sıralama", "keywords": ["sıralama"], "slide_refs": [1]},
+    ]
+    _mock_note_llm(
+        monkeypatch,
+        topics=topics,
+        sections={
+            "Bağlı Listeler": f"### Bağlı Listeler\n\n{GD_TEXT} [1]",
+            "Sıralama": f"### Sıralama\n\n{GD_SORT_TEXT} [1]",
+        },
+        chunks_for={"Bağlı Listeler": [_chunk("chk_9_1_1", GD_TEXT, material_id=9, page=3)]},
+        web_sources=[
+            {
+                "title": "Örnek Web Kaynağı",
+                "url": GD_WEB_URL,
+                "text": GD_SORT_TEXT,
+                "quote": GD_SORT_TEXT,
+            }
+        ],
+    )
+
+    note = await _note_of(chapter_id)
+    content = note["content_md"]
+    assert f"{GD_TEXT} [1]" in content
+    assert f"{GD_SORT_TEXT} ⟨2⟩" in content
+    by_type = {t["topic"]: t["citations"][0] for t in note["citations_json"]["topics"]}
+    assert by_type["Bağlı Listeler"]["source_type"] == "textbook"
+    assert by_type["Bağlı Listeler"]["id"] == 1
+    assert by_type["Sıralama"]["source_type"] == "web"
+    assert by_type["Sıralama"]["id"] == 2
+    assert by_type["Sıralama"]["url"] == GD_WEB_URL
+
+
+async def test_bibliography_lists_all_source_types(client, monkeypatch):
+    """Kaynakça üç tipi de kendi biçimiyle listeler: sayfa / slayt / URL."""
+    chapter_id = await _make_chapter_with_slides(client)
+    await _insert_slide(chapter_id, 1, "İçerik")
+    course_id = await _course_id_for_chapter(chapter_id)
+    textbook_id = await _insert_material(course_id, "Veri Yapıları.pdf", "textbook")
+    slides_id = await _insert_material(course_id, "Hafta-1 Sunum.pptx", "slides")
+
+    topics = [
+        {"topic": "Bağlı Listeler", "keywords": ["düğüm"], "slide_refs": [1]},
+        {"topic": "Yığınlar", "keywords": ["yığın"], "slide_refs": [1]},
+        {"topic": "Sıralama", "keywords": ["sıralama"], "slide_refs": [1]},
+    ]
+    _mock_note_llm(
+        monkeypatch,
+        topics=topics,
+        sections={
+            "Bağlı Listeler": f"### Bağlı Listeler\n\n{GD_TEXT} [1]",
+            "Yığınlar": f"### Yığınlar\n\n{GD_SLIDE_TEXT} [1]",
+            "Sıralama": f"### Sıralama\n\n{GD_SORT_TEXT} [1]",
+        },
+        chunks_for={
+            "Bağlı Listeler": [_chunk("chk_1", GD_TEXT, material_id=textbook_id, page=3)],
+            "Yığınlar": [_chunk("chk_2", GD_SLIDE_TEXT, material_id=slides_id, slide=5)],
+        },
+        web_sources=[
+            {
+                "title": "Örnek Web Kaynağı",
+                "url": GD_WEB_URL,
+                "text": GD_SORT_TEXT,
+                "quote": GD_SORT_TEXT,
+            }
+        ],
+    )
+
+    note = await _note_of(chapter_id)
+    content = note["content_md"]
+    assert content.rstrip().endswith(
+        "\n".join(
+            [
+                "- [1] Veri Yapıları.pdf, s. 3",
+                "- [2] Hafta-1 Sunum.pptx, slayt 5",
+                f"- ⟨3⟩ Örnek Web Kaynağı — <{GD_WEB_URL}>",
+            ]
+        )
+    )
+    assert "## Kaynakça" in content
+    # kaynakça not içeriğinin parçası olarak kaydedilir
+    import aiosqlite
+
+    from src.config import settings
+
+    async with aiosqlite.connect(settings.db_path) as conn:
+        cursor = await conn.execute(
+            "SELECT content_md FROM notes WHERE chapter_id = ?", (chapter_id,)
+        )
+        row = await cursor.fetchone()
+    assert row is not None
+    assert "## Kaynakça" in row[0]

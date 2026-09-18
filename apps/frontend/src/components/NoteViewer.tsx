@@ -68,9 +68,15 @@ function splitSections(note: SavedNote): RenderedSection[] {
   return sections
 }
 
-/** Atıf numaralarını markdown bağlantısına çevirir: [1] → [1](stuhub-citation://1) */
+/** Atıf numaralarını markdown bağlantısına çevirir.
+ *
+ * Materyal atıfı `[1]` → `[1](stuhub-citation://1)`, web atıfı `⟨1⟩` →
+ * `[⟨1⟩](stuhub-citation://1)`. Sıra önemli DEĞİL: iki desen birbirinin ürettiği
+ * metni yakalamaz (`[⟨1⟩]` içinde rakam-köşeli parantez yok). */
 function enhanceMarkdown(body: string): string {
-  return body.replace(/\[(\d+)\]/g, `[$1](${CITATION_SCHEME}$1)`)
+  return body
+    .replace(/⟨(\d+)⟩/g, `[⟨$1⟩](${CITATION_SCHEME}$1)`)
+    .replace(/\[(\d+)\]/g, `[$1](${CITATION_SCHEME}$1)`)
 }
 
 function CitationLink({
@@ -88,17 +94,45 @@ function CitationLink({
     const id = Number(href.slice(CITATION_SCHEME.length))
     const citation = citations.find((c) => c.id === id)
     if (citation) {
+      const web = isWebCitation(citation)
       return (
         <button
           type="button"
           onClick={() => onOpenCitation(citation)}
-          className="mx-0.5 inline-block rounded-sm bg-stuhub-accent/15 px-1 text-sm font-semibold text-stuhub-accent transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-accent/25"
-          title="Atıf kaynağını göster"
+          title={web ? 'Web kaynağını göster' : 'Atıf kaynağını göster'}
+          /* Tip ayrımı RENKLE değil BİÇİMLE kurulur (kullanıcı kararı): web atıfı
+           * yuvarlak + kesikli kenarlıklı çip ve dış-bağlantı oku taşır; materyal
+           * atıfı köşeli/düz kenarlıklı kalır. İki tema da aynı ayrımı gösterir. */
+          className={
+            web
+              ? 'mx-0.5 inline-flex items-center gap-0.5 rounded-chip border border-dashed border-stuhub-border bg-stuhub-accent/15 px-1 text-sm font-semibold text-stuhub-accent transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-accent/25'
+              : 'mx-0.5 inline-block rounded-sm border border-stuhub-border bg-stuhub-accent/15 px-1 text-sm font-semibold text-stuhub-accent transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-accent/25'
+          }
         >
-          [{id}]
+          {web ? `⟨${id}⟩` : `[${id}]`}
+          {web && (
+            <span aria-hidden="true" className="text-[10px] leading-none">
+              ↗
+            </span>
+          )}
         </button>
       )
     }
+    return <span>{children}</span>
+  }
+  if (href && /^(https?:|mailto:|tel:)/i.test(href)) {
+    /* Dış bağlantı (kaynakça URL'i): tıklanabilir kalır. `urlTransform` zaten
+     * yalnız http(s)/mailto/tel/relative/# ve atıf şemasını geçiriyor. */
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline decoration-dotted underline-offset-2 hover:text-stuhub-text"
+      >
+        {children}
+      </a>
+    )
   }
   return <span>{children}</span>
 }
