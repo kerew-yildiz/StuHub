@@ -39,6 +39,16 @@ const YENILEME_ANAHTARI = 'stuhub-pwa-yenilendi'
 const odakAniDegerler = new WeakMap<Element, string>()
 
 if (typeof document !== 'undefined') {
+  // Açılışta zaten odaklı alanları referansla kaydet: giriş ekranının ilk
+  // odaklanabilir elemanı (e-posta) sayfa yüklenir yüklenmez odaklı; kullanıcı
+  // yazmaya başladığında focusin ZATEN ÜRETİLMEZ (odak hiç değişmediği için) ve
+  // alan haritaya giremez → `kaydedilmemisGirdiVar()` dolu alanı göremez,
+  // sessiz yenileme veri kaybettirir (2026-09-18 deneyinde kanıtlandı).
+  document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea').forEach((alan) => {
+    if (alan === document.activeElement) {
+      odakAniDegerler.set(alan, alan.value)
+    }
+  })
   document.addEventListener(
     'focusin',
     (olay) => {
@@ -56,6 +66,11 @@ if (typeof document !== 'undefined') {
  * iken yapılır; true ise "Yeni sürüm hazır" bildirimi gösterilir (kararı
  * kullanıcı verir — veri kaybı yok). Yanlış-pozitif (gereksiz bildirim)
  * zararsızdır, yanlış-negatif (sessiz reload) veri kaybettirir.
+ *
+ * İki katman (2026-09-18): (1) odak-anı referansıyla değişim tespiti; (2)
+ * savunma katmanı — haritada kaydı OLMAYAN ama DOLU olan alan da kaydedilmemiş
+ * girdi sayılır. Katman 2, katman 1'in kör noktalarını kapatır (erken odak,
+ * focusin'i kaçıran her durum): dolu alan asla sessiz yenilemeye izin vermez.
  */
 export function kaydedilmemisGirdiVar(): boolean {
   const alanlar = document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
@@ -63,7 +78,13 @@ export function kaydedilmemisGirdiVar(): boolean {
   )
   for (const alan of alanlar) {
     const odakAni = odakAniDegerler.get(alan)
-    if (odakAni !== undefined && alan.value !== odakAni) return true
+    if (odakAni !== undefined) {
+      if (alan.value !== odakAni) return true
+    } else if (alan.value !== '') {
+      // Haritada kaydı yok (focusin hiç yakalanmadı) ama içinde metin var:
+      // kaynağını bilmesek de veri kaybetmemek için kullanıcıya sorarız.
+      return true
+    }
   }
   return false
 }
