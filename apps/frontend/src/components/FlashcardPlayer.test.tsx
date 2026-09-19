@@ -127,7 +127,7 @@ describe('FlashcardPlayer', () => {
     vi.useRealTimers()
   })
 
-  it('yön eşiğini geçmeyen YAVAŞ sürükleme cevap sayılmaz', async () => {
+  it('yön eşiğini geçmeyen YAVAŞ sürükleme cevap sayılmaz ve kart geri döner', async () => {
     render(<FlashcardPlayer dueCards={dueCards} onFinished={vi.fn()} onExit={vi.fn()} />)
     expect(screen.getByText('Soru 1?')).toBeInTheDocument()
 
@@ -144,6 +144,8 @@ describe('FlashcardPlayer', () => {
     await vi.advanceTimersByTimeAsync(400)
     expect(submitReview).not.toHaveBeenCalled()
     expect(screen.getByText('Cevap 1')).toBeInTheDocument()
+    // Kart yaylanarak başlangıç transformuna döner (snap-back bittikten sonra).
+    expect(group.style.transform).toBe('rotateY(180deg)')
     vi.useRealTimers()
   })
 
@@ -162,6 +164,8 @@ describe('FlashcardPlayer', () => {
     await vi.advanceTimersByTimeAsync(400)
     expect(submitReview).not.toHaveBeenCalled()
     expect(screen.getByText('Cevap 1')).toBeInTheDocument()
+    // Snap-back bittikten sonra flip transformu geri gelir.
+    expect(group.style.transform).toBe('rotateY(180deg)')
     vi.useRealTimers()
   })
 
