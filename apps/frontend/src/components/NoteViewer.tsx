@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import { ListTree, FileText } from 'lucide-react'
 
 import type { SavedNote } from '../api/notes'
 import { normalizeNoteMarkdown } from '../lib/noteCleanup'
@@ -72,13 +73,21 @@ export function NoteViewer({ note }: NoteViewerProps) {
         {/* Daralt/genişlet — yalnızca birden fazla bölüm varken anlamlı. */}
         {sections.length > 1 && (
           <div className="mb-6 flex justify-end">
+            {/* Daralt/genişlet düğmesi YALNIZ İKON (kullanıcı isteği, 2026-09-19):
+                metin etiketi aria-label ile ekran okuyuculara taşınır. */}
             <button
               type="button"
               onClick={() => setOutlineMode((v) => !v)}
               aria-pressed={outlineMode}
-              className="glass-panel-subtle glass-interactive rounded-control px-3 py-1.5 text-xs font-medium text-stuhub-text-secondary"
+              aria-label={outlineMode ? 'Tam not görünümü' : 'Daralt (liste görünümü)'}
+              title={outlineMode ? 'Tam not görünümü' : 'Daralt (liste görünümü)'}
+              className="glass-panel-subtle glass-interactive flex h-8 w-8 items-center justify-center rounded-control text-stuhub-text-secondary"
             >
-              {outlineMode ? 'Tam not' : 'Daralt (liste görünümü)'}
+              {outlineMode ? (
+                <FileText className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <ListTree className="h-4 w-4" aria-hidden="true" />
+              )}
             </button>
           </div>
         )}

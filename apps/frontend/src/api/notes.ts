@@ -131,7 +131,13 @@ export async function getNote(chapterId: number): Promise<SavedNote | null> {
  * variant: "physical" (baskı dostu, siyah logo, marka header) | "digital" (koyu StuHub teması). */
 export type PdfVariant = 'physical' | 'digital'
 
-export async function exportNotePdf(noteId: number, variant: PdfVariant = 'physical'): Promise<void> {
+export async function exportNotePdf(
+  noteId: number,
+  variant: PdfVariant = 'physical',
+  /** İndirme dosya adı (uzantısız) — chapter başlığından türetilir.
+   * Varsayılan eski kalıp (geriye uyumluluk; çağıranlar artık başlık veriyor). */
+  filename = `stuhub-not-${noteId}-${variant}`,
+): Promise<void> {
   const response = await authFetch(`/notes/${noteId}/export?variant=${variant}`)
   if (!response.ok) {
     throw new Error('PDF oluşturulamadı. Lütfen tekrar deneyin.')
@@ -140,11 +146,16 @@ export async function exportNotePdf(noteId: number, variant: PdfVariant = 'physi
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `stuhub-not-${noteId}-${variant}.pdf`
+  link.download = `${sanitizeFilename(filename)}.pdf`
   document.body.appendChild(link)
   link.click()
   link.remove()
   URL.revokeObjectURL(url)
+}
+
+/** Dosya adını platformda geçersiz karakterlerden temizler (Windows yasaklıları dahil). */
+function sanitizeFilename(name: string): string {
+  return name.replace(/[\\/:*?"<>|\x00-\x1f]/g, '').trim() || 'not'
 }
 
 /** Atıf pop-up'ı için kaynak parça (Yetenek 06 §4). */
