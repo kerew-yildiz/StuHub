@@ -1039,7 +1039,7 @@ body::before {
  * CursorRing.tsx mount edilmedigi surece (pointer:coarse / unmount) hicbir kural
  * etkili olmaz: cursor:none ve glow `cursor-ring-on` sinifina bagli — o sinifi
  * yalniz bilesen ekler/cekler. Tum konum guncellemeleri tek rAF'ta: kok katman
- * (halka + glow birlikte) translate3d ile tasinir.
+ * (halka + glow birlikte) translate3d ile tasinir. */
 
 @media (pointer: fine) {
   /* Native imlec HICBIR YERDE kullanilmaz (kullanici istegi): tum yuzeylerde
