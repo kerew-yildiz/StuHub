@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import { ListTree, FileText } from 'lucide-react'
 
-import type { Citation, SavedNote } from '../api/notes'
+import type { SavedNote } from '../api/notes'
 import { normalizeNoteMarkdown } from '../lib/noteCleanup'
-import { CitationPopup } from './CitationPopup'
 
 interface NoteViewerProps {
   note: SavedNote
@@ -12,38 +12,18 @@ interface NoteViewerProps {
 interface RenderedSection {
   heading: string | null
   body: string
-  citations: Citation[]
 }
 
-const CITATION_SCHEME = 'stuhub-citation://'
-
-/** Web kaynaklı atıf mı? (source_type "web" ya da url varsa) — API'ye fetch yapılmaz. */
-function isWebCitation(citation: Citation): boolean {
-  return citation.source_type === 'web' || Boolean(citation.url)
-}
-
-/** Başlık ↔ konu adı esnek eşleşmesi (LLM başlıkları konu adından sapabilir). */
-function topicMatches(heading: string, topic: string): boolean {
-  const normalize = (s: string) => s.toLowerCase().replace(/[^\w\s]/g, '').trim()
-  const a = normalize(heading)
-  const b = normalize(topic)
-  if (!a || !b) return false
-  if (a === b) return true
-  if (b.length >= 4 && a.includes(b)) return true
-  return a.length >= 4 && b.includes(a)
-}
-
-/** content_md'yi başlık bazlı bölerek her bölüme kendi atıf haritasını bağlar.
+/** content_md'yi başlık bazlı bölerek bölümlere ayırır.
+ *
+ * ATIF SİSTEMİ KALDIRILDI (2026-09-19): atıf çipleri, atıf pop-up'ı ve Kaynakça
+ * bölümü kullanıcıya GÖSTERİLMEZ. Gövdede kalıntı `[n]`/`⟨n⟩` işaretleri ve
+ * eski kayıtlardan gelen `## Kaynakça` bölümü burada da temizlenir.
  *
  * `normalizeNoteMarkdown` SON SAVUNMA HATTI: kayıtlı içerik modelin JSON zarfını
  * taşıyorsa (bkz. `lib/noteCleanup`) burada açılır — ekranda ham JSON/kod çiti görünmez. */
 function splitSections(note: SavedNote): RenderedSection[] {
-  const topicMap = new Map<string, Citation[]>()
-  for (const topic of note.citations_json.topics ?? []) {
-    topicMap.set(topic.topic, topic.citations)
-  }
-
-  const contentMd = normalizeNoteMarkdown(note.content_md)
+  const contentMd = stripBibliography(normalizeNoteMarkdown(note.content_md))
   const sections: RenderedSection[] = []
   const lines = contentMd.split('\n')
   let current: RenderedSection | null = null
@@ -52,15 +32,7 @@ function splitSections(note: SavedNote): RenderedSection[] {
     const match = line.match(/^(#{1,4})\s+(.+?)\s*$/)
     if (match) {
       if (current) sections.push(current)
-      const heading = match[2]
-      let citations: Citation[] = []
-      for (const [topicName, topicCitations] of topicMap) {
-        if (topicMatches(heading, topicName)) {
-          citations = topicCitations
-          break
-        }
-      }
-      current = { heading, body: '', citations }
+      current = { heading: match[2], body: '' }
     } else if (current) {
       current.body += `${line}\n`
     }
@@ -68,85 +40,30 @@ function splitSections(note: SavedNote): RenderedSection[] {
   if (current) sections.push(current)
 
   if (sections.length === 0) {
-    sections.push({ heading: null, body: contentMd, citations: [] })
+    sections.push({ heading: null, body: contentMd })
   }
   return sections
 }
 
-/** Atıf numaralarını markdown bağlantısına çevirir.
- *
- * Materyal atıfı `[1]` → `[1](stuhub-citation://1)`, web atıfı `⟨1⟩` →
- * `[⟨1⟩](stuhub-citation://1)`. Sıra önemli DEĞİL: iki desen birbirinin ürettiği
- * metni yakalamaz (`[⟨1⟩]` içinde rakam-köşeli parantez yok). */
-function enhanceMarkdown(body: string): string {
+/** Eski kayıtlardan kalabilecek `## Kaynakça` bölümünü (ve altındaki her şeyi) siler. */
+function stripBibliography(contentMd: string): string {
+  const index = contentMd.search(/^##\s+Kaynakça\s*$/m)
+  return index === -1 ? contentMd : contentMd.slice(0, index).trimEnd()
+}
+
+/** Kalıntı atıf numaralarını temizler (atıf sistemi kaldırıldı; kullanıcıya gösterilmez). */
+function cleanCitationMarkers(body: string): string {
   return body
-    .replace(/⟨(\d+)⟩/g, `[⟨$1⟩](${CITATION_SCHEME}$1)`)
-    .replace(/\[(\d+)\]/g, `[$1](${CITATION_SCHEME}$1)`)
+    .replace(/⟨\d+⟩/g, '')
+    .replace(/\[\d+\]/g, '')
+    .replace(/ {2,}/g, ' ')
+    .replace(/ ([,.!?;:])/g, '$1')
 }
 
-function CitationLink({
-  href,
-  children,
-  citations,
-  onOpenCitation,
-}: {
-  href?: string
-  children?: React.ReactNode
-  citations: Citation[]
-  onOpenCitation: (citation: Citation) => void
-}) {
-  if (href?.startsWith(CITATION_SCHEME)) {
-    const id = Number(href.slice(CITATION_SCHEME.length))
-    const citation = citations.find((c) => c.id === id)
-    if (citation) {
-      const web = isWebCitation(citation)
-      return (
-        <button
-          type="button"
-          onClick={() => onOpenCitation(citation)}
-          title={web ? 'Web kaynağını göster' : 'Atıf kaynağını göster'}
-          /* Tip ayrımı RENKLE değil BİÇİMLE kurulur (kullanıcı kararı): web atıfı
-           * yuvarlak + kesikli kenarlıklı çip ve dış-bağlantı oku taşır; materyal
-           * atıfı köşeli/düz kenarlıklı kalır. İki tema da aynı ayrımı gösterir. */
-          className={
-            web
-              ? 'mx-0.5 inline-flex items-center gap-0.5 rounded-chip border border-dashed border-stuhub-border bg-stuhub-accent/15 px-1 text-sm font-semibold text-stuhub-accent transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-accent/25'
-              : 'mx-0.5 inline-block rounded-sm border border-stuhub-border bg-stuhub-accent/15 px-1 text-sm font-semibold text-stuhub-accent transition-colors duration-[var(--duration-micro)] hover:bg-stuhub-accent/25'
-          }
-        >
-          {web ? `⟨${id}⟩` : `[${id}]`}
-          {web && (
-            <span aria-hidden="true" className="text-[10px] leading-none">
-              ↗
-            </span>
-          )}
-        </button>
-      )
-    }
-    return <span>{children}</span>
-  }
-  if (href && /^(https?:|mailto:|tel:)/i.test(href)) {
-    /* Dış bağlantı (kaynakça URL'i): tıklanabilir kalır. `urlTransform` zaten
-     * yalnız http(s)/mailto/tel/relative/# ve atıf şemasını geçiriyor. */
-    return (
-      <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="underline decoration-dotted underline-offset-2 hover:text-stuhub-text"
-      >
-        {children}
-      </a>
-    )
-  }
-  return <span>{children}</span>
-}
-
-/** Not görüntüleyici — markdown + interaktif atıflar + daralt/genişlet (tam not /
- * liste görünümü; kullanıcı isteği). Daralt modunda yalnızca bölüm başlıkları
- * listelenir; başlığa tıklayınca o bölüm açılır. */
+/** Not görüntüleyici — markdown + daralt/genişlet (tam not / liste görünümü; kullanıcı
+ * isteği). Daralt modunda yalnızca bölüm başlıkları listelenir; başlığa tıklayınca o
+ * bölüm açılır. */
 export function NoteViewer({ note }: NoteViewerProps) {
-  const [active, setActive] = useState<Citation | null>(null)
   const [outlineMode, setOutlineMode] = useState(false)
   const sections = splitSections(note)
 
@@ -156,13 +73,21 @@ export function NoteViewer({ note }: NoteViewerProps) {
         {/* Daralt/genişlet — yalnızca birden fazla bölüm varken anlamlı. */}
         {sections.length > 1 && (
           <div className="mb-6 flex justify-end">
+            {/* Daralt/genişlet düğmesi YALNIZ İKON (kullanıcı isteği, 2026-09-19):
+                metin etiketi aria-label ile ekran okuyuculara taşınır. */}
             <button
               type="button"
               onClick={() => setOutlineMode((v) => !v)}
               aria-pressed={outlineMode}
-              className="glass-panel-subtle glass-interactive rounded-control px-3 py-1.5 text-xs font-medium text-stuhub-text-secondary"
+              aria-label={outlineMode ? 'Tam not görünümü' : 'Daralt (liste görünümü)'}
+              title={outlineMode ? 'Tam not görünümü' : 'Daralt (liste görünümü)'}
+              className="glass-panel-subtle glass-interactive flex h-8 w-8 items-center justify-center rounded-control text-stuhub-text-secondary"
             >
-              {outlineMode ? 'Tam not' : 'Daralt (liste görünümü)'}
+              {outlineMode ? (
+                <FileText className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <ListTree className="h-4 w-4" aria-hidden="true" />
+              )}
             </button>
           </div>
         )}
@@ -197,24 +122,12 @@ export function NoteViewer({ note }: NoteViewerProps) {
             className="text-[15.5px] leading-[1.75] text-stuhub-text/80"
           >
             <ReactMarkdown
-              /* URL allow-list: atıf şeması + http(s)/mailto/tel/relative/anchor.
-               * `(url) => url` identity dönüşü javascript:/data: URI'larını da geçiyordu
-               * — `a` override'ı şu an anchor render etmese de bu tesadüfi savunma;
-               * kaynakta tek bir `<a>` fallback'i XSS kapısı olur (in-depth savunma). */
+              /* URL allow-list: http(s)/mailto/tel/relative/anchor. Atıf şeması artık
+               * yok (atıf sistemi kaldırıldı); javascript:/data: URI'ları engellenir. */
               urlTransform={(url) =>
-                url.startsWith(CITATION_SCHEME) || /^(https?:|mailto:|tel:|[./#])/i.test(url)
-                  ? url
-                  : ''
+                /^(https?:|mailto:|tel:|[./#])/i.test(url) ? url : ''
               }
               components={{
-                a: ({ href, children }) => (
-                  <CitationLink
-                    href={href}
-                    children={children}
-                    citations={section.citations}
-                    onOpenCitation={setActive}
-                  />
-                ),
                 /* Hiyerarşi yalnızca boşluk + punto + ağırlıkla kuruluyor; renkli/çizgili
                    vurgu yok (sol-kenar çizgisi 2026-09-08'de kaldırıldı — en tanınabilir
                    "AI-üretimi arayüz" izlerinden biriydi). */
@@ -273,22 +186,15 @@ export function NoteViewer({ note }: NoteViewerProps) {
                 ),
               }}
             >
-              {section.heading ? `### ${section.heading}\n\n${enhanceMarkdown(section.body)}` : enhanceMarkdown(section.body)}
+              {section.heading
+                ? `### ${section.heading}\n\n${cleanCitationMarkers(section.body)}`
+                : cleanCitationMarkers(section.body)}
             </ReactMarkdown>
           </section>
         ))}
         </div>
         )}
       </div>
-
-      {active && (
-        <CitationPopup
-          citation={active}
-          preloadedText={isWebCitation(active) ? (active.quote ?? undefined) : undefined}
-          sourceLabel={isWebCitation(active) ? (active.title ?? active.url ?? undefined) : undefined}
-          onClose={() => setActive(null)}
-        />
-      )}
     </div>
   )
 }

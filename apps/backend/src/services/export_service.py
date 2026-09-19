@@ -15,6 +15,18 @@ yüksek header bölgesi alır (sayfa başına content rect mekanizması doğrula
 Tasarım TALEP ANINDA uygulanır: not gövdesi yalnız Markdown olarak saklanır
 (``notes.content_md``), stil bilgisi saklanmaz — bu yüzden eski notların PDF'i de
 her indirmede güncel tasarımı alır.
+
+KART YERLEŞİMİ (2026-09-19, kullanıcı isteği):
+- ALT KONU başlıkları kartın DIŞINDA, yatay ORTALI yazılır; hemen altında kart
+  açılır ve o başlığın içeriği karta yazılır.
+- İçerik sayfa sonunda bitmezse kart YİNE DE KAPANIR; kalan içerik yeni sayfada
+  YENİ kart içinde kaldığı yerden devam eder (düz çizgiyle akan kart YOK).
+- ANA başlıklar alt başlıklardan BÜYÜK punto ile, yatay ortalı ve hemen altında
+  başlık uzunluğuna (çok satırlıysa EN ALT satırın uzunluğuna) uygun bir ayraç
+  çizgisiyle basılır.
+- Footer sayfa sonunda kart ALANININ İÇİNDE durur; içerik akışı footer üstünde
+  biter, çakışma olmaz.
+- Kartların sayfa kenarlarına olan dış marjı eskiye göre %35 ARTTIRILDI.
 """
 
 from __future__ import annotations
@@ -37,16 +49,15 @@ BOLD_CANDIDATES = (
 )
 LOGO_DIR = Path(__file__).resolve().parent.parent / "assets"
 
-# Kenar boşlukları: kullanıcı geri bildirimi (v4) — kartların sayfaya göre dış
-# boşluğu %80 azaltıldı (54 → ~11pt); metnin karta olan iç payı da aynı oranda
-# küçültülür (`_CONTENT_PAD`), sonra kullanıcı isteğiyle bir tık artırıldı
-# (11 → 16pt; iç pay 2 → 3pt). Üst/alt boşluk header/footer geometrisiyle sabittir.
-_MARGIN = 16.0
+# Kenar boşlukları (2026-09-19): kart → sayfa kenarı dış marjı %35 artırıldı
+# (kullanıcı isteği). Eski 16pt → ~21.6pt; metnin karta olan iç payı aynı kalır.
+_MARGIN = round(16.0 * 1.35, 1)  # 21.6pt
 _CONTENT_PAD = 3.0
-# Alt boşluk: footer sayfa kenarının içinde durur, içerik metni footer'ın hemen
-# üstüne kadar akar (önce 24pt footer payı içeriği yukarı itip altta ölü boşluk
-# bırakıyordu — 2026-09-17 koordinatör geri bildirimi).
-_MARGIN_BOTTOM = 46
+# Alt boşluk: footer artık kart ALANININ İÇİNDE — kart gövdesi footer bandının
+# üstüne kadar iner, footer bandı kart içinde (koyu/ışık dolgusuz) yer alır ve
+# içerik akışı footer'ın üstünde biter (çakışma yok).
+_FOOTER_BAND = 26.0  # kart içi footer rezervi (metin akışı bunun üstünde biter)
+_MARGIN_BOTTOM = _FOOTER_BAND + 8.0
 _FOOTER_BASELINE = 30.0
 # Story'ye verilen `em`: CSS'teki px değerleri bu ölçekle punto'ya çevrilir.
 _EM = 12
@@ -63,28 +74,28 @@ _CHART_FONTS = {"regular": "stuhub-reg", "bold": "stuhub-bold"}
 _REF_PATTERNS = (
     re.compile(r"\s*[\[\(]\s*[Ss]lide[^\]\)\n]*[\]\)]"),  # [Slide 3], [Slide 26, Slide 27]
     re.compile(r"\s*\[\d+(?:\s*[,;]\s*\d+)*\]"),  # [1], [3, 5]
+    re.compile(r"\s*⟨\d+(?:\s*[,;]\s*⟨?\d+⟩*)*⟩"),  # ⟨1⟩ / ⟨2⟩ (web işareti)
 )
 _CODE_SPAN_RE = re.compile(r"(```.*?```|`[^`\n]*`)", re.S)
+_TAG_RE = re.compile(r"<[^>]+>")
 _SPACE_BEFORE_PUNCT_RE = re.compile(r"[ \t]+([.,;:!?])")
 _NOTICE_RE = re.compile(r"^.*ders sunumundan üretildi.*$", re.M)
 _MULTISPACE_RE = re.compile(r"[ \t]{2,}")
 _HEADING_RE = re.compile(r"<h([1-4])(>.*?</h\1>)", re.S)
-_TAG_RE = re.compile(r"<[^>]+>")
 
-# --- Konu kartları -----------------------------------------------------------
-# Kart = notes.topics_json'daki konu başlığı + sonraki konu başlığına kadar olan
-# TÜM içeriği saran yuvarlak cam kutu. Eşleşmeyen başlıklar (alt başlıklar) kart
-# İÇİNDE normal h3/h4 stiliyle kalır. Kart PyMuPDF katmanında çizilir: Story'nin
-# CSS motoru `border-radius` desteklemiyor (ölçüldü) — yuvarlak köşe bu katmanda.
+# --- Konu kartları (2026-09-19 kural seti) -----------------------------------
+# Kart = bir ALT KONU başlığının altındaki içerik. Başlık kartın DIŞINDA, yatay
+# ortalı; kart başlığın hemen altında açılır ve içeriği sarmalar. Kart sayfa
+# sonunda DAIMA kapanır; kalan içerik yeni sayfada YENİ kartta devam eder.
 _TOPIC_MIN_SIZE = 12.0  # başlık punto eşiği (h2 14 / h3 12.5 girer, gövde 10.5 girmez)
-_TOPIC_PAD_Y = 8.0  # başlık üstü/altı kart payı
-_TOPIC_GAP = 24.0  # iki kart arası görsel boşluk = _TOPIC_GAP - _TOPIC_PAD_Y (16pt)
+_TOPIC_PAD_Y = 8.0  # başlık ile kart üst kenarı arası pay
+_TOPIC_GAP = 24.0  # iki kart/başlık bloğu arası görsel boşluk
 # Köşe yarıçapı PUNTO cinsinden: PyMuPDF `radius` oranı kısa kenara göre alır,
 # oran büyük kartlarda ~100pt'ye çıkar ve metin yuvarlatılmış köşenin dışında
 # kalırdı (kullanıcı kanıtı 030416) — sabit 7pt'ye çevrildi.
 _TOPIC_RADIUS_PT = 7.0
 
-# --- Header stilleri (kullanıcı seçimi bekliyor: V1/V2/V3) --------------------
+# --- Header stilleri (kullanıcı seçimi: v2) ----------------------------------
 # (üst boşluk, bant yüksekliği, içerik öncesi nefes payı) — 1. sayfa içerik payı
 # bu üçünün toplamından `_MARGIN` çıkarılarak hesaplanır.
 HEADER_STYLES = ("v1", "v2", "v3")
@@ -190,8 +201,13 @@ _HEADER_TEXT = {
 # değişir. blur/gradient YOK (Story desteklemez); başlık hiyerarşisi yalnız
 # punto + ağırlık + boşlukla kurulur (09-08 kararı: çizgili/renkli başlık vurgusu
 # "AI-üretimi arayüz" izi sayılıp kaldırılmıştı).
-# Bağlantı rengi `body a` ile verilir: Story'nin UA stil sayfası çıplak `a`
-# seçicisini (mavi) geçersiz kılıyor — ölçüldü, kapsam + `:link` özgüllüğü gerekiyor.
+# 2026-09-19: TÜM konu/alt başlıklar yatay ortalı (kullanıcı isteği) — metin
+# dikdörtgeni kart iç payı kadar daraltılmış olduğundan ortalama kartın İÇİNE
+# göre değil sayfanın iç genişliğine göre olur; bu yüzden başlıklar h2/h3'lerin
+# kart DIŞINA taşınması yerine aynı metin dikdörtgeninde `text-align:center` ile
+# ortalanır (kart, başlığın ALTINDAN başlar — çizim katmanı başlık satırını kart
+# alanından hariç tutar).
+# Ana başlık (h1.topic) alt başlıktan BÜYÜK punto + altında ayraç çizgisi.
 _BASE_CSS = """
 @font-face {{ font-family: stuhub; src: url(regular.ttf); }}
 @font-face {{ font-family: stuhub; font-weight: bold; src: url(bold.ttf); }}
@@ -199,14 +215,15 @@ _BASE_CSS = """
 /* Gövde zemini YOK: sayfa zemini + arka plan görseli PyMuPDF katmanında çizilir,
    metin katmanı şeffaf kalır (aksi halde opak gövde zemini görseli kapatırdı). */
 body {{ font-family: {family}; font-size: 10.5px; color: {text}; line-height: 1.62; }}
-h1 {{ font-size: 17.5px; font-weight: bold; margin: 0 0 7px 0; }}
-h2 {{ font-size: 14px; font-weight: bold; margin: 19px 0 7px 0; }}
-h3 {{ font-size: 12.5px; font-weight: bold; margin: 15px 0 5px 0; }}
-h4 {{ font-size: 11px; font-weight: bold; margin: 13px 0 4px 0; }}
-/* Konu başlıkları: kart PyMuPDF katmanında çizilir; burada yalnız kartlar arası
-   nefes payı verilir. Yatay hizalama padding ile DEĞİL, metin dikdörtgeni kartın
-   iç payı kadar daraltılarak kurulur (taşma önlemi — v4). */
-h1.topic, h2.topic, h3.topic, h4.topic {{ margin: 26px 0 16px 0; }}
+h1 {{ font-size: 17.5px; font-weight: bold; margin: 0 0 7px 0; text-align: center; }}
+h2 {{ font-size: 14px; font-weight: bold; margin: 19px 0 7px 0; text-align: center; }}
+h3 {{ font-size: 12.5px; font-weight: bold; margin: 15px 0 5px 0; text-align: center; }}
+h4 {{ font-size: 11px; font-weight: bold; margin: 13px 0 4px 0; text-align: center; }}
+/* Konu başlıkları: kart başlığın ALTINDAN başlar; başlıkla kart arasında nefes payı.
+   Ana başlık (h1.topic) alt başlıktan daha büyük punto — görsel ayrım kullanıcı
+   isteği; ayraç çizgisi çizim katmanında başlığın EN ALT satır uzunluğuna göre. */
+h1.topic {{ font-size: 17.5px; margin: 24px 0 14px 0; }}
+h2.topic, h3.topic, h4.topic {{ margin: 22px 0 10px 0; }}
 p {{ margin: 0 0 9px 0; }}
 ul, ol {{ margin: 0 0 9px 0; }}
 li {{ margin: 0 0 5px 0; }}
@@ -272,7 +289,7 @@ _LIST_START_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)]|>)")
 
 
 def _strip_references(markdown: str) -> str:
-    """Atıf işaretlerini (``[1]``, ``[Slide 3]``) ve bilgi kutusunu render kopyasından çıkarır.
+    """Atıf işaretlerini (``[1]``, ``⟨2⟩``, ``[Slide 3]``) ve bilgi kutusunu kopyadan çıkarır.
 
     Not verisine DOKUNULMAZ. Kod içerikleri korunur: ``` çitleri, satır içi ``kod``
     ve 4 boşlukla kaydırılmış kod satırları. Girinti kodu ile liste alt satırı
@@ -323,10 +340,11 @@ def _body_markdown(content_md: str, title: str) -> str:
 
 
 def _mark_topic_headings(body: str, topics: set[str]) -> str:
-    """topics_json ile eşleşen başlıklara `topic` sınıfı ekler (kart içi pay/marj).
+    """topics_json ile eşleşen başlıklara `topic` sınıfı ekler (yerleşim kuralları).
 
-    Kartın kendisi PyMuPDF katmanında çizilir; sınıf yalnız yerleşim (yatay pay +
-    nefes payı) verir. Eşleşmeyen başlıklar alt başlık olarak normal stilde kalır.
+    Kart başlığın ALTINDAN başlar (başlık kartın DIŞINDA — 2026-09-19); sınıf
+    yalnız başlık-aralığı (nefes payı) verir. Eşleşmeyen başlıklar alt başlık
+    olarak normal stilde kalır.
     """
     if not topics:
         return body
@@ -362,8 +380,9 @@ def note_markdown_to_pdf(
 ) -> bytes:
     """Markdown notu PDF baytlarına çevirir (A4; ``physical`` | ``digital``).
 
-    ``topics``: ``notes.topics_json`` içindeki konu adları — eşleşen başlıklar ve
-    altındaki içerik yuvarlak konu kartı içinde basılır. Boş/None ise kart çizilmez.
+    ``topics``: ``notes.topics_json`` içindeki konu adları — eşleşen başlıklar
+    kartın DIŞINDA ortalanır, altlarındaki içerik kart içinde basılır.
+    Boş/None ise kart çizilmez (başlıklar yine ortalanır).
     """
     if variant not in PDF_VARIANTS:
         raise ValueError(f"unknown pdf variant: {variant!r}")
@@ -402,9 +421,9 @@ def note_markdown_to_pdf(
     writer.close()
     text_doc = pymupdf.open(stream=buffer.getvalue(), filetype="pdf")
 
-    # 2) Baskı katmanı: zemin → arka plan görseli → konu kartları → metin katmanı →
-    #    header/footer. Sıra tek yerde ve deterministiktir (overlay varsayılanı:
-    #    her çizim mevcut içeriğin ÜSTÜNE eklenir).
+    # 2) Baskı katmanı: zemin → arka plan görseli → başlık ayraçları → konu kartları →
+    #    metin katmanı → header/footer. Sıra tek yerde ve deterministiktir (overlay
+    #    varsayılanı: her çizim mevcut içeriğin ÜSTÜNE eklenir).
     logo_name = "stuhub-logo-soft.png" if variant == "digital" else "stuhub-logo-black.png"
     logo_path = LOGO_DIR / logo_name
     if not logo_path.exists():
@@ -413,13 +432,12 @@ def note_markdown_to_pdf(
     background = _digital_background() if variant == "digital" else None
 
     doc = pymupdf.open()
-    # Konu başlıkları belge genelinde ÖNCEDEN taranır: kart kapanışı sayfa
-    # doluluğuna değil "sonraki başlık var mı" bilgisine bağlıdır.
+    # Konu başlıkları belge genelinde ÖNCEDEN taranır: kart başlığın altından
+    # başlar, sayfa sonunda her zaman kapanır ve kalan içerik yeni kartta sürer.
     page_count = text_doc.page_count
     headings = {
         index: _topic_span_boxes(text_doc[index], topic_set) for index in range(page_count)
     } if topic_set else {}
-    open_topic = False
     for number in range(1, page_count + 1):
         # `pymupdf.Document` çalışma zamanında gezilebilir ama stub'ı `__iter__`
         # bildirmiyor; sayfa erişimi `__getitem__` üzerinden tip-güvenli kalır.
@@ -428,21 +446,23 @@ def note_markdown_to_pdf(
         page.draw_rect(page.rect, color=None, fill=palette["page_bg"])
         if background:
             page.insert_image(page.rect, stream=background)
+        content_top = _MARGIN + (first_offset if number == 1 else 0.0)
+        # Başlık ayraçları (h1.topic altındaki ayraç çizgisi) kartlardan ÖNCE çizilir.
+        if headings.get(number - 1):
+            _draw_main_heading_rules(page, text_page, palette, headings[number - 1], content_top)
         if topic_set:
-            content_top = _MARGIN + (first_offset if number == 1 else 0.0)
-            open_topic = _draw_topic_cards(
+            _draw_topic_cards(
                 page,
                 text_page,
                 palette,
                 content_top,
-                open_topic,
                 headings[number - 1],
                 number == page_count,
             )
         page.show_pdf_page(page.rect, text_doc, number - 1)
         if number == 1:
             _draw_brand_header(page, page_rect, title, variant, logo_path, regular_path, bold_path)
-        # Footer — sayfa takibi ve alt bilgi yalnızca burada (header'da yok).
+        # Footer — kart alanının İÇİNDE (sayfa sonu rezerv bandı) durur.
         _draw_footer(page, page_rect, number, variant, regular_path)
 
     out = doc.tobytes(deflate=True, garbage=4)
@@ -478,6 +498,12 @@ def _text_width(value: str, font_path: str, size: float) -> float:
     return pymupdf.Font(fontfile=str(font_path)).text_length(
         value, fontsize=size  # type: ignore[arg-type]
     )
+
+
+def _text_centered(page, center_x, y, value, font_path, size, color, weight="regular") -> None:
+    """Yatay ortalanmış metin — genişlik font metrikleriyle ölçülür."""
+    x = center_x - _text_width(value, font_path, size) / 2
+    _text(page, x, y, value, font_path, size, color, weight)
 
 
 def _page_dict(page: pymupdf.Page) -> dict[str, Any]:
@@ -550,12 +576,10 @@ def _card_shape(
 ) -> None:
     """Yuvarlak konu kartı — köşeler AYRI AYRI yuvarlanır.
 
-    Kullanıcı kuralı (v4): kart bir sonraki başlığa kadar kapanmaz; sayfa biterse
-    kapanış YOK (düz kenarla sayfa sonuna kadar gider), devamı yeni sayfada düz
-    kenarla başlar, yuvarlak kapanış yalnız sonraki başlıkta/belge sonunda olur.
+    2026-09-19 kuralı: kart sayfa sonunda DAIMA kapanır (yuvarlak alt köşeler);
+    kalan içerik yeni sayfada YENİ kart içinde (yuvarlak üst köşeler) devam eder.
     PyMuPDF'in `draw_rect(radius=...)` çağrısı dört köşeyi birden yuvarladığı ve
-    oranı kısa kenara göre aldığı için (büyük kartta ~100pt → metin köşe dışında
-    kalıyordu) kart yolu elde kurulur.
+    oranı kısa kenara göre aldığı için kart yolu elde kurulur.
     """
     radius = min(_TOPIC_RADIUS_PT, rect.width / 2 - 0.5, rect.height / 2 - 0.5)
     control = 0.5523 * radius  # çeyrek daire yaklaşımı (cubic bezier)
@@ -617,17 +641,16 @@ def _draw_topic_cards(
     text_page: pymupdf.Page,
     palette: dict,
     content_top: float,
-    open_topic: bool,
     boxes: list[pymupdf.Rect],
     is_last_page: bool,
-) -> bool:
-    """Konu kartlarını çizer; kart sayfa sonunda AÇIK kalıyorsa True döner.
+) -> None:
+    """Konu kartlarını çizer (2026-09-19 kural seti).
 
-    Kapanış kuralı (kullanıcı, v4): kart bir sonraki konu başlığına kadar kapanmaz.
-    Sayfa sınırında kesilen kenar DÜZ çizilir, devamı yeni sayfada DÜZ başlar; kart
-    yalnız sonraki başlıkta ya da belgenin son sayfasında yuvarlak kapanır. Karar
-    sayfa doluluğuna değil BELGE YAPISINA bağlıdır (doluluk sezgisi dijital varyantta
-    devam kartını düşürüyordu — 2026-09-17 ölçümü).
+    - Her başlık kartın DIŞINDA: kart başlığın ALT kenarından başlar.
+    - Kart içeriği sayfa sonunda bitmeden sayfa bitse bile kart KAPANIR
+      (yuvarlak alt); kalan içerik yeni sayfada YENİ kart içinde sürer.
+    - Son sayfada kart içerik bittiği yerde kapanır; altta footer bandı
+      (kart ALANININ içinde) rezerve edilir.
     """
     blocks = [
         b
@@ -635,24 +658,27 @@ def _draw_topic_cards(
         if b.get("lines") and b["bbox"][3] > content_top
     ]
     if not blocks:
-        return open_topic and not is_last_page
-    cut_bottom = page.rect.height - _MARGIN_BOTTOM  # kesilen kart sayfa sonuna kadar gider
-    text_bottom = min(max(b["bbox"][3] for b in blocks) + _TOPIC_PAD_Y, cut_bottom)
+        return
+    # Kart alanı footer bandının üstünde biter — footer kart ALANINDA kalır ve
+    # içerikle ÇAKIŞMAZ (footer bandı kart dolgusunun parçası).
+    card_bottom_limit = page.rect.height - _MARGIN_BOTTOM
+    text_bottom = min(max(b["bbox"][3] for b in blocks) + _TOPIC_PAD_Y, card_bottom_limit)
+
     segments: list[tuple[float, float, bool, bool]] = []
-    if open_topic:
-        if boxes:
-            segments.append((content_top, boxes[0].y0 - _TOPIC_GAP, False, True))
-        else:
-            flat_bottom = text_bottom if is_last_page else cut_bottom
-            segments.append((content_top, flat_bottom, False, is_last_page))
+    # Başlıklar kart DIŞINDA: her segment bir başlığın ALT kenarından başlar.
+    # Başlık bloğunun üstü ile önceki kart arasındaki boşluk `_TOPIC_GAP` çiziminde
+    # korunur (başlık kutusunun kendisi kartla kaplanmaz).
     for index, box in enumerate(boxes):
+        top = box.y1 + _TOPIC_PAD_Y  # başlığın HEMEN altında kart açılır
         last = index == len(boxes) - 1
         if last:
-            close = is_last_page  # sonraki başlık yoksa kart belge sonunda kapanır
-            bottom = text_bottom if close else cut_bottom
-            segments.append((box.y0 - _TOPIC_PAD_Y, bottom, True, close))
+            # Sonraki başlık yok: kart içerik bittiği yerde (son sayfada) ya da
+            # sayfa sonunda KAPANIR; devam yeni sayfada yeni kart olarak çizilir.
+            bottom = text_bottom if is_last_page else card_bottom_limit
+            segments.append((top, bottom, True, True))
         else:
-            segments.append((box.y0 - _TOPIC_PAD_Y, boxes[index + 1].y0 - _TOPIC_GAP, True, True))
+            segments.append((top, boxes[index + 1].y0 - _TOPIC_GAP, True, True))
+
     right = page.rect.width - _MARGIN
     for top, bottom, round_top, round_bottom in segments:
         if bottom - top < 2:
@@ -664,7 +690,57 @@ def _draw_topic_cards(
             round_top,
             round_bottom,
         )
-    return (bool(boxes) or open_topic) and not is_last_page
+
+
+def _draw_main_heading_rules(
+    page: pymupdf.Page,
+    text_page: pymupdf.Page,
+    palette: dict,
+    boxes: list[pymupdf.Rect],
+    content_top: float,
+) -> None:
+    """h1.topic (ANA başlık) kutularının hemen altına başlık uzunluğuna uygun ayraç.
+
+    Başlık çok satırlıysa uzunluk EN ALT satırın gerçek span genişliğine göre
+    ölçülür (kullanıcı isteği). Çizgi sayfanın iç genişliğinde ortalanır.
+    """
+    rule_color = palette["css"].get("rule") or "#2c2c31"
+    color = _hex_to_rgb(rule_color)
+    center_x = page.rect.width / 2
+    full_text = _page_dict(text_page)
+    for block in full_text["blocks"]:
+        spans = [s for line in block.get("lines", []) for s in line["spans"]]
+        if not spans or max(s["size"] for s in spans) < _TOPIC_MIN_SIZE:
+            continue
+        if not all("Bold" in s["font"] for s in spans):
+            continue
+        rect = pymupdf.Rect(block["bbox"])
+        if not any(abs(r.y0 - rect.y0) < 0.5 and abs(r.x0 - rect.x0) < 0.5 for r in boxes):
+            continue
+        if rect.y1 <= content_top:
+            continue
+        # EN ALT satırın gerçek uzunluğu: son satırın span genişlikleri toplamı.
+        last_width = 0.0
+        bottom_y = rect.y1
+        if block.get("lines"):
+            line = block["lines"][-1]
+            last_width = sum(s["bbox"][2] - s["bbox"][0] for s in line["spans"])
+            bottom_y = max(s["bbox"][3] for s in line["spans"])
+        if last_width <= 0:
+            last_width = rect.width
+        half = max(last_width / 2, 18.0)
+        y = bottom_y + 5.0
+        page.draw_line(
+            pymupdf.Point(center_x - half, y),
+            pymupdf.Point(center_x + half, y),
+            color=color,
+            width=1.0,
+        )
+
+
+def _hex_to_rgb(hex_color: str) -> tuple[float, float, float]:
+    value = hex_color.lstrip("#")
+    return tuple(int(value[i : i + 2], 16) / 255 for i in (0, 2, 4))  # type: ignore[return-value]
 
 
 def _split_title(title: str) -> tuple[str, str]:
@@ -704,12 +780,7 @@ def _draw_brand_header(
     bold_path: str,
     style: str | None = None,
 ) -> None:
-    """1. sayfa marka header'ı — kullanıcının seçeceği üç stil (V1/V2/V3).
-
-    Referans: uygulamanın kendi header dili (AppHeader.tsx + theme.css `.app-header`:
-    cam yüzey, ince kenar ışığı, logo + wordmark). PDF'te blur/backdrop-filter yok;
-    cam hissi katmanlı çizimle (dolgu + üst ışık çizgisi + kenar) kurulur.
-    """
+    """1. sayfa marka header'ı — kullanıcının seçtiği stil (v2)."""
     style = style or HEADER_STYLE
     top, height, _ = _header_box(variant, style)
     eyebrow, main = _split_title(title)
@@ -863,7 +934,11 @@ def _draw_footer(
     variant: str,
     regular_path: str,
 ) -> None:
-    """Footer: sol "StuHub · tarih" alt bilgisi, sağ sayfa numarası — takibin tek yeri."""
+    """Footer: sol "StuHub · tarih" alt bilgisi, sağ sayfa numarası.
+
+    Footer kart ALANININ İÇİNDE durur: rezerv bandı kart dolgusunun parçasıdır,
+    içerik akışı bandın üstünde biter — çakışma yok (2026-09-19 kullanıcı isteği).
+    """
     color = _PALETTE[variant]["footer"]
     y = page_rect.height - _FOOTER_BASELINE
     _text(page, _MARGIN, y, f"StuHub · {date.today().strftime('%d.%m.%Y')}", regular_path, 8, color)
@@ -884,4 +959,3 @@ def _draw_footer(
 def note_markdown_to_md(title: str, content_md: str) -> str:
     """Notu Markdown olarak döner: başlık + content_md birebir (Yetenek 12 Format 1)."""
     return f"# {title}\n\n{content_md}\n"
-

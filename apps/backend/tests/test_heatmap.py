@@ -191,21 +191,22 @@ async def _seed(tenant_id: str = "local") -> int:
     return course_id
 
 
-async def test_weakness_score_uc_sinyalden_uretilir(heatmap_client):
+async def test_weakness_score_iki_sinyalden_uretilir(heatmap_client):
     course_id = await _seed()
     resp = await heatmap_client.get(f"/api/courses/{course_id}/heatmap")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["weights"] == {"quiz": 0.5, "card": 0.3, "chat": 0.2}
+    # Chat sinyali kaldırıldı (2026-09-19): iki sinyal, normalize ağırlıklar.
+    assert body["weights"] == {"quiz": 0.625, "card": 0.375}
 
     by_topic = {t["topic"]: t for t in body["topics"]}
     weak = by_topic["Bağlı Liste"]
     assert weak["quiz_accuracy"] == 0.25
     assert weak["card_retention"] == 0.5
-    assert weak["chat_question_count"] == 5
-    # 0.5*(1-0.25) + 0.3*(1-0.5) + 0.2*1.0 = 0.375 + 0.15 + 0.2 = 0.725 (ağırlık toplamı 1.0)
-    assert weak["weakness_score"] == 0.725
-    assert weak["sample_size"] == 4 + 2 + 5
+    assert "chat_question_count" not in weak
+    # 0.625*(1-0.25) + 0.375*(1-0.5) = 0.46875 + 0.1875 = 0.65625 → 0.6562
+    assert weak["weakness_score"] == 0.6562
+    assert weak["sample_size"] == 4 + 2
     # En zayıf konu listenin başında
     assert body["topics"][0]["topic"] == "Bağlı Liste"
 
@@ -220,18 +221,16 @@ async def test_verisi_olmayan_konu_null_doner(heatmap_client):
         "topic": "Yığın",
         "quiz_accuracy": None,
         "card_retention": None,
-        "chat_question_count": 0,
         "weakness_score": None,
         "sample_size": 0,
     }
 
-    # "Kuyruk": yalnızca quiz sinyali var (kartı var ama hiç tekrar edilmemiş, chat'te
-    # sorulmamış) → eksik sinyaller paydadan düşer, skor tek sinyale normalize edilir:
-    # 0.5*(1-0.5) / 0.5 = 0.5 — ağırlık düşmeseydi 0.25 çıkardı.
+    # "Kuyruk": yalnızca quiz sinyali var (kartı var ama hiç tekrar edilmemiş) →
+    # eksik sinyal paydadan düşer, skor tek sinyale normalize edilir:
+    # 0.625*(1-0.5) / 0.625 = 0.5 — ağırlık düşmeseydi 0.3125 çıkardı.
     queue = by_topic["Kuyruk"]
     assert queue["quiz_accuracy"] == 0.5
     assert queue["card_retention"] is None
-    assert queue["chat_question_count"] == 0
     assert queue["weakness_score"] == 0.5
     assert queue["sample_size"] == 2
 
@@ -250,14 +249,10 @@ async def test_tenant_izolasyonu(heatmap_client):
     # Yerel dersin sayıları başka kiracının verisiyle şişmemiş olmalı
     resp = await heatmap_client.get(f"/api/courses/{course_id}/heatmap")
     by_topic = {t["topic"]: t for t in resp.json()["topics"]}
-    assert by_topic["Bağlı Liste"]["sample_size"] == 11
+    assert by_topic["Bağlı Liste"]["sample_size"] == 6
 
     # Yerel dersin satırlarını başka kiracıya çevir → sinyaller boşalır
     async with aiosqlite.connect(settings.db_path) as conn:
-        await conn.execute(
-            "UPDATE chat_messages SET tenant_id = 'other-tenant' WHERE course_id = ?",
-            (course_id,),
-        )
         await conn.execute("UPDATE quiz_attempts SET tenant_id = 'other-tenant'")
         await conn.execute("UPDATE card_reviews SET tenant_id = 'other-tenant'")
         await conn.commit()
@@ -267,6 +262,5 @@ async def test_tenant_izolasyonu(heatmap_client):
     weak = by_topic["Bağlı Liste"]
     assert weak["quiz_accuracy"] is None
     assert weak["card_retention"] is None
-    assert weak["chat_question_count"] == 0
     assert weak["weakness_score"] is None
     assert weak["sample_size"] == 0

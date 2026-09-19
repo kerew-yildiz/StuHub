@@ -7,9 +7,6 @@ export interface WeakTopicHeatmapProps {
   courseId: number
 }
 
-/** Backend `CHAT_SATURATION` ile aynı doyum noktası — chat baskısını 0..1'e indirger. */
-const CHAT_SATURATION = 5
-
 /** Zayıflık yoğunluğu kademesi — monochrome: renk skalası değil, beyaz aksanın
  * opaklık kademesi (TASARIM-SISTEMI.md §1 "tek aksan: beyaz, vurgu yoğunlukla"). */
 const HEAT_STEPS = [
@@ -40,8 +37,8 @@ const CELL_BASE =
 
 const HEAD_CELL = 'text-[10px] font-medium uppercase tracking-widest text-stuhub-text-muted'
 
-/** Zayıf konu ısı haritası — konu × (quiz doğruluğu / kart tutma / chat yoğunluğu)
- * ızgarası; hücre yoğunluğu zayıflıkla artar, en zayıf konu en üstte (Plan #18). */
+/** Zayıf konu ısı haritası — konu × (quiz doğruluğu / kart tutma) ızgarası;
+ * hücre yoğunluğu zayıflıkla artar, en zayıf konu en üstte (Plan #18). */
 export function WeakTopicHeatmap({ courseId }: WeakTopicHeatmapProps) {
   const [heatmap, setHeatmap] = useState<CourseHeatmap | null>(null)
   const [error, setError] = useState('')
@@ -119,11 +116,10 @@ export function WeakTopicHeatmap({ courseId }: WeakTopicHeatmapProps) {
 
       <div className="mt-4 overflow-x-auto">
         <div className="min-w-[28rem]">
-          <div className="grid grid-cols-[minmax(6rem,1fr)_repeat(4,4.25rem)] gap-2 px-1 pb-2">
+          <div className="grid grid-cols-[minmax(6rem,1fr)_repeat(3,4.25rem)] gap-2 px-1 pb-2">
             <span className={HEAD_CELL}>Konu</span>
             <span className={`${HEAD_CELL} text-center`}>Quiz</span>
             <span className={`${HEAD_CELL} text-center`}>Kart</span>
-            <span className={`${HEAD_CELL} text-center`}>Chat</span>
             <span className={`${HEAD_CELL} text-center`}>Zayıflık</span>
           </div>
 
@@ -133,15 +129,10 @@ export function WeakTopicHeatmap({ courseId }: WeakTopicHeatmapProps) {
               // Her sinyalin kendi zayıflık değeri hücre yoğunluğunu belirler.
               const quizHeat = topic.quiz_accuracy === null ? null : 1 - topic.quiz_accuracy
               const cardHeat = topic.card_retention === null ? null : 1 - topic.card_retention
-              // Chat tek yönlü: soru yokluğu güç kanıtı değil, veri yokluğudur (backend kuralı).
-              const chatHeat =
-                topic.chat_question_count === 0
-                  ? null
-                  : Math.min(topic.chat_question_count / CHAT_SATURATION, 1)
               return (
                 <li
                   key={topic.topic}
-                  className="grid grid-cols-[minmax(6rem,1fr)_repeat(4,4.25rem)] items-center gap-2"
+                  className="grid grid-cols-[minmax(6rem,1fr)_repeat(3,4.25rem)] items-center gap-2"
                 >
                   <span
                     className="truncate px-1 text-sm text-stuhub-text"
@@ -171,12 +162,6 @@ export function WeakTopicHeatmap({ courseId }: WeakTopicHeatmapProps) {
                     {percentLabel(topic.card_retention)}
                   </span>
                   <span
-                    className={`${CELL_BASE} ${heatClass(chatHeat)}`}
-                    title={`Chat'te ${topic.chat_question_count} soru — örneklem: ${topic.sample_size} gözlem`}
-                  >
-                    {topic.chat_question_count}
-                  </span>
-                  <span
                     className={`${CELL_BASE} ${heatClass(topic.weakness_score)} font-semibold`}
                     title={
                       topic.weakness_score === null
@@ -194,10 +179,9 @@ export function WeakTopicHeatmap({ courseId }: WeakTopicHeatmapProps) {
       </div>
 
       <p className="mt-4 text-xs text-stuhub-text-muted">
-        Zayıflık skoru üç sinyalin ağırlıklı birleşimidir: quiz %
+        Zayıflık skoru iki sinyalin ağırlıklı birleşimidir: quiz %
         {Math.round((heatmap.weights.quiz ?? 0) * 100)}, kart %
-        {Math.round((heatmap.weights.card ?? 0) * 100)}, chat %
-        {Math.round((heatmap.weights.chat ?? 0) * 100)}. Verisi olmayan sinyal ağırlıktan düşer.
+        {Math.round((heatmap.weights.card ?? 0) * 100)}. Verisi olmayan sinyal ağırlıktan düşer.
       </p>
     </div>
   )

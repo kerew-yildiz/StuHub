@@ -1,8 +1,12 @@
 """Zayıf konu ısı haritası router'ı (Plan #18).
 
-Ders bazında konu × performans matrisi üretir: quiz doğruluğu, flashcard tutma oranı
-ve chat'te sorulan soru yoğunluğu tek tabloda birleşir. **LLM çağrısı YOK** — tüm
-hesap SQL okumaları + deterministik Python birleştirmesidir.
+Ders bazında konu × performans matrisi üretir: quiz doğruluğu ve flashcard tutma
+oranı tek tabloda birleşir. **LLM çağrısı YOK** — tüm hesap SQL okumaları +
+deterministik Python birleştirmesidir.
+
+CHAT SİNYALİ KALDIRILDI (2026-09-19, kullanıcı isteği): ısı haritasından chat
+tamamen çıkarıldı — kolon, sinyal ve ağırlık olarak. Zayıflık skoru iki sinyal
+üzerinden normalize edilir: quiz 0.625 / kart 0.375 (eski 0.5/0.3 oranı korundu).
 
 Konu eşlemesi (`topics_json` zinciri):
 - Konu evreni `notes.topics_json` (`[{"topic", "keywords", "slide_refs"}]`),
@@ -25,23 +29,14 @@ from ..db import get_db
 
 router = APIRouter(prefix="/api", tags=["heatmap"])
 
-# ── weakness_score ağırlıkları ──────────────────────────────────────────
-# Üç sinyalin göreli ağırlığı; toplamı 1.0. Quiz en doğrudan ölçüm olduğu için
-# en ağır, chat yoğunluğu en dolaylı sinyal olduğu için en hafif.
-WEIGHT_QUIZ = 0.5
-WEIGHT_CARD = 0.3
-WEIGHT_CHAT = 0.2
-
-# Chat soru yoğunluğu doyum noktası: bu kadar (veya daha fazla) soru sorulan konu
-# chat sinyalinde tam zayıf (1.0) sayılır.
-CHAT_SATURATION = 5
+# ── weakness_score ağırlıkları (2026-09-19: chat kaldırıldı) ────────────
+# İki sinyalin göreli ağırlığı; toplamı 1.0. Eski quiz/kart oranı (0.5/0.3)
+# korundu ve kalan ikiliye normalize edildi: quiz 0.625, kart 0.375.
+WEIGHT_QUIZ = 0.625
+WEIGHT_CARD = 0.375
 
 # SM-2 puanlarından "tutuldu" sayılanlar (flashcards.VALID_RATINGS alt kümesi).
 RETAINED_RATINGS = frozenset({"good", "easy"})
-
-# Konu adı/anahtar kelimenin chat mesajında aranabilmesi için gereken en kısa uzunluk —
-# daha kısa parçalar ("ağ", "iş") rastgele eşleşme üretir.
-MIN_MATCH_LEN = 4
 
 
 class TopicHeat(BaseModel):
@@ -52,11 +47,9 @@ class TopicHeat(BaseModel):
     quiz_accuracy: float | None
     # ("good" + "easy") / puanlanmış tekrar sayısı — hiç tekrar yoksa null.
     card_retention: float | None
-    # Konuyla eşleşen kullanıcı sohbet mesajı sayısı.
-    chat_question_count: int
     # 0..1, 1 = en zayıf. Hiçbir sinyalde veri yoksa null.
     weakness_score: float | None
-    # Skorun dayandığı toplam gözlem sayısı (cevap + tekrar + soru).
+    # Skorun dayandığı toplam gözlem sayısı (cevap + tekrar).
     sample_size: int
 
 
@@ -92,7 +85,6 @@ class _TopicBucket:
         "quiz_correct",
         "review_total",
         "review_retained",
-        "chat_count",
     )
 
     def __init__(self, label: str) -> None:
@@ -101,13 +93,11 @@ class _TopicBucket:
         self.quiz_correct = 0
         self.review_total = 0
         self.review_retained = 0
-        self.chat_count = 0
 
 
 def _weakness_score(
     quiz_accuracy: float | None,
     card_retention: float | None,
-    chat_pressure: float | None,
 ) -> float | None:
     """Üç sinyali ağırlıklı ortalamayla 0..1 zayıflık skoruna indirger (1 = en zayıf).
 
@@ -118,9 +108,7 @@ def _weakness_score(
 
     Formül: Σ(ağırlık × zayıflık) / Σ(mevcut sinyallerin ağırlıkları).
     Veri olmayan sinyal paydadan da düşer (uydurma varsayılan kullanılmaz); hiçbir
-    sinyalde veri yoksa sonuç None'dır. Chat tek yönlü bir sinyaldir: soru sorulmuş
-    olması zayıflık kanıtıdır, sorulmamış olması güç kanıtı DEĞİLDİR — bu yüzden
-    `chat_pressure` yalnızca soru sayısı > 0 iken sinyal sayılır (bkz. çağrı yeri).
+    sinyalde veri yoksa sonuç None'dır.
     """
     weighted = 0.0
     total_weight = 0.0
@@ -130,9 +118,6 @@ def _weakness_score(
     if card_retention is not None:
         weighted += WEIGHT_CARD * (1.0 - card_retention)
         total_weight += WEIGHT_CARD
-    if chat_pressure is not None:
-        weighted += WEIGHT_CHAT * chat_pressure
-        total_weight += WEIGHT_CHAT
     if total_weight == 0.0:
         return None
     return round(weighted / total_weight, 4)
@@ -158,9 +143,9 @@ async def get_course_heatmap(
 ) -> HeatmapOut:
     """Dersin konu × performans ısı haritasını döner (zayıftan güçlüye sıralı).
 
-    Üç sinyalin kaynağı: `quiz_attempts` (soru bazlı doğruluk), `card_reviews`
-    (SM-2 `last_rating` tutma oranı), `chat_messages` (kullanıcı sorularının konu
-    adı/anahtar kelime eşleşmesi). Skor formülü `_weakness_score` docstring'inde.
+    İki sinyalin kaynağı: `quiz_attempts` (soru bazlı doğruluk) ve `card_reviews`
+    (SM-2 `last_rating` tutma oranı). Chat sinyali kaldırıldı (2026-09-19).
+    Skor formülü `_weakness_score` docstring'inde.
     """
     db = await get_db()
     try:
@@ -168,8 +153,6 @@ async def get_course_heatmap(
             raise HTTPException(status_code=404, detail="Ders bulunamadı")
 
         buckets: dict[str, _TopicBucket] = {}
-        # Konu adı/anahtar kelime → konu anahtarı (chat eşleşmesi için)
-        match_terms: list[tuple[str, str]] = []
 
         def bucket_for(label: str) -> _TopicBucket | None:
             key = _normalize(label)
@@ -178,10 +161,9 @@ async def get_course_heatmap(
             bucket = buckets.get(key)
             if bucket is None:
                 bucket = buckets[key] = _TopicBucket(label.strip())
-                match_terms.append((key, key))
             return bucket
 
-        # ── 1) Konu evreni: notes.topics_json (anahtar kelimeler dahil) ──
+        # ── 1) Konu evreni: notes.topics_json ──
         cursor = await db.execute(
             "SELECT n.topics_json FROM notes n "
             "JOIN chapters c ON c.id = n.chapter_id "
@@ -192,14 +174,7 @@ async def get_course_heatmap(
             for entry in json.loads(row["topics_json"] or "[]"):
                 if not isinstance(entry, dict):
                     continue
-                bucket = bucket_for(str(entry.get("topic") or ""))
-                if bucket is None:
-                    continue
-                key = _normalize(bucket.label)
-                for keyword in entry.get("keywords", []):
-                    term = _normalize(str(keyword))
-                    if len(term) >= MIN_MATCH_LEN:
-                        match_terms.append((key, term))
+                bucket_for(str(entry.get("topic") or ""))
 
         # ── 2) Quiz doğruluğu ──
         cursor = await db.execute(
@@ -272,25 +247,9 @@ async def get_course_heatmap(
                 if row["last_rating"] in RETAINED_RATINGS:
                     bucket.review_retained += 1
 
-        # ── 4) Chat soru yoğunluğu ──
-        cursor = await db.execute(
-            "SELECT content FROM chat_messages "
-            "WHERE course_id = ? AND tenant_id = ? AND role = 'user'",
-            (course_id, tenant_id),
-        )
-        terms = [(key, term) for key, term in match_terms if len(term) >= MIN_MATCH_LEN]
-        for row in await cursor.fetchall():
-            normalized = _normalize(row["content"] or "")
-            if not normalized:
-                continue
-            hit_keys = {key for key, term in terms if term in normalized}
-            for key in hit_keys:
-                buckets[key].chat_count += 1
     finally:
         await db.close()
 
-    # Chat sinyali TEK YÖNLÜ: soru sorulmamış olması güç kanıtı değil, veri yokluğudur —
-    # sinyal yalnızca en az bir eşleşen soru varsa ağırlığa katılır.
     topics: list[TopicHeat] = []
     for bucket in buckets.values():
         quiz_accuracy = (
@@ -301,19 +260,13 @@ async def get_course_heatmap(
             if bucket.review_total
             else None
         )
-        chat_pressure = (
-            round(min(bucket.chat_count / CHAT_SATURATION, 1.0), 4)
-            if bucket.chat_count
-            else None
-        )
         topics.append(
             TopicHeat(
                 topic=bucket.label,
                 quiz_accuracy=quiz_accuracy,
                 card_retention=card_retention,
-                chat_question_count=bucket.chat_count,
-                weakness_score=_weakness_score(quiz_accuracy, card_retention, chat_pressure),
-                sample_size=bucket.quiz_total + bucket.review_total + bucket.chat_count,
+                weakness_score=_weakness_score(quiz_accuracy, card_retention),
+                sample_size=bucket.quiz_total + bucket.review_total,
             )
         )
 
@@ -327,6 +280,6 @@ async def get_course_heatmap(
     )
     return HeatmapOut(
         course_id=course_id,
-        weights={"quiz": WEIGHT_QUIZ, "card": WEIGHT_CARD, "chat": WEIGHT_CHAT},
+        weights={"quiz": WEIGHT_QUIZ, "card": WEIGHT_CARD},
         topics=topics,
     )

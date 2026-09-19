@@ -60,7 +60,6 @@ const panelKur = () => {
 
 const halka = () => document.querySelector('.cursor-ring')
 const halkaSinif = () => String(halka()?.className)
-const panelDegeri = (ad: string) => (document.querySelector('.glass-panel') as HTMLElement).style.getPropertyValue(ad)
 
 beforeEach(() => {
   kareKuyrugu.length = 0
@@ -86,12 +85,9 @@ describe('CursorRing', () => {
     expect(document.documentElement.classList.contains('cursor-ring-on')).toBe(false)
   })
 
-  it('pointer:fine ortamda ilk hareketle gorunur olur ve ters-paralaks leke konumunu panele yazar', () => {
+  it('pointer:fine ortamda ilk hareketle gorunur olur, glow katmani tek ve panele dokunmaz', () => {
     ortamKur({ isaretci: 'fine', azHareket: false })
-    document.documentElement.style.setProperty('--reflect-parallax', '-0.3')
-    document.documentElement.style.setProperty('--reflect-lerp', '1')
-    document.documentElement.style.setProperty('--reflect-edge-range', '120')
-    const { buton, hareket } = panelKur()
+    const { buton, hareket, panel } = panelKur()
     render(<CursorRing />)
 
     hareket(buton, 300, 160)
@@ -100,26 +96,10 @@ describe('CursorRing', () => {
     expect(halkaSinif()).toContain('cursor-ring--visible')
     expect(document.documentElement.classList.contains('cursor-ring-on')).toBe(true)
     expect((halka() as HTMLElement).style.transform).toBe('translate3d(300.00px, 160.00px, 0)')
-    // panel merkezi (200,100): leke = merkez + (imlec - merkez) * -0.3
-    expect(panelDegeri('--cursor-x')).toBe('170')
-    expect(panelDegeri('--cursor-y')).toBe('82')
-  })
-
-  it('kenar isigi imlece yakin kenarda parlar, uzak kenarda soner', () => {
-    ortamKur({ isaretci: 'fine', azHareket: false })
-    document.documentElement.style.setProperty('--reflect-parallax', '-0.3')
-    document.documentElement.style.setProperty('--reflect-lerp', '1')
-    document.documentElement.style.setProperty('--reflect-edge-range', '120')
-    const { buton, hareket } = panelKur()
-    render(<CursorRing />)
-
-    hareket(buton, 300, 160)
-    kare()
-
-    expect(panelDegeri('--edge-b')).toBe('0.444') // 40px -> (1-40/120)^2
-    expect(panelDegeri('--edge-r')).toBe('0.028') // 100px -> (1-100/120)^2
-    expect(panelDegeri('--edge-l')).toBe('0.000') // 300px -> menzil disi
-    expect(panelDegeri('--edge-t')).toBe('0.000')
+    // Tek glow katmani; panel yansima sistemi tamamen kaldirildi.
+    expect(document.querySelectorAll('.cursor-glow')).toHaveLength(1)
+    expect(panel.getAttribute('data-reflect')).toBeNull()
+    expect(panel.getAttribute('style')).toBeNull()
   })
 
   it('etkilesimli elemanda hover sinifi alir, duz panelde almaz', () => {
@@ -246,36 +226,29 @@ describe('CursorRing', () => {
     expect(halkaSinif()).not.toContain('cursor-ring--drag')
   })
 
-  it('prefers-reduced-motion: lerp yok (anlik konum) ve smear kapali', () => {
+  it('prefers-reduced-motion: lerp yok (anlik konum), panel degiskeni yazilmaz', () => {
     ortamKur({ isaretci: 'fine', azHareket: true })
-    document.documentElement.style.setProperty('--reflect-parallax', '-0.3')
-    document.documentElement.style.setProperty('--reflect-lerp', '0.15')
-    document.documentElement.style.setProperty('--reflect-stretch-max', '0.2')
-    const { buton, hareket } = panelKur()
+    const { buton, hareket, panel } = panelKur()
     render(<CursorRing />)
 
     hareket(buton, 320, 180)
     kare()
 
     expect((halka() as HTMLElement).style.transform).toBe('translate3d(320.00px, 180.00px, 0)')
-    expect(panelDegeri('--smear')).toBe('0.000')
-    expect(panelDegeri('--smear-sx')).toBe('1.0000')
+    expect(panel.getAttribute('style')).toBeNull()
   })
 
-  it('pencere kaybinda gorunurluk ve yansima degiskenleri temizlenir', () => {
+  it('pencere kaybinda gorunurluk kapanir ve cursor:none kapisi kaldirilir', () => {
     ortamKur({ isaretci: 'fine', azHareket: false })
-    document.documentElement.style.setProperty('--reflect-parallax', '-0.3')
     const { buton, hareket } = panelKur()
     render(<CursorRing />)
 
     hareket(buton, 100, 100)
     kare()
-    expect(panelDegeri('--cursor-x')).not.toBe('')
+    expect(halkaSinif()).toContain('cursor-ring--visible')
 
     document.documentElement.dispatchEvent(pointerOlay('pointerleave'))
     expect(halkaSinif()).not.toContain('cursor-ring--visible')
     expect(document.documentElement.classList.contains('cursor-ring-on')).toBe(false)
-    kare()
-    expect(panelDegeri('--cursor-x')).toBe('')
   })
 })

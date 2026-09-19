@@ -1,4 +1,10 @@
-"""Map-reduce not üretimi — konu çıkarımı, hibrit retrieval, kapsama, atıf doğrulama (Faz 3.1).
+"""Map-reduce not üretimi — konu çıkarımı, hibrit retrieval, kapsama denetimi (Faz 3.1).
+
+ATIF SİSTEMİ KALDIRILDI (2026-09-19): notlar hâlâ YALNIZ sağlanan kaynaklardan (kitap/slayt/web)
+yazılır ama model metne [n] işareti yazmaz ve kullanıcıya kaynakça/atıf GÖSTERİLMEZ.
+`citations_json` kaydı geriye uyumluluk için boş şemayle ({"topics": [...]}) yazılmaya devam eder
+(quiz/flashcard üretimi ve `coverage` router'ı bu alanı okur); artık boş atıf listeleri taşır.
+`_validate_citations` / `CITATION_CONFIRM_PROMPT` / `_sync_bibliography` zinciri kaldırıldı.
 
 `generate_notes_stream(chapter_id)` bir async generator'dır; SSE olayları yield eder:
   {"type": "status", "percent": int, "message": str}
@@ -13,7 +19,6 @@ import asyncio
 import json
 import logging
 import re
-from pathlib import Path
 
 from ..auth import LOCAL_TENANT_ID
 from ..config import settings
@@ -34,7 +39,6 @@ MAX_COVERAGE_ITERATIONS = 3
 # Ders için yüklenmiş syllabus/müfredat materyalinin prompt'a eklenecek azami karakter
 # sayısı — dev bir PDF metni tüm topic/section promptlarını şişirmesin diye kırpılır.
 KAZANIMLAR_MAX_CHARS = 4000
-QUOTE_WINDOW_CHARS = 240
 SLIDES_CONTEXT_CHARS = 8000
 NOTE_CONTEXT_CHARS = 6000
 # Bölüm yazımı çağrılarının çıktı bütçesi. Reasoning sağlayıcısında (opencode/deepseek)
@@ -61,10 +65,22 @@ class NoteGenerationError(Exception):
 
 # ── Metin yardımcıları ─────────────────────────────────────────────────
 
-# Atıf işaretleri: materyal kaynaklı `[3]`, web kaynaklı `⟨3⟩` (U+27E8 / U+27E9).
-# Model tek biçim (`[n]`) üretir; ayrımı `_resolve_citations` yapar. TARAYICI tek
-# noktadır: numaralandırma, alıntı çıkarma ve doğrulama aynı desenden beslenir.
+# Not üretimi artık atıfsız: model metne [n] yazmaz (ATIF_YASAGI), ancak her ihtimale
+# karşı kayıt öncesi gövdede kalmış olabilecek numara işaretleri ([3], ⟨3⟩) temizlenir.
 _MARKER_RE = re.compile(r"\[(\d+)\]|⟨(\d+)⟩")
+
+
+def _strip_note_markers(text: str) -> str:
+    """Metindeki [n] / ⟨n⟩ numara işaretlerini siler (atıf sistemi kaldırıldı).
+
+    Model prompt yasağına rağmen ara sıra işaret üretebilir; kullanıcıya ASLA
+    numara işareti gösterilmez. İşaret silinince bıraktığı boşluk düzeltilir.
+    """
+    cleaned = _MARKER_RE.sub("", text)
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+    cleaned = re.sub(r"[ \t]+([,.!?;:])", r"\1", cleaned)
+    # İşaret cümle sonundayken "...metin ." kalıntısını düzelt
+    return re.sub(r" +([,.!?;:])", r"\1", cleaned)
 
 
 def _normalize(text: str) -> str:
@@ -74,7 +90,7 @@ def _normalize(text: str) -> str:
 def topic_matches(heading: str, topic: str) -> bool:
     """Başlık ↔ konu adı eşleşmesi (tam ya da anlamlı alt-metin).
 
-    LLM başlığı konu adından sapabilir; kapsama/atıf eşlemesinde esneklik sağlar.
+    LLM başlığı konu adından sapabilir; kapsama eşlemesinde esneklik sağlar.
     """
     a = _normalize(heading)
     b = _normalize(topic)
@@ -85,43 +101,6 @@ def topic_matches(heading: str, topic: str) -> bool:
     if len(b) >= 4 and b in a:
         return True
     return len(a) >= 4 and a in b
-
-
-def _fuzzy_match(quote: str, chunk_text: str) -> bool:
-    """Normalize fuzzy substring eşleşmesi (Yetenek 06 §2)."""
-    q = _normalize(quote)
-    t = _normalize(chunk_text)
-    if not q or not t:
-        return False
-    if q in t:
-        return True
-    prefix = q[:60]
-    return len(prefix) >= 20 and prefix in t
-
-
-def _quote_before_citation(text: str, number: int) -> str:
-    """`[n]` / `⟨n⟩` işaretinden hemen önceki cümleyi alıntı adayı olarak döner.
-
-    Markdown başlık satırları (`### ...`) ve boş satırlar alıntıdan ayıklanır —
-    tek cümlelik bölümlerde başlığın alıntıya karışıp fuzzy eşleşmeyi bozmasını
-    önler (kullanıcı geri bildirimi).
-    """
-    idx = -1
-    for marker in (f"[{number}]", f"⟨{number}⟩"):
-        found = text.find(marker)
-        if found != -1 and (idx == -1 or found < idx):
-            idx = found
-    if idx == -1:
-        return ""
-    window = text[max(0, idx - QUOTE_WINDOW_CHARS) : idx]
-    sentences = [s for s in re.split(r"(?<=[.!?…])\s+", window) if s.strip()]
-    quote = sentences[-1].strip() if sentences else window.strip()
-    lines = [
-        line.strip()
-        for line in quote.split("\n")
-        if line.strip() and not line.lstrip().startswith("#")
-    ]
-    return lines[-1] if lines else quote
 
 
 def _slide_content_for_topic(topic: dict, slides: list[dict]) -> str:
@@ -228,89 +207,6 @@ async def _safe_hybrid_search(course_id: int, query: str, keywords: list[str]) -
     except Exception:
         logger.warning("retrieval başarısız, yedek zincire düşülüyor: %s", query, exc_info=True)
         return []
-
-
-def _chunk_to_citation(number: int, chunk: dict) -> dict:
-    if chunk.get("url"):
-        # Web kaynağı atfı: kaynak kimliği yok; url/title doğrudan atıfa taşınır.
-        return {
-            "id": number,
-            "source_type": "web",
-            "source_id": None,
-            "page": None,
-            "slide": None,
-            "chunk_id": chunk["chunk_id"],
-            "url": chunk.get("url"),
-            "title": chunk.get("title"),
-            "quote": "",
-            "chunk_text": chunk["text"],
-        }
-    return {
-        "id": number,
-        "source_type": "textbook" if chunk["page"] is not None else "slides",
-        "source_id": chunk["material_id"],
-        "page": chunk["page"],
-        "slide": chunk["slide"],
-        "chunk_id": chunk["chunk_id"],
-        "quote": "",
-        "chunk_text": chunk["text"],
-    }
-
-
-class _CitationRegistry:
-    """Not üretimi boyunca `chunk_id → global atıf numarası` kaydı (1'den artan sayaç).
-
-    Bölümler kendi kaynak listesine göre yerel `[1..n]` üretir (prompt böyle yazılmıştır);
-    bölümler birleşince numaralar çakışıyordu. Kayıt, yerel numarayı global numaraya
-    çevirir ve AYNI chunk'a her zaman AYNI numarayı verir (tekrar üretmez). Numara ataması
-    üretim boyunca (yeniden üretim turları dahil) yaşadığı için numaralar kaymaz.
-    """
-
-    def __init__(self) -> None:
-        self._ids: dict[str, int] = {}
-        self._citations: dict[int, dict] = {}
-
-    def resolve(self, chunk: dict) -> dict:
-        """Chunk'ın global atıf kaydını döner; ilk görülüşünde sıradaki numarayı atar."""
-        number = self._ids.get(chunk["chunk_id"])
-        if number is None:
-            number = len(self._ids) + 1
-            self._ids[chunk["chunk_id"]] = number
-            self._citations[number] = _chunk_to_citation(number, chunk)
-        return self._citations[number]
-
-    def ordered(self) -> list[dict]:
-        """Global numara sırasına göre tüm atıflar (kaynakça bu sırayı kullanır)."""
-        return [self._citations[n] for n in sorted(self._citations)]
-
-
-def _resolve_citations(
-    section: str, chunks: list[dict], registry: _CitationRegistry
-) -> tuple[str, list[dict]]:
-    """Bölüm metnini global numaralara çevirir; (yeni metin, atıflar) döner.
-
-    Yerel `[n]` → global numara; web kaynağı `⟨n⟩`, kitap/slayt `[n]` (görsel tip
-    ayrımını backend yapar, model tek biçim üretir). Aynı chunk bölümde birden çok
-    geçerse TEK atıf kaydı olur. Çözümsüz (aralık dışı) numaranın metni değiştirilmez.
-    """
-    quotes: dict[int, str] = {}
-    used: dict[int, dict] = {}
-
-    def _rewrite(match: re.Match[str]) -> str:
-        local = int(match.group(1) or match.group(2))
-        if not 1 <= local <= len(chunks):
-            return match.group(0)
-        citation = registry.resolve(chunks[local - 1])
-        if local not in quotes:
-            # Alıntı ÖZGÜN metinden çıkarılır — yeniden yazım sırasında işaret kaymasın.
-            quotes[local] = _quote_before_citation(section, local)
-        used[local] = citation
-        number = citation["id"]
-        return f"⟨{number}⟩" if citation["source_type"] == "web" else f"[{number}]"
-
-    text = _MARKER_RE.sub(_rewrite, section)
-    citations = [{**used[local], "quote": quotes[local]} for local in used]
-    return text, citations
 
 
 # ── LLM adımları ───────────────────────────────────────────────────────
@@ -449,14 +345,12 @@ async def _generate_fallback_section(
     tenant_id: str,
     kazanimlar: str,
     allow_web: bool = True,
-    *,
-    registry: _CitationRegistry,
-) -> tuple[str, list[dict], list[str], str]:
-    """Kitapta kaynak yokken (ya da atıf sorunu giderilirken) kaynak zinciri.
+) -> tuple[str, list[str], str]:
+    """Kitapta kaynak yokken yedek kaynak zinciri.
 
     allow_web=True → web → slayt → deterministik slayt; allow_web=False → yalnızca
-    slayt → deterministik slayt (atıfsız, doğrulaması garantili temiz).
-    Dönüş: (bölüm, atıflar, deltalar, durum mesajı). Bölüm asla boş dönmez.
+    slayt → deterministik slayt.
+    Dönüş: (bölüm, deltalar, durum mesajı). Bölüm asla boş dönmez.
     """
     deltas: list[str] = []
     name = topic["topic"]
@@ -486,12 +380,10 @@ async def _generate_fallback_section(
                     emitted = stream.feed(delta)
                     if emitted:
                         deltas.append(emitted)
-                section = stream.cleaned()
+                section = _strip_note_markers(stream.cleaned())
                 if section:
-                    section, citations = _resolve_citations(section, chunks, registry)
                     return (
                         _ensure_topic_heading(section, name),
-                        citations,
                         deltas,
                         f"“{name}” için web kaynakları kullanılıyor…",
                     )
@@ -519,16 +411,12 @@ async def _generate_fallback_section(
             emitted = stream.feed(delta)
             if emitted:
                 deltas.append(emitted)
-        # Bu yol asla atıf listesi döndürmez ([] — aşağıda); model yine de yasağa
-        # rağmen [n]/⟨n⟩ biçiminde bir işaret bırakırsa gövdede sahipsiz kalır ve
-        # kaynakça senkronizasyonu (_sync_bibliography) onu YANLIŞLIKLA gerçek bir
-        # atıfla eşleştirebilir (kayıttaki başka bir numarayla çakışarak). Kaynağı
-        # olmayan bu yolda işaretler baştan temizlenir.
-        section = _MARKER_RE.sub("", stream.cleaned())
+        # Model yasağa rağmen [n]/⟨n⟩ biçiminde işaret bırakırsa temizlenir —
+        # kullanıcıya asla numara işareti gösterilmez.
+        section = _strip_note_markers(stream.cleaned())
         if section:
             return (
                 _ensure_topic_heading(section, name),
-                [],
                 deltas,
                 f"“{name}” sunum içeriğinden yazılıyor…",
             )
@@ -539,7 +427,6 @@ async def _generate_fallback_section(
     # LLM gerektirmez — anında biter).
     return (
         _deterministic_slide_section(topic, slides),
-        [],
         deltas,
         f"“{name}” sunum içeriğinden yazılıyor…",
     )
@@ -553,17 +440,15 @@ async def _regen_topic(
     course_name: str,
     tenant_id: str,
     kazanimlar: str,
-    *,
-    registry: _CitationRegistry,
-) -> tuple[str | None, list[dict]]:
-    """Kapsama/atıf düzeltme turu için konuyu yeniden üretir (stream'siz).
+) -> str | None:
+    """Kapsama düzeltme turu için konuyu yeniden üretir (stream'siz).
 
     Kitapta kaynak yoksa aynı zinciri izler (web → slayt yedeği); bölüm asla boş dönmez.
     Boş yanıt "bu turda değişiklik yok" sayılır (çağıran `None` görür).
     """
     chunks = await _safe_hybrid_search(course_id, topic["topic"], topic.get("keywords", []))
     if not chunks:
-        section, citations, _deltas, _msg = await _generate_fallback_section(
+        section, _deltas, _msg = await _generate_fallback_section(
             topic,
             slides,
             course_id,
@@ -571,9 +456,8 @@ async def _regen_topic(
             course_name,
             tenant_id,
             kazanimlar,
-            registry=registry,
         )
-        return _strip_own_heading(section, topic["topic"]), citations
+        return _strip_own_heading(section, topic["topic"])
     prompt = _build_prompt(topic, slides, chunks, kazanimlar)
     parts: list[str] = []
     try:
@@ -591,7 +475,7 @@ async def _regen_topic(
         # Sağlayıcı zinciri tükendi (2026-09-05 kullanıcı geri bildirimi: bu, zaten üretilmiş
         # notu tamamen çöpe atıyordu) — bu turda değişiklik yok sayılır, önceki bölüm korunur.
         logger.warning("konu yeniden üretimi başarısız, mevcut bölüm korunuyor: %s", topic["topic"])
-        return None, []
+        return None
     section = _strip_own_heading(
         note_cleanup.normalize_note_markdown("".join(parts)), topic["topic"]
     )
@@ -602,23 +486,22 @@ async def _regen_topic(
         # canlı vaka: chapter 13 notunda "Uyarıcı-Uyarıcı İlişkilendirmesi" bölümü
         # başlıktan ibaret kalmıştı).
         logger.warning("boş yeniden üretim yanıtı, mevcut bölüm korunuyor: %s", topic["topic"])
-        return None, []
-    section, citations = _resolve_citations(section, chunks, registry)
-    return section, citations
+        return None
+    return _strip_note_markers(section)
 
 
-async def _safe_regen_topic(*args, **kwargs) -> tuple[str | None, list[dict]]:
+async def _safe_regen_topic(*args, **kwargs) -> str | None:
     """`_regen_topic` sarmalayıcısı — beklenmeyen hatada (LLM dışı: retrieval/db/…)
     turu "değişiklik yok" sayar, tüm üretimi ÇÖKERTMEZ (2026-09-06 kullanıcı geri
-    bildirimi: kapsama/atıf düzeltme turlarında üretim sessizce iptal oluyordu)."""
+    bildirimi: kapsama düzeltme turlarında üretim sessizce iptal oluyordu)."""
     try:
         return await _regen_topic(*args, **kwargs)
     except Exception:
         logger.warning("konu yeniden üretimi beklenmeyen hatayla başarısız", exc_info=True)
-        return None, []
+        return None
 
 
-async def _safe_fallback_section(*args, **kwargs) -> tuple[str, list[dict], list[str], str] | None:
+async def _safe_fallback_section(*args, **kwargs) -> tuple[str, list[str], str] | None:
     """`_generate_fallback_section` sarmalayıcısı — beklenmeyen hatada `None` döner
     (çağıran taraf mevcut bölümü korur) — aynı gerekçeyle `_safe_regen_topic` gibi."""
     try:
@@ -626,33 +509,6 @@ async def _safe_fallback_section(*args, **kwargs) -> tuple[str, list[dict], list
     except Exception:
         logger.warning("yedek bölüm üretimi beklenmeyen hatayla başarısız", exc_info=True)
         return None
-
-
-async def _validate_citations(
-    content_md: str,
-    topic_citations: dict[str, list[dict]],
-    course_id: int,
-    chapter_id: int,
-) -> list[str]:
-    """Her [n] atfını DETERMİNİSTİK olarak çözümler; çözümsüz atıflı konuları döner.
-
-    PERFORMANS NOTU (kullanıcı geri bildirimi): atıf başına LLM onay çağrısı
-    (citation_confirm) kaldırıldı — yüzlerce küçük çağrı üretimi dakikalarca
-    uzatıyordu. Doğrulama artık yalnız fuzzy eşleşmeyle yapılır; eşleşmeyen
-    atıf "sorunlu konu" sayılır ve üst katmanın yedek zinciri devreye girer.
-    """
-    problems: list[str] = []
-    for topic_name, citations in topic_citations.items():
-        section = _section_for_topic(content_md, topic_name)
-        if not section:
-            continue
-        for citation in citations:
-            quote = citation["quote"] or _quote_before_citation(section, citation["id"])
-            if _fuzzy_match(quote, citation["chunk_text"]):
-                continue
-            problems.append(topic_name)
-            break
-    return list(dict.fromkeys(problems))
 
 
 async def _save_note(
@@ -686,83 +542,10 @@ async def _save_note(
         await db.close()
 
 
-def _strip_internal(citations: list[dict]) -> list[dict]:
-    """chunk_text dahili doğrulama içindir; kayıtlı JSON'a girmez (Yetenek 06 şeması)."""
-    return [{k: v for k, v in c.items() if k != "chunk_text"} for c in citations]
-
-
-# ── Kaynakça (model değil, KOD üretir) ─────────────────────────────────
-
-# Yüklenen dosyalar `{uuid4().hex}_{özgün ad}` olarak saklanır (bkz. routers/materials.py).
-_UUID_PREFIX_RE = re.compile(r"^[0-9a-f]{32}_")
-
-
-def _material_label(filepath: str) -> str:
-    """Materyalin görünen adı (UUID öneki gizlenir)."""
-    return _UUID_PREFIX_RE.sub("", Path(filepath).name)
-
-
-async def _load_material_labels(course_id: int, tenant_id: str) -> dict[int, str]:
-    """Kaynakça için {materyal_id: görünen ad}. Okunamazsa boş döner — kaynakça
-    "Ders materyali" ile yazılır, not üretimi bu yüzden çökmez."""
-    db = await get_db()
-    try:
-        cursor = await db.execute(
-            "SELECT id, filepath FROM materials WHERE course_id = ? AND tenant_id = ?",
-            (course_id, tenant_id),
-        )
-        return {row["id"]: _material_label(row["filepath"]) for row in await cursor.fetchall()}
-    except Exception:
-        logger.warning("materyal adları okunamadı, kaynakça genel adla yazılıyor", exc_info=True)
-        return {}
-    finally:
-        await db.close()
-
-
-def _md_safe(text: str) -> str:
-    """Markdown yapısını bozabilecek karakterleri temizler (tek satıra indirir)."""
-    return re.sub(r"[\[\]<>|\n\r]+", " ", text).strip()
-
-
-def _bibliography_block(
-    registry: _CitationRegistry,
-    topic_citations: dict[str, list[dict]],
-    labels: dict[int, str],
-) -> str:
-    """Notun sonuna eklenen `## Kaynakça` bölümü (model yazmaz).
-
-    Yalnız notta GERÇEKTEN kalan atıflar listelenir: yeniden üretimde düşen atıf
-    kaynakçaya girmez. Sıra global numara sırasıdır. Atıf yoksa "" döner.
-    """
-    used = {c["id"] for cites in topic_citations.values() for c in cites}
-    lines: list[str] = []
-    for citation in registry.ordered():
-        number = citation["id"]
-        if number not in used:
-            continue
-        if citation["source_type"] == "web":
-            title = _md_safe(citation.get("title") or "") or "Web kaynağı"
-            url = (citation.get("url") or "").strip()
-            marker = f"⟨{number}⟩"
-            # URL otomatik bağlantı (`<url>`) — markdown bağlantı sözdizimini bozmaz
-            # ve tıklanabilir kalır (URL içinde parantez olsa bile).
-            body = f"{marker} {title} — <{url}>" if url and " " not in url else f"{marker} {title}"
-            lines.append(f"- {body}")
-            continue
-        raw_source_id = citation.get("source_id")
-        name = (
-            _md_safe(labels.get(int(raw_source_id)) or "")
-            if isinstance(raw_source_id, int)
-            else ""
-        ) or "Ders materyali"
-        marker = f"[{number}]"
-        if citation["source_type"] == "textbook" and citation.get("page") is not None:
-            lines.append(f"- {marker} {name}, s. {citation['page']}")
-        elif citation["source_type"] == "slides" and citation.get("slide") is not None:
-            lines.append(f"- {marker} {name}, slayt {citation['slide']}")
-        else:
-            lines.append(f"- {marker} {name}")
-    return "## Kaynakça\n\n" + "\n".join(lines) if lines else ""
+# ── Kaynakça kaldırıldı (2026-09-19) ──────────────────────────────────
+# Atıf sistemi ve kaynakça üretimi tamamen kaldırıldı: not yalnız öğretici metinden
+# oluşur, kullanıcıya atıf/kaynakça/kaynak uyarısı GÖSTERİLMEZ. Kaynak temelli üretim
+# korunur (promptlar KAYNAK_ROL_AYRIMI ile kaynaklara bağlar).
 
 
 # ── Ana akış ───────────────────────────────────────────────────────────
@@ -827,12 +610,8 @@ async def _generate(chapter_id: int, tenant_id: str):
     # Genel başlık garantisi (kullanıcı isteği): model vermezse chapter başlığı düşer.
     general_title = (note_title or chapter_title or "").strip() or "Ders Notu"
 
-    # 2+3) Konu bazlı map-reduce üretim (stream'li)
+    # 2+3) Konu bazlı map-reduce üretim (stream'li) — atıfsız
     sections: list[str] = []
-    topic_citations: dict[str, list[dict]] = {}
-    # Global atıf kaydı: bölümler kendi yerel [1..n] numaralarını üretir, birleştirmede
-    # global numaraya çevrilir (numaralar bölümler arasında ÇAKIŞMAZ; bkz. _CitationRegistry).
-    registry = _CitationRegistry()
 
     for i, topic in enumerate(topics):
         base = 10 + int(72 * i / max(len(topics), 1))
@@ -885,9 +664,7 @@ async def _generate(chapter_id: int, tenant_id: str):
                     break
                 logger.warning("boş bölüm yanıtı, bir kez daha deneniyor: %s", topic["topic"])
             if section:
-                section, citations = _resolve_citations(section, chunks, registry)
-                sections.append(section)
-                topic_citations[topic["topic"]] = citations
+                sections.append(_strip_note_markers(section))
                 continue
 
         if not chunks:
@@ -900,24 +677,21 @@ async def _generate(chapter_id: int, tenant_id: str):
                 course_name,
                 tenant_id,
                 kazanimlar,
-                registry=registry,
             )
             if result is None:
                 # Beklenmeyen hata (LLM dışı) — anında biten deterministik yedeğe düş,
                 # üretim asla çökmesin (2026-09-06 kullanıcı geri bildirimi).
-                section, citations, deltas, status_message = (
+                section, deltas, status_message = (
                     _deterministic_slide_section(topic, slides),
-                    [],
                     [],
                     f"“{topic['topic']}” sunum içeriğinden yazılıyor…",
                 )
             else:
-                section, citations, deltas, status_message = result
+                section, deltas, status_message = result
             yield {"type": "status", "percent": base + 3, "message": status_message}
             for delta in deltas:
                 yield {"type": "delta", "text": delta}
             sections.append(section)
-            topic_citations[topic["topic"]] = citations
             continue
 
         # Kaynak bulundu ama LLM iki denemede de boş döndü: anında biten deterministik bölüm.
@@ -927,7 +701,6 @@ async def _generate(chapter_id: int, tenant_id: str):
             "message": f"“{topic['topic']}” sunum içeriğinden yazılıyor…",
         }
         sections.append(_deterministic_slide_section(topic, slides))
-        topic_citations[topic["topic"]] = []
 
     # Kayıt öncesi SON savunma: bölümler zaten normalize edilerek geldi, burada
     # birleşim düzeyinde de uygulanır (bölümler arası sızmış JSON/kod çiti kalmasın;
@@ -938,7 +711,7 @@ async def _generate(chapter_id: int, tenant_id: str):
     # chapter başlığı düşer. H1 her zaman içeriğin EN ÜSTÜNE eklenir: düzgün üretilen not da
     # "### Konu" ile başladığı için "ilk satır başlık mı" koşulu H1'i fiilen hiç eklemiyordu
     # (2026-09-18 kullanıcı bildirimi: genel başlık eksik). (Yapışık/duplicate başlık onarımı
-    # kaynakça senkronizasyonunda yapılır — bkz. _sync_bibliography; _dedupe_adjacent_headings
+    # kayıt öncesinde yapılır — bkz. _repair_heading_structure; _dedupe_adjacent_headings
     # H1'i asla düşürmez.)
     content_md = f"# {general_title}\n\n{content_md}"
 
@@ -958,7 +731,7 @@ async def _generate(chapter_id: int, tenant_id: str):
         for topic in topics:
             if topic["topic"] not in missing:
                 continue
-            section, citations = await _safe_regen_topic(
+            section = await _safe_regen_topic(
                 topic,
                 slides,
                 course_id,
@@ -966,7 +739,6 @@ async def _generate(chapter_id: int, tenant_id: str):
                 course_name,
                 tenant_id,
                 kazanimlar,
-                registry=registry,
             )
             if section is None:
                 continue
@@ -976,141 +748,29 @@ async def _generate(chapter_id: int, tenant_id: str):
             )
             new_block = f"### {topic['topic']}\n\n{section}"
             content_md, replaced = _replace_section(content_md, pattern, new_block)
-            if replaced:
-                topic_citations[topic["topic"]] = citations
-            else:
+            if not replaced:
                 content_md += f"\n\n{new_block}"
-                topic_citations[topic["topic"]] = citations
         try:
             missing = await _check_coverage(topics, content_md, course_id, chapter_id, tenant_id)
         except llm_service.LLMError:
             logger.warning("kapsama doğrulaması başarısız oldu, atlanıyor: chapter=%s", chapter_id)
             missing = []
 
-    # 5) Atıf doğrulama — çözümsüz atıf kabul edilmez (Yetenek 06)
-    yield {"type": "status", "percent": 93, "message": "Atıflar doğrulanıyor…"}
-    problems = await _validate_citations(
-        content_md, topic_citations, course_id, chapter_id
-    )
-    if problems:
-        for topic in topics:
-            if topic["topic"] not in problems:
-                continue
-            section, citations = await _safe_regen_topic(
-                topic,
-                slides,
-                course_id,
-                chapter_id,
-                course_name,
-                tenant_id,
-                kazanimlar,
-                registry=registry,
-            )
-            if section is None:
-                continue
-            new_block = f"### {topic['topic']}\n\n{section}"
-            pattern = re.compile(
-                rf"^#{{2,4}}\s+{re.escape(topic['topic'])}\s*$", re.MULTILINE
-            )
-            content_md, replaced = _replace_section(content_md, pattern, new_block)
-            if replaced:
-                topic_citations[topic["topic"]] = citations
-        problems = await _validate_citations(
-            content_md, topic_citations, course_id, chapter_id
-        )
-    if problems:
-        # SON GÜVENCE 1: çözümsüz atıflı konuları yedek zincirle (web → slayt) yeniden üret —
-        # not ASLA atıf hatasıyla bitmez (kullanıcı kararı: her koşulda not teslim edilir).
-        yield {
-            "type": "status",
-            "percent": 95,
-            "message": "Atıf sorunları gideriliyor…",
-        }
-        for topic in topics:
-            if topic["topic"] not in problems:
-                continue
-            result = await _safe_fallback_section(
-                topic,
-                slides,
-                course_id,
-                chapter_id,
-                course_name,
-                tenant_id,
-                kazanimlar,
-                allow_web=True,
-                registry=registry,
-            )
-            if result is None:
-                continue
-            section, citations, _deltas, _msg = result
-            new_block = f"### {topic['topic']}\n\n{_strip_own_heading(section, topic['topic'])}"
-            pattern = re.compile(
-                rf"^#{{2,4}}\s+{re.escape(topic['topic'])}\s*$", re.MULTILINE
-            )
-            content_md, replaced = _replace_section(content_md, pattern, new_block)
-            if not replaced:
-                content_md += f"\n\n{new_block}"
-            topic_citations[topic["topic"]] = citations
-        problems = await _validate_citations(
-            content_md, topic_citations, course_id, chapter_id
-        )
-    if problems:
-        # SON GÜVENCE 2: slayt temelli atıfsız bölüm — doğrulaması garantili temiz.
-        for topic in topics:
-            if topic["topic"] not in problems:
-                continue
-            result = await _safe_fallback_section(
-                topic,
-                slides,
-                course_id,
-                chapter_id,
-                course_name,
-                tenant_id,
-                kazanimlar,
-                allow_web=False,
-                registry=registry,
-            )
-            if result is None:
-                continue
-            section, citations, _deltas, _msg = result
-            new_block = f"### {topic['topic']}\n\n{_strip_own_heading(section, topic['topic'])}"
-            pattern = re.compile(
-                rf"^#{{2,4}}\s+{re.escape(topic['topic'])}\s*$", re.MULTILINE
-            )
-            content_md, replaced = _replace_section(content_md, pattern, new_block)
-            if not replaced:
-                content_md += f"\n\n{new_block}"
-            topic_citations[topic["topic"]] = citations
-        problems = await _validate_citations(
-            content_md, topic_citations, course_id, chapter_id
-        )
-    if problems:
-        # SON ÇARE: bölümler korunur, çözümsüz konuların atıfları düşürülür (asla hata dönmez).
-        # LLM gerektirmez, anında biter. Düşen konunun gövdede kalmış sahipsiz çipleri
-        # kayıt aşamasından önce _sync_bibliography tarafından da temizlenir.
-        logger.warning("çözümsüz atıf kalan konular (atıflar düşürüldü): %s", problems)
-        for topic_name in problems:
-            topic_citations[topic_name] = []
+    # 5) Başlık yapısı onarımı + son temizlik. Atıf doğrulama zinciri KALDIRILDI:
+    # kullanıcıya atıf gösterilmez. Kalan adımlar yalnız başlık yapısını sağlamlaştırır ve
+    # yasağa rağmen sızmış numara işaretlerini temizler. Kaynakça YAZILMAZ.
+    yield {"type": "status", "percent": 93, "message": "Not düzenleniyor…"}
+    content_md = _repair_heading_structure(content_md)
+    content_md = _merge_repeated_memory_headings(content_md)
+    content_md = _strip_note_markers(content_md)
 
-    # 6) Kaynakça + kayıt. Kaynakça not içeriğinin PARÇASI olarak yazılır: PDF/dışa
-    # aktarımda ve not görüntüleyicide aynen çıkar. Doğrulama turlarından SONRA eklenir
-    # (kaynakça metni kapsama/atıf denetimine girmesin).
-    # SENKRONİZASYON (kullanıcı isteği: "kaynakça tüm atıfları kapsamalı"): gövde
-    # gerçeği (çipler) ile topic_citations kayıtları eşitlenir, başlık yapısı onarılır
-    # (yapışık/duplicate başlık), kaynakça YALNIZ gövdede duran atıflarla yazılır.
-    content_md, topic_citations = _sync_bibliography(
-        content_md,
-        registry,
-        topic_citations,
-        await _load_material_labels(course_id, tenant_id),
-        atilmis_konular=set(problems or ()),
-    )
-
+    # 6) Kayıt. Kaynakça üretimi kaldırıldı; citations_json geriye uyumluluk için
+    # boş atıf listeleriyle yazılır (quiz/flashcard üretimi ve coverage router'ı okur).
     yield {"type": "status", "percent": 98, "message": "Not kaydediliyor…"}
     citations_json = {
         "topics": [
-            {"topic": name, "citations": _strip_internal(cites)}
-            for name, cites in topic_citations.items()
+            {"topic": topic["topic"], "citations": []}
+            for topic in topics
         ]
     }
     topics_json = [
@@ -1138,7 +798,7 @@ async def _generate(chapter_id: int, tenant_id: str):
 
 # Prompt'un (v4) yasağa rağmen ürettiği hafıza alt başlıkları — İÇERİK SIRASI adlarıdır,
 # ekranda başlık OLMAMALI (kullanıcı isteği: "içerikler dursun ama başlık olmasın").
-# Sadece tam satır başlığı kaldırılır; konu başlıkları ve ## Kaynakça korunur.
+# Sadece tam satır başlığı kaldırılır; konu başlıkları korunur.
 _MEMORY_SUBSECTION_NAMES = (
     "hatırlatıcı",
     "ne işe yarar",
@@ -1309,86 +969,6 @@ def _make_section_separator(content_md: str) -> str:
     return "" if content_md.endswith("\n\n") else ("\n" if content_md.endswith("\n") else "\n\n")
 
 
-def _sync_bibliography(
-    content_md: str,
-    registry: _CitationRegistry,
-    topic_citations: dict[str, list[dict]],
-    labels: dict[int, str],
-    atilmis_konular: set[str] | None = None,
-) -> tuple[str, dict[str, list[dict]]]:
-    """Kaynakçayı gövdeyle SENKRONİZE eder (kullanıcı isteği: kaynakça tüm atıfları kapsamalı).
-
-    Gövde, son kayıtlı topic_citations'a göre geride kalabilir: yedek zincirdeki
-    `if not replaced: content_md += new_block` (atıf kaydı güncellenmez) ve regen
-    turlarında bölümün iki kez yazılması bu uyuşmazlığın kaynaklarıdır. Bu yüzden
-    kaynakça üretmeden ÖNCE:
-    1. Başlık yapısı onarılır (yapışık başlık bölünür, komşu duplicate tekilleştirilir) —
-       aksi halde çipler doğru bölüme eşlenemez.
-    2. Her konunun çipleri GERÇEK gövdeden sayılır; topic_citations kayıtları buna
-       göre budanır.
-    3. Kaynakça YALNIZ gövdede gerçekten duran atıflarla yazılır — her çipin kaynağı
-       mutlaka listede olur.
-    Dönüş: (onarılmış content_md, güncellenmiş topic_citations).
-    """
-    atilmis_konular = set(atilmis_konular or ())
-    content_md = _repair_heading_structure(content_md)
-    content_md = _merge_repeated_memory_headings(content_md)
-
-    def _nums(m: re.Match) -> list[int]:
-        return [int(x) for x in re.findall(r"\d+", m.group(0))]
-
-    kalan_idler = {c["id"] for c in registry.ordered()}
-    govde_numaralari: set[int] = set()
-    for m in _MARKER_RE.finditer(content_md):
-        govde_numaralari.update(n for n in _nums(m) if n in kalan_idler)
-
-    # SON ÇARE'de AÇIKÇA atılan konu (atilmis_konular): gövdede kalmış sahipsiz çipler
-    # TEMİZLENİR — bu çipler doğrulanmadı, kaynakçada da listelenemez. Sadece kayıt listesi
-    # boş olan konuya dokunulmaz (boş kayıt meşrudur: konu gerçekten atıfsız yazılmıştır).
-    for ad in atilmis_konular:
-        bolum = _section_for_topic(content_md, ad)
-        if not bolum:
-            continue
-        yeni_bolum = bolum
-        for n in {x for m in _MARKER_RE.finditer(bolum) for x in _nums(m) if x in kalan_idler}:
-            yeni_bolum = re.sub(
-                rf"(?<!\d)({re.escape(f'[{n}]')}|{re.escape(f'⟨{n}⟩')})(?!\d)",
-                "",
-                yeni_bolum,
-            )
-        content_md = content_md.replace(bolum, yeni_bolum)
-        govde_numaralari = {
-            x
-            for m in _MARKER_RE.finditer(content_md)
-            for x in _nums(m)
-            if x in kalan_idler
-        }
-
-    # Topic kayıtlarını gövde gerçeğiyle eşitle (kayıtta olup gövdede olmayan atıf düşer)
-    guncel: dict[str, list[dict]] = {}
-    for topic_name, cites in topic_citations.items():
-        guncel[topic_name] = [c for c in cites if c["id"] in govde_numaralari]
-
-    # Bölüm ayrıştırması değişmiş olabilir (duplicate birleşimi, yapışık başlık bölünmesi):
-    # her konunun bölümündeki çipleri bulup kaydı o bölümün çipleriyle eşle. Kaydı HİÇ
-    # kurulmamış konu (yedek zincirin `content_md += new_block` ekleme yolu — çip gövdede
-    # ama kayıt yok) gövdesindeki çiplerden YENİDEN kurulur; aksi halde gövdede çipi duran
-    # kaynak kaynakçada hiç yer alırdı (kullanıcı isteği: "kaynakça tüm atıfları kapsamalı").
-    tum_atiflar = {c["id"]: dict(c) for c in registry.ordered()}
-    for topic_name in list(guncel.keys()):
-        bolum = _section_for_topic(content_md, topic_name)
-        if not bolum:
-            continue
-        bolum_nums: set[int] = set()
-        for m in _MARKER_RE.finditer(bolum):
-            bolum_nums.update(_nums(m))
-        mevcut = {c["id"]: c for c in guncel[topic_name]}
-        if not mevcut and topic_name not in atilmis_konular:
-            mevcut = tum_atiflar
-        guncel[topic_name] = [mevcut[n] for n in sorted(bolum_nums) if n in mevcut]
-
-    kaynakca = _bibliography_block(registry, guncel, labels)
-    if kaynakca:
-        govde = content_md.split("## Kaynakça")[0].rstrip()
-        content_md = f"{govde}\n\n{kaynakca}"
-    return content_md, guncel
+# _sync_bibliography kaldırıldı (2026-09-19): atıf/kaynakça yok, onarım adımları
+# ana akışta (_repair_heading_structure + _merge_repeated_memory_headings +
+# _strip_note_markers) çağrılıyor.

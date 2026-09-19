@@ -77,20 +77,16 @@ KAYNAK_ROL_AYRIMI = """KAYNAKLARIN ROL AYRIMI (karıştırma):
 - REHBER (ders sunumu/slaytlar) KAPSAMI belirler: hangi kavramlar, hangi sırayla, ne derinlikte
   işlenecek. Sınavın sınırı budur. Rehberde olmayan konuyu ANLATMA.
 - KAYNAKLAR (ders kitabı taraması) İÇERİĞİ verir: tanım, mekanizma, örnek, sayı, ayrıntı.
-  Her bilgi cümlesi buradan gelir ve [n] atfı taşır.
+  Her bilgi cümlesi buradan gelir. Kaynak numaralarını METNE YAZMA (bkz. ATIF YASAĞI).
 - Yani: rehber NE anlatılacağını, kaynaklar NASIL anlatılacağını söyler.
 - Rehberde geçen ama kaynaklarda karşılığı olmayan kavramı yalnızca adıyla an, uydurma açıklama yazma."""
 
-ATIF_KURALLARI = """ATIF KURALLARI:
-1. Her bilgi cümlesinin sonuna [n] koy. n, KAYNAKLAR listesindeki numaradır.
-2. Listede olmayan numara YAZMA. Numara aralığı dışına çıkma.
-3. Tek cümle iki kaynağa dayanıyorsa [1][2] biçiminde arka arkaya yaz.
-4. Başlıklara, sorulara ve hatırlatıcı satırlarına atıf koyma; yalnız bilgi cümlelerine koy.
-5. Atıf uyduramazsın: kaynağı olmayan cümleyi yazma, cümleyi sil.
-6. KAYNAKÇA YAZMA: notun sonuna "Kaynakça", "Kaynaklar", "Referanslar" başlıklı bölüm EKLEME.
-   Kaynak listesini sistem otomatik üretir; senin işin yalnız metin içindeki [n] atıflarıdır.
-7. Numaralandırmayı SEN yeniden başlatmazsın: yalnız sana verilen KAYNAKLAR listesindeki numaraları
-   kullan. Bölüm birleştirme sırasında numaralar sistem tarafından yeniden eşlenir."""
+ATIF_YASAGI = """ATIF YASAĞI (İHLALİ HATADIR):
+1. Metin içinde [1], [2], ⟨3⟩ biçiminde NUMARA İŞARETİ KULLANMA. Tek bir tane bile yazma.
+2. KAYNAKLAR listesindeki numaralar sana içeriği sunmak içindir; numaraları metne TAŞIMA.
+3. Kaynakça, kaynak listesi, "Kaynaklar" başlıklı bölüm EKLEME; not yalnız öğretici metinden oluşur.
+4. Kaynağı olmayan bilgiyi YAZMA (uydurma yasaktır) — ama yazdığın her cümle ÇIPLAK akar:
+   numara işareti olmadan."""
 
 
 def dil_talimati(not_dili: str, *, json_sema: bool = True) -> str:

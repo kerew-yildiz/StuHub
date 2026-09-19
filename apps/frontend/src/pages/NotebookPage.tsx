@@ -261,7 +261,8 @@ export function NotebookPage() {
   }
 
   const handleDownloadNoteMarkdown = async (noteId: number) => {
-    const ok = await downloadAuthed(`/notes/${noteId}/export?format=md`, `stuhub-not-${noteId}.md`)
+    const chapterLabel = (chapter?.title ?? `Chapter ${chapterId}`).trim()
+    const ok = await downloadAuthed(`/notes/${noteId}/export?format=md`, `${chapterLabel}.md`)
     if (!ok) setError('Not indirilemedi. Lütfen tekrar deneyin.')
   }
 
@@ -269,7 +270,11 @@ export function NotebookPage() {
     if (!note || exportingPdf) return
     setExportingPdf(true)
     try {
-      await exportNotePdf(note.id, variant)
+      // İndirme adı chapter başlığından: "1. Perspectives Research - Digital Copy.pdf"
+      // (kullanıcı isteği; eski "stuhub-not-<id>-<variant>.pdf" yerine).
+      const chapterLabel = (chapter?.title ?? `Chapter ${chapterId}`).trim()
+      const variantLabel = variant === 'digital' ? 'Digital Copy' : 'Physical Copy'
+      await exportNotePdf(note.id, variant, `${chapterLabel} - ${variantLabel}`)
       setPdfMenuOpen(false)
     } catch {
       setError('PDF oluşturulamadı. Lütfen tekrar deneyin.')

@@ -67,45 +67,23 @@
   --glass-gleam: radial-gradient(closest-side at 18% 12%, rgba(255,255,255,.08), transparent);
   --shadow-card-hover: 0 14px 36px rgba(0,0,0,.45);
   --shadow-card: 0 8px 24px rgba(0,0,0,.35);
-  /* Custom cursor (glass halka) — cam yansimasi opakligi. B (performans paketi):
-   * mix-blend-mode KALDIRILDI — ton gradient alfasina gomulu; blend grubu olmadigi
-   * icin panel backdrop'u her karede yeniden harmanlanmiyor. */
-  --glass-reflect-opacity: .12;
-  /* Cam yansimasi T1 (ters-paralaks) / T2 (kenar isigi) / T3 (hiz smear'i) —
-   * CursorRing --reflect-* degerlerini panel degisiminde BIR KEZ okur; V1/V2/V3
-   * varyantlari yalniz bu blok degistirilerek denenir. */
-  --reflect-parallax: -0.3;
-  --reflect-lerp: 0.15;
-  --reflect-light-x: -22px;
-  --reflect-light-y: -22px;
-  --reflect-edge-alpha: .9;
-  --reflect-edge-width: 1.5px;
-  --reflect-edge-range: 120;
-  --reflect-ambient-r: 110px;
-  --reflect-ambient-a: .28;
-  --reflect-specular-r: 26px;
-  --reflect-specular-a: .5;
-  --reflect-stretch-max: 0.12;
-  /* CursorRing'in kare-basi yazdigi durum degiskenleri (varsayilan = notr). */
-  --cursor-x: -9999;
-  --cursor-y: -9999;
-  --edge-t: 0;
-  --edge-b: 0;
-  --edge-l: 0;
-  --edge-r: 0;
-  --smear: 0;
-  --smear-sx: 1;
-  --smear-sy: 1;
+  /* Global cursor glow (2026-09-19 performans paketi): panel yansima sistemi
+   * (data-reflect + --reflect-* + kare-basi --edge-*/--smear* degiskenleri)
+   * KALDIRILDI — kare basi panel rect okumasi ve CSS degiskeni yazimi cok guc
+   * tuketiyordu. Yerinde TEK ambient glow katmani: buyuk, bulanik, dusuk alfa.
+   * Kok katman translate3d ile tasinir; kare basi CSS degiskeni YAZILMAZ. */
+  --cursor-glow-size: 600px;
+  --cursor-glow-alpha: .08;
   /* Halka stroke kalinligi — TUM durumlarda sabit (hover/drag boyutu degistirir,
    * kalinlik degismez); halka %35 kucultuldu, oran korunur. Son ayar: +%30
    * (1.3px -> 1.7px). */
   --cursor-ring-stroke: 1.7px;
   /* Katman renkleri (kullanici istegi): metin durumunda halka daha SILIK,
    * icindeki I daha BELIRGIN — ayri tokenler. */
-  --cursor-ring-renk: rgb(var(--glass-reflect-renk) / .85);
-  --cursor-ring-renk-hover: rgb(var(--glass-reflect-renk) / 1);
-  --cursor-ring-renk-metin: rgb(var(--glass-reflect-renk) / .58);
-  --cursor-beam-renk: rgb(var(--glass-reflect-renk) / .9);
+  --cursor-ring-renk: rgb(var(--cursor-renk) / .85);
+  --cursor-ring-renk-hover: rgb(var(--cursor-renk) / 1);
+  --cursor-ring-renk-metin: rgb(var(--cursor-renk) / .58);
+  --cursor-beam-renk: rgb(var(--cursor-renk) / .9);
   /* I (beam) olcusu: halka 18px + 1.7px stroke -> ic cap 14.6px; beam 8px
    * (~%55) -> kenarlara 3.3px guvenli bosluk (dokunmaz). */
   --cursor-beam-yukseklik: 8px;
@@ -161,12 +139,10 @@
   --stuhub-error-bg: rgba(210,181,181,.08);   /* yıkıcı satır hover + uyarı zemini */
   --stuhub-error-border: rgba(210,181,181,.4);/* hatalı toast kenarı */
   --glass-sweep: rgba(255,255,255,.08);       /* hover ışık süpürmesi */
-  /* İmleç yansıması: rgb() kanal üçlüsü — alfa kuralın içinde calc ile kalır. */
-  --glass-reflect-renk: 255 255 255;
+  /* Cursor katman renk kanali: karanlik temada beyaz, acik temada siyah (0 0 0) —
+   * halka/beam/glow alfalari bu ucuden turetilir. */
+  --cursor-renk: 255 255 255;
   --cursor-dot-bg: #fff;
-  --cursor-glow: 0 0 5px rgba(255,255,255,.22), inset 0 0 3px rgba(255,255,255,.08);
-  --cursor-glow-hover: 0 0 12px rgba(255,255,255,.5), inset 0 0 4px rgba(255,255,255,.16);
-  --cursor-glow-sakin: 0 0 4px rgba(255,255,255,.16);
   --tour-spot-border: rgba(255,255,255,.55);
   --tour-spot-ring: rgba(255,255,255,.07);
   --tour-dim: rgba(0,0,0,.42);
@@ -281,7 +257,7 @@
   --glass-edge: inset 0 1px 0 rgba(0,0,0,.18), inset 1px 0 0 rgba(0,0,0,.06), inset -1px 0 0 rgba(0,0,0,.06), inset 0 -1px 0 rgba(255,255,255,.25);
   --glass-gleam: radial-gradient(closest-side at 18% 12%, rgba(0,0,0,.08), transparent);
   --glass-sweep: rgba(0,0,0,.08);
-  --glass-reflect-renk: 0 0 0;
+  --cursor-renk: 0 0 0;
   --shadow-glass: 0 8px 32px rgba(0,0,0,.18);
   --shadow-card: 0 8px 24px rgba(0,0,0,.12);
   --shadow-card-hover: 0 14px 36px rgba(0,0,0,.18);
@@ -335,12 +311,9 @@
   --stuhub-danger-bg: rgba(200,40,40,.10);
   --stuhub-error-bg: rgba(150,50,50,.08);
   --stuhub-error-border: rgba(150,50,50,.4);
-  /* İmleç halkası/beam tonları --glass-reflect-renk'ten türer (yukarıda 0 0 0
+  /* Cursor halka/beam tonları --cursor-renk'ten türer (yukarıda 0 0 0
    * yapıldı) — alfa değerleri iki temada da aynı, yalnız hue kutbu döner. */
   --cursor-dot-bg: #0a0a0a;
-  --cursor-glow: 0 0 5px rgba(0,0,0,.22), inset 0 0 3px rgba(0,0,0,.08);
-  --cursor-glow-hover: 0 0 12px rgba(0,0,0,.5), inset 0 0 4px rgba(0,0,0,.16);
-  --cursor-glow-sakin: 0 0 4px rgba(0,0,0,.16);
   --tour-spot-border: rgba(0,0,0,.55);
   --tour-spot-ring: rgba(0,0,0,.07);
   --tour-dim: rgba(0,0,0,.32);
@@ -471,8 +444,6 @@ body::before {
     border-top-color: var(--glass-border-top);
     border-radius: var(--radius-panel);
     box-shadow: var(--glass-inner-light), var(--glass-edge), var(--shadow-glass);
-    /* ::after imlec yansimasi bu kutunun içine kırpılır (inset:0). */
-    position: relative;
   }
   .glass-panel-subtle {
     background: var(--glass-gleam), var(--glass-sheen), var(--glass-surface-2);
@@ -733,10 +704,14 @@ body::before {
   .card-progress__fill { display:block; height:100%; border-radius:var(--radius-pill); background:var(--stuhub-fill); }
   .card-progress__value { font-size:12px; color:var(--stuhub-text-secondary); font-variant-numeric:tabular-nums; }
   .chapter-card__head { display:flex; align-items:center; gap:8px; min-width:0; }
-  .chapter-card__title { font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .chapter-card__check { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:var(--radius-pill); background:var(--stuhub-accent-glass); color:var(--stuhub-accent); flex-shrink:0; }
   .chapter-card__actions { display:inline-flex; gap:2px; margin-left:auto; }
   .chapter-card__go { color:var(--stuhub-text-muted); align-self:flex-end; opacity:.6; }
+  /* Item #11 (2026-09-19): başlık ortalı + 1 punto büyük (varsayılan → 16px).
+   * Aksiyon butonları varken sola hizalı kalır; yoksa başlık kartta ortalanır. */
+  .chapter-card__title { font-size:16px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:center; }
+  .chapter-card__head { justify-content:center; }
+  .chapter-card__head:has(.chapter-card__actions) { justify-content:flex-start; }
   /* Ders karti metin katmanlari: GlobalCoursesPage bu siniflari kullaniyor ama
    * theme.css'te TANIMSIZDI (kurs kartlari sistemsiz boş satirlarla ciziliyordu).
    * Chapter karti varyantlariyla ayni dil: ust satir = donem etiketi + chevron,
@@ -1060,11 +1035,11 @@ body::before {
   .term-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(clamp(220px,22vw,320px),420px)); justify-content:center; justify-items:center; gap:16px; align-items:start; }
 }
 
-/* ── Custom cursor: glass halka + cam yansimasi (kullanici onayli ozellik) ──
+/* ── Custom cursor: glass halka + global glow (kullanici onayli ozellik) ──
  * CursorRing.tsx mount edilmedigi surece (pointer:coarse / unmount) hicbir kural
- * etkili olmaz: cursor:none ve yansima `cursor-ring-on` sinifina bagli — o sinifi
- * yalniz bilesen ekler/cekler. Tum konum guncellemeleri tek rAF'ta: halka
- * translate3d, yansima --cursor-x/--cursor-y (panel-yerel px). */
+ * etkili olmaz: cursor:none ve glow `cursor-ring-on` sinifina bagli — o sinifi
+ * yalniz bilesen ekler/cekler. Tum konum guncellemeleri tek rAF'ta: kok katman
+ * (halka + glow birlikte) translate3d ile tasinir.
 
 @media (pointer: fine) {
   /* Native imlec HICBIR YERDE kullanilmaz (kullanici istegi): tum yuzeylerde
@@ -1096,13 +1071,11 @@ body::before {
   height: 15px;
   border: var(--cursor-ring-stroke) solid var(--cursor-ring-renk);
   border-radius: var(--radius-pill);
-  box-shadow: var(--cursor-glow);
   transform: translate(-50%,-50%);
-  transition: width var(--duration-micro) var(--ease-out-expo), height var(--duration-micro) var(--ease-out-expo), border-color var(--duration-micro) var(--ease-out-expo), box-shadow var(--duration-micro) var(--ease-out-expo);
+  transition: width var(--duration-micro) var(--ease-out-expo), height var(--duration-micro) var(--ease-out-expo), border-color var(--duration-micro) var(--ease-out-expo);
 }
 .cursor-ring--hover .cursor-ring__ring {
   border-color: var(--cursor-ring-renk-hover);
-  box-shadow: var(--cursor-glow-hover);
   width: 18px;
   height: 18px;
 }
@@ -1157,41 +1130,28 @@ body::before {
   transition: transform var(--duration-micro) var(--ease-spring), opacity var(--duration-micro) linear;
 }
 
-/* Cam yansimasi — T1 ters-paralaks blob + T2 kenar isigi + T3 hiz smear'i.
- * PERFORMANS PAKETI (kullanici: uygulama kasmasin):
- *  A) Yalnizca AKTIF panel: `.glass-panel[data-reflect="1"]` (CursorRing hover'da
- *     isaretler; ekranda en fazla 1 yansima katmani).
- *  B) mix-blend-mode YOK — ton gradient alfasinda; blend grubu/backdrop yeniden
- *     harmanlama yok.
- *  D) filter: blur YOK — smear, gradient YARICAPI + ALFASI ile yapilir (genisler +
- *     sonuklesir); uzama transform ile kalir.
- *  5) Kenar isigi 4 gradient katmani yerine TEK `box-shadow` (4 inset golge).
- * Butce: element opakligi %12 → birlesik piksel artisi <= %12.
- * :not([data-tour-id]) — rehberli tur ayni ::after'i vurgu halkasi icin kullaniyor. */
-.glass-panel:not([data-tour-id])[data-reflect="1"]::after {
-  content: "";
+/* Global cursor glow — TEK ambient katman (panel yansimasinin yerine).
+ * Buyuk, bulanik, cok dusuk alfa: goze batmayan bir “oda isigi”. Kare basi CSS
+ * degiskeni YAZILMAZ — kok katman (halka + glow) tek translate3d ile tasinir,
+ * boylece guc tuketimi kare basi panel rect okuma + style yazimindan
+ * tek komposit katman hareketine iner. Gradyan merkez kokun 0,0 noktasinda
+ * (imlec konumu), yarıcap token'dan. */
+.cursor-glow {
   position: absolute;
-  inset: 0;
-  border-radius: inherit;
+  left: 0;
+  top: 0;
+  width: var(--cursor-glow-size);
+  height: var(--cursor-glow-size);
+  border-radius: var(--radius-pill);
+  background: radial-gradient(circle closest-side, rgb(var(--cursor-renk) / var(--cursor-glow-alpha)), transparent 70%);
+  transform: translate(-50%, -50%);
   pointer-events: none;
-  background:
-    radial-gradient(circle calc(var(--reflect-ambient-r) * (1 + var(--smear) * 0.6)) at calc(var(--cursor-x) * 1px + var(--reflect-light-x)) calc(var(--cursor-y) * 1px + var(--reflect-light-y)), rgb(var(--glass-reflect-renk) / calc(var(--reflect-ambient-a) / (1 + var(--smear) * 0.8))), transparent 72%),
-    radial-gradient(circle calc(var(--reflect-specular-r) * (1 + var(--smear) * 0.5)) at calc(var(--cursor-x) * 1px + var(--reflect-light-x)) calc(var(--cursor-y) * 1px + var(--reflect-light-y)), rgb(var(--glass-reflect-renk) / calc(var(--reflect-specular-a) / (1 + var(--smear) * 0.8))), transparent 74%);
-  box-shadow:
-    inset 0 var(--reflect-edge-width) 0 0 rgb(var(--glass-reflect-renk) / calc(var(--edge-t) * var(--reflect-edge-alpha))),
-    inset 0 calc(var(--reflect-edge-width) * -1) 0 0 rgb(var(--glass-reflect-renk) / calc(var(--edge-b) * var(--reflect-edge-alpha))),
-    inset var(--reflect-edge-width) 0 0 0 rgb(var(--glass-reflect-renk) / calc(var(--edge-l) * var(--reflect-edge-alpha))),
-    inset calc(var(--reflect-edge-width) * -1) 0 0 rgb(var(--glass-reflect-renk) / calc(var(--edge-r) * var(--reflect-edge-alpha)));
-  transform: scale(var(--smear-sx), var(--smear-sy));
-  opacity: 0;
 }
-html.cursor-ring-on .glass-panel:not([data-tour-id])[data-reflect="1"]::after { opacity: var(--glass-reflect-opacity); }
+.cursor-ring--visible .cursor-glow { opacity: 1; }
 
 @media (prefers-reduced-motion: reduce) {
-  /* Lerp JS'te kapali (anlik konum) + T3 smear kapali; glow sabit dusuk. */
+  /* Lerp JS'te kapali (anlik konum); glow ayni katmanda tasinmaya devam eder. */
   .cursor-ring, .cursor-ring__ring, .cursor-ring__dot, .cursor-ring__beam { transition: none; }
-  .cursor-ring__ring, .cursor-ring--hover .cursor-ring__ring { box-shadow: var(--cursor-glow-sakin); }
-  html.cursor-ring-on .glass-panel:not([data-tour-id])[data-reflect="1"]::after { opacity: calc(var(--glass-reflect-opacity) * .5); }
 }
 
 /* ── Metin secimi (kullanici istegi 014626) ──────────────────────────────
