@@ -1,8 +1,13 @@
 # ruff: noqa: E501 — prompt şablonları doğal dil metnidir; satır uzunluğu kısıtı uygulanmaz
-"""Not üretimi prompt şablonları (v3 — düşük akıl yürütmeli model için direktif sertleştirme)."""
+"""Not üretimi prompt şablonları (v3 — düşük akıl yürütmeli model için direktif sertleştirme).
+
+ATIF SİSTEMİ KALDIRILDI (2026-09-19): model artık metne [n] numara işareti YAZMAZ.
+Kaynak temelli üretim korunur (KAYNAK_ROL_AYRIMI); numaralar yalnızca prompt içindeki
+kaynak listesinin okunurluğu için vardır. Son kullanıcıya atıf/kaynakça gösterilmez.
+"""
 
 from .common import (
-    ATIF_KURALLARI,
+    ATIF_YASAGI,
     CIKTI_SOZLESMESI_JSON,
     CIKTI_SOZLESMESI_MARKDOWN,
     DIDAKTIK_USLUP,
@@ -78,20 +83,20 @@ ZORUNLU BÖLÜM DÜZENİ (BAŞLIK KURALI — İHLALİ HATADIR):
 
 ### {topic}
 
-- 2-3 cümle. Konunun ne olduğunu ve öğrencinin bunu neden öğrendiğini söyle. Her cümle [n] taşır.
+- 2-3 cümle. Konunun ne olduğunu ve öğrencinin bunu neden öğrendiğini söyle.
 - 3-8 madde. Her madde şu kalıpta: "**Terim** — tanım (tek cümle). Sade karşılığı: <günlük dille
-  tek cümle>. [n]"
+  tek cümle>."
 - Madde 3 satırı geçerse ikiye böl. Tanımsız terim bırakma.
-- 2-4 madde. Her madde "Neden ...?" sorusuyla başlar, hemen altında tek paragraflık cevap verir ve [n] taşır.
+- 2-4 madde. Her madde "Neden ...?" sorusuyla başlar, hemen altında tek paragraflık cevap verir.
 - Cevap neden-sonuç zinciri kurar ("çünkü ... bu yüzden ...").
 - Kaynaklarda cevabı olmayan soruyu YAZMA.
 - 1-3 madde. Kalıp: "**A** ile **B**: <fark tek cümle>. Ayırt etmek için: <5 saniyede uygulanacak
-  tek test>. [n]"
+  tek test>."
 - Kaynaklarda karşılaştırma yoksa bu bölümü tek satır "Bu konuda karışan ikili yok." yaz.
-- Tek somut örnek. 3-5 cümle. Örneği adım adım yürüt ve kavramın nerede devreye girdiğini göster. [n]
+- Tek somut örnek. 3-5 cümle. Örneği adım adım yürüt ve kavramın nerede devreye girdiğini göster.
 - TAM 3 soru. Her soru ayrı madde. Sorular "neden", "ne olurdu", "hangisi farklı", "sırala" tipinde olur.
 - Yalnızca "... nedir?" biçiminde soru YASAK.
-- Her sorunun hemen altına "**Cevap:** ..." satırı yaz (1-2 cümle, [n] taşır).
+- Her sorunun hemen altına "**Cevap:** ..." satırı yaz (1-2 cümle).
 - 3-5 madde. Her madde TEK satır, en fazla 15 kelime, ezberlenecek çekirdek bilgi. Atıf koyma.
 
 UZUNLUK BÜTÇESİ: toplam 400-700 kelime. Bütçeyi aşma, yarısında da bırakma.
@@ -105,48 +110,48 @@ UZUNLUK BÜTÇESİ: toplam 400-700 kelime. Bütçeyi aşma, yarısında da bıra
     + """
 
 """
-    + ATIF_KURALLARI
+    + ATIF_YASAGI
     + """
 
 {dil_talimati}
 
 ALTIN REFERANS 1 (yalnız BİÇİM örneğidir; konusu farklıdır, içeriğini KOPYALAMA; alt başlık YOK —
-parçalar arka arkaya akar):
+parçalar arka arkaya akar; numara işareti YOK):
 ### Klasik Koşullanma
-- Klasik koşullanma, tarafsız bir uyaranın tepki doğuran bir uyaranla eşleşerek tepki üretir hale gelmesidir [1].
-- Öğrenmenin en temel biçimidir; korku, iştah ve alışkanlık davranışlarının nasıl kurulduğunu açıklar [2].
-- **Koşulsuz uyaran** — doğuştan tepki doğuran uyarandır. Sade karşılığı: öğrenmeye gerek olmadan etkileyen şey. [1]
-- **Koşullu uyaran** — eşleşme sonucu tepki doğurmaya başlayan tarafsız uyarandır. Sade karşılığı: sonradan anlam kazanan işaret. [1]
+- Klasik koşullanma, tarafsız bir uyaranın tepki doğuran bir uyaranla eşleşerek tepki üretir hale gelmesidir.
+- Öğrenmenin en temel biçimidir; korku, iştah ve alışkanlık davranışlarının nasıl kurulduğunu açıklar.
+- **Koşulsuz uyaran** — doğuştan tepki doğuran uyarandır. Sade karşılığı: öğrenmeye gerek olmadan etkileyen şey.
+- **Koşullu uyaran** — eşleşme sonucu tepki doğurmaya başlayan tarafsız uyarandır. Sade karşılığı: sonradan anlam kazanan işaret.
 - Neden eşleşme tek başına yetmez?
-  Çünkü tarafsız uyaranın koşulsuz uyarandan ÖNCE ve ona yakın zamanda gelmesi gerekir; sıra bozulursa beyin iki olayı ilişkilendirmez, bu yüzden koşullanma kurulmaz [2].
-- **Klasik koşullanma** ile **edimsel koşullanma**: klasikte tepki uyaranla, edimselde sonuçla öğrenilir. Ayırt etmek için: davranışın ardından ödül/ceza varsa edimseldir. [3]
-- Zil sesi başta anlamsızdır. Zil her yemekten hemen önce çalınır. Birkaç tekrardan sonra köpek zili duyunca salya üretir. Salya artık zile verilmiş öğrenilmiş tepkidir [1].
+  Çünkü tarafsız uyaranın koşulsuz uyarandan ÖNCE ve ona yakın zamanda gelmesi gerekir; sıra bozulursa beyin iki olayı ilişkilendirmez, bu yüzden koşullanma kurulmaz.
+- **Klasik koşullanma** ile **edimsel koşullanma**: klasikte tepki uyaranla, edimselde sonuçla öğrenilir. Ayırt etmek için: davranışın ardından ödül/ceza varsa edimseldir.
+- Zil sesi başta anlamsızdır. Zil her yemekten hemen önce çalınır. Birkaç tekrardan sonra köpek zili duyunca salya üretir. Salya artık zile verilmiş öğrenilmiş tepkidir.
 - Zil yemekten SONRA çalınsaydı koşullanma neden kurulmazdı?
-  **Cevap:** Çünkü işaret, olayı önceden haber vermez; beyin ilişkilendirme kuramaz [2].
+  **Cevap:** Çünkü işaret, olayı önceden haber vermez; beyin ilişkilendirme kuramaz.
 - Aşağıdakilerden hangisi edimsel koşullanmadır: ödülle artan davranış mı, işaretle gelen tepki mi?
-  **Cevap:** Ödülle artan davranış edimseldir; sonuç davranışı biçimlendirir [3].
+  **Cevap:** Ödülle artan davranış edimseldir; sonuç davranışı biçimlendirir.
 - Söndürme sırasında ne olur?
-  **Cevap:** Koşullu uyaran tek başına tekrarlanır ve öğrenilmiş tepki zamanla zayıflar [2].
+  **Cevap:** Koşullu uyaran tek başına tekrarlanır ve öğrenilmiş tepki zamanla zayıflar.
 - Önce işaret, sonra olay: sıra bozulursa öğrenme olmaz.
 - Klasik = uyaran eşleşmesi, edimsel = sonuç.
 - Söndürme tepkiyi siler değil, zayıflatır.
 
 ALTIN REFERANS 2 (yalnız BİÇİM örneğidir; konusu farklıdır, içeriğini KOPYALAMA; alt başlık YOK):
 ### Bağlı Listede Ekleme
-- Bağlı liste, her düğümün bir sonrakini işaret ettiği bir veri yapısıdır [1].
-- Araya eleman eklemeyi, diziyi kaydırmadan yapmayı sağlar; bu yüzden sık değişen koleksiyonlarda tercih edilir [2].
-- **Düğüm** — veriyi ve bir sonraki düğümün adresini tutan birimdir. Sade karşılığı: içinde hem eşya hem sonraki durağın adresi olan kutu. [1]
-- **Baş düğüm** — listenin ilk düğümüdür. Sade karşılığı: zincirin ilk halkası. [1]
+- Bağlı liste, her düğümün bir sonrakini işaret ettiği bir veri yapısıdır.
+- Araya eleman eklemeyi, diziyi kaydırmadan yapmayı sağlar; bu yüzden sık değişen koleksiyonlarda tercih edilir.
+- **Düğüm** — veriyi ve bir sonraki düğümün adresini tutan birimdir. Sade karşılığı: içinde hem eşya hem sonraki durağın adresi olan kutu.
+- **Baş düğüm** — listenin ilk düğümüdür. Sade karşılığı: zincirin ilk halkası.
 - Neden başa ekleme O(1)'dir?
-  Çünkü yalnızca yeni düğümün işaretçisi baş düğüme çevrilir ve baş güncellenir; diğer düğümlere dokunulmaz, bu yüzden işlem eleman sayısından bağımsızdır [2].
-- **Bağlı liste** ile **dizi**: dizide elemanlar bitişik bellekte, listede dağınıktır. Ayırt etmek için: soruda "kaydırma" geçiyorsa dizi, "işaretçi" geçiyorsa listedir. [3]
-- Listede 5 → 9 → 12 var. Başa 3 eklenecek. Yeni düğüm 3 oluşturulur, işaretçisi 5'e çevrilir, baş artık 3'tür. Hiçbir eleman yer değiştirmez [2].
+  Çünkü yalnızca yeni düğümün işaretçisi baş düğüme çevrilir ve baş güncellenir; diğer düğümlere dokunulmaz, bu yüzden işlem eleman sayısından bağımsızdır.
+- **Bağlı liste** ile **dizi**: dizide elemanlar bitişik bellekte, listede dağınıktır. Ayırt etmek için: soruda "kaydırma" geçiyorsa dizi, "işaretçi" geçiyorsa listedir.
+- Listede 5 → 9 → 12 var. Başa 3 eklenecek. Yeni düğüm 3 oluşturulur, işaretçisi 5'e çevrilir, baş artık 3'tür. Hiçbir eleman yer değiştirmez.
 - Sona ekleme neden başa eklemeden yavaştır?
-  **Cevap:** Son düğüme ulaşmak için liste baştan taranır; bu tarama eleman sayısıyla artar [2].
+  **Cevap:** Son düğüme ulaşmak için liste baştan taranır; bu tarama eleman sayısıyla artar.
 - Diziyle bağlı liste arasındaki temel fark nedir?
-  **Cevap:** Dizide bellek bitişiktir, listede düğümler işaretçilerle bağlanır [3].
+  **Cevap:** Dizide bellek bitişiktir, listede düğümler işaretçilerle bağlanır.
 - Baş düğümün işaretçisi kaybolursa ne olur?
-  **Cevap:** Listenin geri kalanına erişilemez, tüm zincir kopar [1].
+  **Cevap:** Listenin geri kalanına erişilemez, tüm zincir kopar.
 - Başa ekleme sabit sürede biter.
 - Sona ekleme tarama gerektirir.
 - Baş düğüm kaybolursa liste kaybolur.
@@ -155,7 +160,7 @@ TESLİM ÖNCESİ KONTROL (yazdıktan sonra kendi metnini denetle, hatalıysa dü
 1. Metinde "### {topic}" dışında BAŞKA BAŞLIK veya KALIN BAŞLIK satırı YOK mu? (Ne işe yarar?
    Kavramlar, Neden böyle?... gibi adlar yazılmamış olmalı; yalnız içerikleri akmalı.)
 2. "Kendini sına" kısmında tam 3 soru ve 3 "**Cevap:**" satırı var mı?
-3. Her bilgi cümlesi [n] taşıyor mu? Listede olmayan numara var mı?
+3. Metinde [1], [2] biçiminde NUMARA İŞARETİ var mı? Varsa sil. Kaynakça bölümü yazdın mı? Sil.
 4. Kod çiti, JSON, süslü parantez veya ters bölü + n dizisi var mı? Varsa sil.
 5. Yasak ifadelerden biri geçiyor mu? Geçiyorsa cümleyi yeniden yaz.
 6. Toplam 400-700 kelime aralığında mı?
@@ -165,7 +170,8 @@ KONU: {topic}
 REHBER (ders sunumu — kapsamı belirler):
 {slide_content}
 
-KAYNAKLAR (ders kitabı taraması — içeriği verir):
+KAYNAKLAR (ders kitabı taraması — içeriği verir; numaralar yalnızca listeyi okuman içindir,
+metne taşınmaz):
 {numbered_sources}
 {kazanimlar}"""
 )
@@ -185,7 +191,7 @@ ADIM ADIM YORDAM:
 3. Sonra her bölümü şu altı bozukluk için denetle; bulduğun her bozukluğu "structure_issues" listesine yaz:
    a) "Kendini sına" bölümü yok, boş ya da cevapları yazılmamış.
    b) Sorulardan biri yalnızca "... nedir?" biçiminde (tekrar ettiren, düşündürmeyen).
-   c) Atıfsız bilgi cümlesi var ([n] taşımayan iddia).
+   c) Metinde [1], [2] biçiminde numara işareti kalmış.
    d) Tek cümlede 3'ten fazla yeni kavram var (bilişsel yük).
    e) Aynı bilgi üç kez tekrarlanmış.
    f) Sunumu anlatan ifade var ("sunumda", "slaytta", "[Slide N]").
@@ -206,28 +212,6 @@ NOT:
 {note}"""
 )
 
-CITATION_CONFIRM_PROMPT = (
-    """Görevin: bir alıntının kaynak parça tarafından DESTEKLENİP desteklenmediğine karar vermek.
-
-"""
-    + CIKTI_SOZLESMESI_JSON
-    + """
-
-KARAR KURALI (harfiyen uygula):
-1. Alıntının taşıdığı İDDİA, kaynak parçada aynı anlamda geçiyorsa true yaz.
-2. Kelimeler farklı ama anlam aynıysa true yaz (birebir eşleşme aranmaz).
-3. Kaynak parça iddiayı kısmen destekliyor ama bir koşulu/sayıyı değiştiriyorsa false yaz.
-4. İddia kaynakta hiç geçmiyorsa false yaz. Tahmin yürütme, genel bilgine başvurma.
-
-ŞEMA: {{"supported": true}} veya {{"supported": false}}
-
-ALTIN REFERANS 1: alıntı "Zil sesi öğrenilmiş tepki doğurur", kaynak "koşullu uyaran eşleşme sonrası tepki üretir" → {{"supported": true}}
-ALTIN REFERANS 2: alıntı "Süreç üç evreden oluşur", kaynak "süreç beş evreden oluşur" → {{"supported": false}}
-
-ALINTI: {quote}
-
-KAYNAK PARÇA: {chunk_text}"""
-)
 
 NOTE_GENERATION_WEB_PROMPT = (
     """Görevin: "{topic}" konusunu öğreten bir ders notu bölümü yazmak. Elinde ders kitabı yok;
@@ -244,12 +228,12 @@ ZORUNLU BÖLÜM DÜZENİ (BAŞLIK KURALI — İHLALİ HATADIR):
 
 ### {topic}
 
-- 2-3 cümle. Konunun ne olduğunu ve neden önemli olduğunu söyle. Her cümle [n] taşır.
-- 3-8 madde; "**Terim** — tanım. Sade karşılığı: ... [n]"
-- 2-3 madde; "Neden ...?" sorusu + tek paragraf cevap + [n]
-- Tek somut örnek, 3-5 cümle, [n]
-- TAM 3 soru, her birinin altında "**Cevap:** ..." [n]
-- 3-5 tek satır, en fazla 15 kelime, atıfsız
+- 2-3 cümle. Konunun ne olduğunu ve neden önemli olduğunu söyle.
+- 3-8 madde; "**Terim** — tanım. Sade karşılığı: ..."
+- 2-3 madde; "Neden ...?" sorusu + tek paragraf cevap
+- Tek somut örnek, 3-5 cümle
+- TAM 3 soru, her birinin altında "**Cevap:** ..."
+- 3-5 tek satır, en fazla 15 kelime
 
 UZUNLUK BÜTÇESİ: 350-600 kelime.
 
@@ -262,67 +246,66 @@ UZUNLUK BÜTÇESİ: 350-600 kelime.
     + """
 
 """
-    + ATIF_KURALLARI
+    + ATIF_YASAGI
     + """
-EK KURAL: web kaynağının başlığından emin değilsen kaynağı yine [n] ile an, adını uydurma.
 
 {dil_talimati}
 
-ALTIN REFERANS 1 (biçim örneği — içeriği kopyalama; alt başlık YOK):
+ALTIN REFERANS 1 (biçim örneği — içeriği kopyalama; alt başlık YOK; numara işareti YOK):
 ### Fotosentez Işık Evresi
-- Işık evresi, güneş ışığını hücrenin kullanabileceği kimyasal enerjiye çevirir [1].
-- Bu evre olmadan karbon bağlanması için gerekli enerji üretilemez [2].
-- **Tilakoit zar** — ışık evresinin gerçekleştiği zar yapısıdır. Sade karşılığı: enerji üretiminin yapıldığı atölye. [1]
+- Işık evresi, güneş ışığını hücrenin kullanabileceği kimyasal enerjiye çevirir.
+- Bu evre olmadan karbon bağlanması için gerekli enerji üretilemez.
+- **Tilakoit zar** — ışık evresinin gerçekleştiği zar yapısıdır. Sade karşılığı: enerji üretiminin yapıldığı atölye.
 - Neden su parçalanır?
-  Çünkü kopan elektronlar klorofilin kaybettiği elektronun yerini doldurur; bu yüzden zincir kesintisiz işler [2].
-- Yaprağa ışık düşer, tilakoit zarda elektronlar uyarılır, su parçalanır ve oksijen açığa çıkar [1].
+  Çünkü kopan elektronlar klorofilin kaybettiği elektronun yerini doldurur; bu yüzden zincir kesintisiz işler.
+- Yaprağa ışık düşer, tilakoit zarda elektronlar uyarılır, su parçalanır ve oksijen açığa çıkar.
 - Işık kesilirse karanlık evre neden bir süre sonra durur?
-  **Cevap:** Çünkü karanlık evrenin kullandığı enerji taşıyıcıları ışık evresinde üretilir [2].
+  **Cevap:** Çünkü karanlık evrenin kullandığı enerji taşıyıcıları ışık evresinde üretilir.
 - Açığa çıkan oksijen nereden gelir?
-  **Cevap:** Parçalanan su moleküllerinden gelir [1].
+  **Cevap:** Parçalanan su moleküllerinden gelir.
 - Klorofilin görevi nedir?
-  **Cevap:** Işığı soğurup elektronları uyarır [1].
+  **Cevap:** Işığı soğurup elektronları uyarır.
 - Işık evresi enerji üretir, karanlık evre onu harcar.
 - Oksijenin kaynağı sudur.
 
 ALTIN REFERANS 2 (biçim örneği — içeriği kopyalama; alt başlık YOK):
 ### Enflasyon Nedenleri
-- Enflasyon, genel fiyat düzeyinin sürekli artmasıdır [1].
-- Nedenini bilmek, hangi politikanın işe yarayacağını seçmeyi sağlar [2].
-- **Talep enflasyonu** — toplam talebin üretimi aşmasıyla oluşur. Sade karşılığı: mal az, para çok. [1]
-- **Maliyet enflasyonu** — girdi fiyatlarının artmasıyla oluşur. Sade karşılığı: üretim pahalılaşır, fiyat yükselir. [2]
+- Enflasyon, genel fiyat düzeyinin sürekli artmasıdır.
+- Nedenini bilmek, hangi politikanın işe yarayacağını seçmeyi sağlar.
+- **Talep enflasyonu** — toplam talebin üretimi aşmasıyla oluşur. Sade karşılığı: mal az, para çok.
+- **Maliyet enflasyonu** — girdi fiyatlarının artmasıyla oluşur. Sade karşılığı: üretim pahalılaşır, fiyat yükselir.
 - Neden faiz artışı talebi kısar?
-  Çünkü borçlanma pahalılaşır, harcama ertelenir; bu yüzden talep baskısı azalır [2].
-- Petrol fiyatı yükselir, nakliye maliyeti artar, market fiyatları da artar. Talep değişmese bile fiyatlar yükselir [2].
+  Çünkü borçlanma pahalılaşır, harcama ertelenir; bu yüzden talep baskısı azalır.
+- Petrol fiyatı yükselir, nakliye maliyeti artar, market fiyatları da artar. Talep değişmese bile fiyatlar yükselir.
 - Maliyet enflasyonunda faiz artışı neden yetersiz kalır?
-  **Cevap:** Çünkü sorun talepte değil, girdi maliyetindedir [2].
+  **Cevap:** Çünkü sorun talepte değil, girdi maliyetindedir.
 - Hangisi talep enflasyonu işaretidir: üretim kapasitesi doluyken artan harcama mı, petrol zammı mı?
-  **Cevap:** Kapasite doluyken artan harcama talep enflasyonudur [1].
+  **Cevap:** Kapasite doluyken artan harcama talep enflasyonudur.
 - Fiyat artışı tek seferlikse buna enflasyon denir mi?
-  **Cevap:** Denmez; enflasyon sürekli artış gerektirir [1].
+  **Cevap:** Denmez; enflasyon sürekli artış gerektirir.
 - Talep enflasyonu: para çok, mal az.
 - Maliyet enflasyonu: girdi pahalı.
 - Tek seferlik artış enflasyon değildir.
 
 TESLİM ÖNCESİ KONTROL: "### {topic}" dışında başlık/kalın başlık satırı YOK mu, 3 soru + 3 cevap
-var mı, her bilgi cümlesi [n] taşıyor mu, kod çiti/JSON/süslü parantez var mı, kelime bütçesi
-tutuyor mu?
+var mı, metinde [n] numara işareti var mı (VARSA SİL), kod çiti/JSON/süslü parantez var mı,
+kelime bütçesi tutuyor mu?
 
 KONU: {topic}
 
-KAYNAKLAR (web):
+KAYNAKLAR (web; numaralar yalnızca listeyi okuman içindir, metne taşınmaz):
 {numbered_sources}
 {kazanimlar}"""
 )
 
 NOTE_SLIDE_ONLY_PROMPT = (
     """Görevin: "{topic}" konusunu YALNIZ ders sunumundan öğreten bir not bölümü yazmak.
-Ders kitabı ve web kaynağı bulunamadı. Bu yüzden ATIF KULLANMAYACAKSIN.
+Ders kitabı ve web kaynağı bulunamadı.
 
 """
     + CIKTI_SOZLESMESI_MARKDOWN
     + """
-EK SÖZLEŞME: [n] biçiminde atıf YAZMA. Köşeli parantezli numara kullanma.
+EK SÖZLEŞME: [n] biçiminde numara işareti YAZMA. Köşeli parantezli numara kullanma.
 
 ZORUNLU BÖLÜM DÜZENİ (BAŞLIK KURALI — İHLALİ HATADIR):
 - Bölümün TEK başlığı "### {topic}" satırıdır. BAŞKA HİÇBİR BAŞLIK YAZMA.
@@ -394,7 +377,8 @@ ALTIN REFERANS 2 (biçim örneği — içeriği kopyalama; alt başlık YOK):
 - Büyük moleküller taşıyıcı ister.
 
 TESLİM ÖNCESİ KONTROL: "### {topic}" dışında başlık/kalın başlık satırı YOK mu, 3 soru + 3 cevap
-var mı, hiç [n] kullandın mı (kullanma), sunumu anlatan ifade var mı, kelime bütçesi tutuyor mu?
+var mı, metinde [n] numara işareti var mı (KULLANMA), sunumu anlatan ifade var mı, kelime
+bütçesi tutuyor mu?
 
 REHBER (ders sunumu):
 {slide_content}
