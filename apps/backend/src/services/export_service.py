@@ -77,6 +77,7 @@ _REF_PATTERNS = (
     re.compile(r"\s*⟨\d+(?:\s*[,;]\s*⟨?\d+⟩*)*⟩"),  # ⟨1⟩ / ⟨2⟩ (web işareti)
 )
 _CODE_SPAN_RE = re.compile(r"(```.*?```|`[^`\n]*`)", re.S)
+_TAG_RE = re.compile(r"<[^>]+>")
 _SPACE_BEFORE_PUNCT_RE = re.compile(r"[ \t]+([.,;:!?])")
 _NOTICE_RE = re.compile(r"^.*ders sunumundan üretildi.*$", re.M)
 _MULTISPACE_RE = re.compile(r"[ \t]{2,}")
@@ -288,7 +289,7 @@ _LIST_START_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)]|>)")
 
 
 def _strip_references(markdown: str) -> str:
-    """Atıf işaretlerini (``[1]``, ``⟨2⟩``, ``[Slide 3]``) ve bilgi kutusunu render kopyasından çıkarır.
+    """Atıf işaretlerini (``[1]``, ``⟨2⟩``, ``[Slide 3]``) ve bilgi kutusunu kopyadan çıkarır.
 
     Not verisine DOKUNULMAZ. Kod içerikleri korunur: ``` çitleri, satır içi ``kod``
     ve 4 boşlukla kaydırılmış kod satırları. Girinti kodu ile liste alt satırı

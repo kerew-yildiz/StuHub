@@ -155,7 +155,12 @@ export async function exportNotePdf(
 
 /** Dosya adını platformda geçersiz karakterlerden temizler (Windows yasaklıları dahil). */
 function sanitizeFilename(name: string): string {
-  return name.replace(/[\\/:*?"<>|\x00-\x1f]/g, '').trim() || 'not'
+  const forbidden = '\\/:*?"<>|'
+  const cleaned = Array.from(name)
+    .filter((ch) => ch >= ' ' && !forbidden.includes(ch)) // ch >= ' ' → kontrol karakterleri
+    .join('')
+    .trim()
+  return cleaned || 'not'
 }
 
 /** Atıf pop-up'ı için kaynak parça (Yetenek 06 §4). */
